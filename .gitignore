@@ -1,0 +1,24 @@
+# Credentials and tokens - NEVER commit these!
+credentials.json
+token.pickle
+*.pickle
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+
+# Added by cargo
+
+/target
