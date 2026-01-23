@@ -1,8 +1,9 @@
 # Credentials and tokens - NEVER commit these!
 credentials.json
 token.pickle
+*.json
 *.pickle
-
+*.mbox
 # Python
 __pycache__/
 *.py[cod]

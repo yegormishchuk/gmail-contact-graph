@@ -13,7 +13,7 @@ const REDIRECT_URI: &str = "http://localhost:8080/callback";
 const SCOPES: &str = "https://www.googleapis.com/auth/gmail.readonly";
 
 // Количество параллельных запросов
-const CONCURRENT_REQUESTS: usize = 20;
+const CONCURRENT_REQUESTS: usize = 300;
 
 // ==================== OAuth Structures ====================
 
