@@ -22,6 +22,7 @@ const filters = {
 // Store raw data
 let rawData = null;
 let currentSimulation = null;
+let currentTransform = d3.zoomIdentity;
 
 // Filter data based on current filters
 function filterData(data) {
@@ -92,13 +93,20 @@ function renderGraph(data) {
     const zoom = d3.zoom()
         .scaleExtent([0.3, 3])
         .on('zoom', (event) => {
+            currentTransform = event.transform;
             g.attr('transform', event.transform);
         });
 
     svg.call(zoom);
 
+    // Restore previous transform
+    if (currentTransform !== d3.zoomIdentity) {
+        svg.call(zoom.transform, currentTransform);
+    }
+
     // Reset zoom button
     document.getElementById('reset-zoom').onclick = () => {
+        currentTransform = d3.zoomIdentity;
         svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
     };
 
@@ -297,8 +305,9 @@ async function init() {
         // Initial render
         applyFilters();
 
-        // Re-render on window resize
+        // Re-render on window resize (reset transform to recenter)
         window.addEventListener('resize', () => {
+            currentTransform = d3.zoomIdentity;
             applyFilters();
         });
 
