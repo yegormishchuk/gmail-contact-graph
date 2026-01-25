@@ -1,0 +1,21 @@
+[package]
+name = "fast_mbox_parser"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "fast_mbox_parser"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+rayon = "1.10"
+memmap2 = "0.9"
+charset = "0.1"
+base64 = "0.22"
+encoding_rs = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

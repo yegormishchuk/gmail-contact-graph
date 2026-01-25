@@ -7,6 +7,13 @@ from pathlib import Path
 
 from .models import Contact
 
+# Try to import Rust extension for faster parsing
+try:
+    import fast_mbox_parser as _rust_parser
+    RUST_AVAILABLE = True
+except ImportError:
+    RUST_AVAILABLE = False
+
 
 def decode_mime_header(text: str) -> str:
     """Decode MIME encoded-word headers like =?UTF-8?B?...?="""
@@ -125,6 +132,53 @@ def parse_mbox(mbox_file: str | Path, my_email: str) -> list[Contact]:
     contacts.sort(key=lambda c: c.total_count, reverse=True)
 
     return contacts
+
+
+def parse_mbox_fast(mbox_file: str | Path, my_email: str, num_threads: int = 0) -> list[Contact]:
+    """
+    Parse mbox file using fast Rust extension with parallel processing.
+
+    Args:
+        mbox_file: Path to the mbox file
+        my_email: Your email address (to identify sent vs received)
+        num_threads: Number of threads (0 = auto-detect based on CPU cores)
+
+    Returns:
+        List of Contact objects with received/sent counts
+
+    Raises:
+        ImportError: If Rust extension is not installed
+    """
+    if not RUST_AVAILABLE:
+        raise ImportError(
+            "fast_mbox_parser not installed. "
+            "Install with: cd rust_parser && maturin develop --release"
+        )
+
+    mbox_file = Path(mbox_file)
+    rust_contacts = _rust_parser.parse_mbox(str(mbox_file), my_email, num_threads)
+
+    return [
+        Contact(
+            name=c.name,
+            email=c.email,
+            received_count=c.received_count,
+            sent_count=c.sent_count,
+        )
+        for c in rust_contacts
+    ]
+
+
+def parse_mbox_auto(mbox_file: str | Path, my_email: str) -> list[Contact]:
+    """
+    Parse mbox file, automatically using Rust extension if available.
+
+    Falls back to pure Python implementation if Rust extension is not installed.
+    """
+    if RUST_AVAILABLE:
+        return parse_mbox_fast(mbox_file, my_email)
+    else:
+        return parse_mbox(mbox_file, my_email)
 
 
 def save_contacts_json(contacts: list[Contact], output_file: str | Path) -> None:
