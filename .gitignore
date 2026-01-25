@@ -1,9 +1,13 @@
+# Data files
+data/*
+!data/.gitkeep
+*.mbox
+
 # Credentials and tokens - NEVER commit these!
 credentials.json
 token.pickle
-*.json
 *.pickle
-*.mbox
+
 # Python
 __pycache__/
 *.py[cod]
@@ -11,6 +15,7 @@ __pycache__/
 .Python
 venv/
 env/
+.venv/
 .env
 
 # IDE
@@ -19,7 +24,10 @@ env/
 *.swp
 *.swo
 
-
-# Added by cargo
-
+# Rust
 /target
+gmail_api/target/
+
+# OS
+.DS_Store
+Thumbs.db
