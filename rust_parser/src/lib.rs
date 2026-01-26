@@ -53,46 +53,86 @@ impl ContactData {
 fn decode_mime_header(text: &str) -> String {
     let mut result = String::new();
     let mut remaining = text;
+    let mut last_was_encoded = false;
 
     while let Some(start) = remaining.find("=?") {
-        // Add text before encoded word
-        result.push_str(&remaining[..start]);
+        let between = &remaining[..start];
+        // RFC 2047: whitespace between adjacent encoded words is ignored
+        if last_was_encoded && between.chars().all(|c| c == ' ' || c == '\t') {
+            // skip whitespace between encoded words
+        } else {
+            result.push_str(between);
+        }
         remaining = &remaining[start..];
 
-        // Find end of encoded word
-        if let Some(end) = remaining[2..].find("?=") {
-            let encoded = &remaining[..end + 4];
-            remaining = &remaining[end + 4..];
+        // Parse =?charset?encoding?data?= by finding delimiters sequentially
+        let inner = &remaining[2..]; // skip "=?"
 
-            // Parse encoded word: =?charset?encoding?data?=
-            let parts: Vec<&str> = encoded[2..encoded.len() - 2].splitn(3, '?').collect();
-            if parts.len() == 3 {
-                let charset = parts[0];
-                let encoding = parts[1].to_uppercase();
-                let data = parts[2];
-
-                let decoded_bytes = match encoding.as_str() {
-                    "B" => base64_decode(data),
-                    "Q" => quoted_printable_decode(data),
-                    _ => None,
-                };
-
-                if let Some(bytes) = decoded_bytes {
-                    let decoded = decode_charset(&bytes, charset);
-                    result.push_str(&decoded);
-                } else {
-                    result.push_str(encoded);
-                }
-            } else {
-                result.push_str(encoded);
+        // Find end of charset (first '?')
+        let charset_end = match inner.find('?') {
+            Some(pos) => pos,
+            None => {
+                result.push_str("=?");
+                remaining = &remaining[2..];
+                last_was_encoded = false;
+                continue;
             }
+        };
+        let charset = &inner[..charset_end];
+
+        // Find end of encoding (next '?')
+        let after_charset = &inner[charset_end + 1..];
+        let encoding_end = match after_charset.find('?') {
+            Some(pos) => pos,
+            None => {
+                result.push_str("=?");
+                remaining = &remaining[2..];
+                last_was_encoded = false;
+                continue;
+            }
+        };
+        let encoding = &after_charset[..encoding_end];
+
+        // Find end of data ("?=" after the data section)
+        let data_start = &after_charset[encoding_end + 1..];
+        let data_end = match data_start.find("?=") {
+            Some(pos) => pos,
+            None => {
+                result.push_str(remaining);
+                remaining = "";
+                last_was_encoded = false;
+                break;
+            }
+        };
+        let data = &data_start[..data_end];
+
+        // Advance past the entire encoded word
+        let total_len = 2 + charset_end + 1 + encoding_end + 1 + data_end + 2;
+        remaining = &remaining[total_len..];
+
+        let encoding_upper = encoding.to_uppercase();
+        let decoded_bytes = match encoding_upper.as_str() {
+            "B" => base64_decode(data),
+            "Q" => quoted_printable_decode(data),
+            _ => None,
+        };
+
+        if let Some(bytes) = decoded_bytes {
+            result.push_str(&decode_charset(&bytes, charset));
+            last_was_encoded = true;
         } else {
-            result.push_str(remaining);
-            break;
+            // Could not decode, keep original
+            result.push_str(&text[start..start + total_len]);
+            last_was_encoded = false;
         }
     }
 
-    result.push_str(remaining);
+    if last_was_encoded && remaining.chars().all(|c| c == ' ' || c == '\t') {
+        // trailing whitespace after last encoded word — keep it
+        result.push_str(remaining);
+    } else {
+        result.push_str(remaining);
+    }
     result
 }
 
