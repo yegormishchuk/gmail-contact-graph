@@ -279,18 +279,16 @@ function renderGraph(data) {
         if (sameOrgNodes.length > 0) {
             const allOrgNodes = [d, ...sameOrgNodes];
 
-            // Connect every pair in the org group
-            for (let i = 0; i < allOrgNodes.length; i++) {
-                for (let j = i + 1; j < allOrgNodes.length; j++) {
-                    domainLinksGroup.append('line')
-                        .attr('class', 'domain-link')
-                        .attr('data-src', allOrgNodes[i].email)
-                        .attr('data-tgt', allOrgNodes[j].email)
-                        .attr('x1', allOrgNodes[i].x)
-                        .attr('y1', allOrgNodes[i].y)
-                        .attr('x2', allOrgNodes[j].x)
-                        .attr('y2', allOrgNodes[j].y);
-                }
+            // Connect as a chain: each node linked to its neighbors
+            for (let i = 0; i < allOrgNodes.length - 1; i++) {
+                domainLinksGroup.append('line')
+                    .attr('class', 'domain-link')
+                    .attr('data-src', allOrgNodes[i].email)
+                    .attr('data-tgt', allOrgNodes[i + 1].email)
+                    .attr('x1', allOrgNodes[i].x)
+                    .attr('y1', allOrgNodes[i].y)
+                    .attr('x2', allOrgNodes[i + 1].x)
+                    .attr('y2', allOrgNodes[i + 1].y);
             }
 
             // Show domain label
