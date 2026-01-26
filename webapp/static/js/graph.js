@@ -64,13 +64,6 @@ function getNodeRadius(d, maxActivity) {
     return scale(total || 1);
 }
 
-// Create pie chart arc generator
-function createPieArc(radius) {
-    return d3.arc()
-        .innerRadius(0)
-        .outerRadius(radius);
-}
-
 // Render graph with current filters
 function renderGraph(data) {
     const container = document.getElementById('graph-container');
@@ -144,11 +137,6 @@ function renderGraph(data) {
     // Create nodes group
     const nodesGroup = g.append('g').attr('class', 'nodes');
 
-    // Pie layout
-    const pie = d3.pie()
-        .value(d => d.value)
-        .sort(null);
-
     // Create node groups
     const nodeGroups = nodesGroup.selectAll('g.node')
         .data(data.nodes)
@@ -156,11 +144,10 @@ function renderGraph(data) {
         .append('g')
         .attr('class', d => d.isCenter ? 'node node-center' : 'node node-contact');
 
-    // Add pie charts to each node
-    nodeGroups.each(function(d) {
+    // Add fill-level circles to each node
+    nodeGroups.each(function(d, i) {
         const group = d3.select(this);
         const radius = getNodeRadius(d, maxActivity);
-        const arc = createPieArc(radius);
 
         if (d.isCenter) {
             // Center node - solid circle
@@ -170,22 +157,40 @@ function renderGraph(data) {
                 .attr('stroke', '#fff')
                 .attr('stroke-width', 4);
         } else {
-            // Contact node - pie chart
-            const pieData = pie([
-                { type: 'sent', value: d.sent || 0.01 },
-                { type: 'received', value: d.received || 0.01 }
-            ]);
+            // Contact node - fill level
+            const total = (d.sent || 0) + (d.received || 0);
+            const receivedRatio = total > 0 ? d.received / total : 0.5;
 
-            // Draw pie segments
-            group.selectAll('path')
-                .data(pieData)
-                .enter()
-                .append('path')
-                .attr('d', arc)
-                .attr('fill', segment => segment.data.type === 'sent' ? config.sentColor : config.receivedColor)
-                .attr('class', 'pie-segment');
+            const clipId = `clip-node-${i}`;
 
-            // Add border - green if has sent, otherwise default
+            // Clip path to constrain fill within circle
+            const defs = group.append('defs');
+            defs.append('clipPath')
+                .attr('id', clipId)
+                .append('circle')
+                .attr('r', radius);
+
+            const clipped = group.append('g')
+                .attr('clip-path', `url(#${clipId})`);
+
+            // Background: sent color (green) fills entire circle
+            clipped.append('rect')
+                .attr('x', -radius)
+                .attr('y', -radius)
+                .attr('width', radius * 2)
+                .attr('height', radius * 2)
+                .attr('fill', config.sentColor);
+
+            // Received color (blue) fills from bottom up
+            const fillHeight = radius * 2 * receivedRatio;
+            clipped.append('rect')
+                .attr('x', -radius)
+                .attr('y', radius - fillHeight)
+                .attr('width', radius * 2)
+                .attr('height', fillHeight)
+                .attr('fill', config.receivedColor);
+
+            // Border
             const hasSent = d.sent > 0;
             group.append('circle')
                 .attr('r', radius)

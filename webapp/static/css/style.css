@@ -86,11 +86,6 @@ svg {
     filter: drop-shadow(0 0 15px rgba(248, 113, 113, 0.6));
 }
 
-.pie-segment {
-    stroke: rgba(0, 0, 0, 0.2);
-    stroke-width: 1px;
-}
-
 .node-border {
     transition: stroke-width 0.2s;
 }
