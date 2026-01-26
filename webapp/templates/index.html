@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,87 +13,92 @@
             <h1>Gmail Contact Graph</h1>
             <div class="stats">
                 <div class="stat-item">
-                    <span>Всего контактов:</span>
+                    <span>Total contacts:</span>
                     <span class="stat-value" id="total-contacts">-</span>
                 </div>
                 <div class="stat-item">
-                    <span>Показано:</span>
+                    <span>Displayed:</span>
                     <span class="stat-value" id="displayed-contacts">-</span>
                 </div>
                 <div class="stat-item">
-                    <span>Получено писем:</span>
+                    <span>Emails received:</span>
                     <span class="stat-value" id="total-received">-</span>
                 </div>
                 <div class="stat-item">
-                    <span>Отправлено писем:</span>
+                    <span>Emails sent:</span>
                     <span class="stat-value" id="total-sent">-</span>
                 </div>
             </div>
         </header>
 
         <div id="graph-container">
-            <div class="loading" id="loading">Загрузка графа...</div>
+            <div class="loading" id="loading">Loading graph...</div>
             <svg id="graph"></svg>
 
             <div class="tooltip" id="tooltip">
                 <div class="tooltip-name"></div>
                 <div class="tooltip-email"></div>
+                <div class="tooltip-org"></div>
                 <div class="tooltip-stats">
                     <div class="tooltip-stat">
-                        <span class="tooltip-stat-label">Получено</span>
+                        <span class="tooltip-stat-label">Received</span>
                         <span class="tooltip-stat-value received"></span>
                     </div>
                     <div class="tooltip-stat">
-                        <span class="tooltip-stat-label">Отправлено</span>
+                        <span class="tooltip-stat-label">Sent</span>
                         <span class="tooltip-stat-value sent"></span>
                     </div>
                 </div>
             </div>
 
             <div class="legend">
-                <div class="legend-title">Обозначения</div>
+                <div class="legend-title">Legend</div>
                 <div class="legend-item">
                     <div class="legend-color received"></div>
-                    <span>Получено писем</span>
+                    <span>Emails received</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color sent"></div>
-                    <span>Отправлено писем</span>
+                    <span>Emails sent</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color border-indicator"></div>
-                    <span>Есть исходящие письма</span>
+                    <span>Has outgoing emails</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color domain-indicator"></div>
+                    <span>Same organization</span>
                 </div>
             </div>
 
             <div class="controls">
-                <div class="controls-title">Фильтры</div>
+                <div class="controls-title">Filters</div>
 
                 <div class="search-group">
-                    <input type="text" id="contact-search" placeholder="Поиск по имени или email..." autocomplete="off">
+                    <input type="text" id="contact-search" placeholder="Search by name or email..." autocomplete="off">
                     <div class="search-results" id="search-results"></div>
                 </div>
 
                 <div class="control-group">
                     <label class="control-label received">
                         <input type="checkbox" id="show-senders" checked>
-                        Показать отправителей
+                        Show senders
                     </label>
                     <label class="control-label sent">
                         <input type="checkbox" id="show-recipients" checked>
-                        Показать получателей
+                        Show recipients
                     </label>
                 </div>
 
                 <div class="slider-group">
                     <div class="slider-label">
-                        <span>Лимит контактов:</span>
+                        <span>Contact limit:</span>
                         <span class="slider-value" id="limit-value">50</span>
                     </div>
                     <input type="range" id="contact-limit" min="10" max="500" value="50" step="10">
                 </div>
 
-                <button class="control-btn" id="reset-zoom">Сбросить масштаб</button>
+                <button class="control-btn" id="reset-zoom">Reset zoom</button>
             </div>
         </div>
     </div>

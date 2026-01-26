@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from flask import Flask, jsonify, render_template
 
-from src.parser import parse_mbox_auto, save_contacts_json, load_contacts_json, RUST_AVAILABLE
+from src.parser import parse_mbox_auto, save_contacts_json, load_contacts_json, group_contacts_by_domain, RUST_AVAILABLE
 from src.config import DEFAULT_MBOX_FILE, DEFAULT_CONTACTS_FILE, MY_EMAIL, MY_NAME
 
 app = Flask(__name__)
@@ -124,6 +124,31 @@ def api_contacts():
     """Get all contacts as a list."""
     contacts = get_contacts()
     return jsonify([contact.to_dict() for contact in contacts])
+
+
+@app.route('/api/domains')
+def api_domains():
+    """Get contacts grouped by organizational email domain."""
+    contacts = get_contacts()
+    domain_groups = group_contacts_by_domain(contacts)
+
+    result = {}
+    for domain, users in domain_groups.items():
+        result[domain] = [
+            {
+                "name": c.name,
+                "email": c.email,
+                "received": c.received_count,
+                "sent": c.sent_count,
+                "total": c.total_count,
+            }
+            for c in sorted(users, key=lambda c: c.total_count, reverse=True)
+        ]
+
+    return jsonify({
+        "total_domains": len(result),
+        "domain_groups": result,
+    })
 
 
 if __name__ == '__main__':

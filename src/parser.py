@@ -7,6 +7,34 @@ from pathlib import Path
 
 from .models import Contact
 
+# Common email provider domains to ignore when grouping by organization
+IGNORED_DOMAINS: set[str] = {
+    # Google
+    "gmail.com", "googlemail.com", "google.com",
+    # Yandex
+    "yandex.ru", "yandex.com", "yandex.ua", "yandex.by", "yandex.kz",
+    "ya.ru",
+    # Mail.ru Group
+    "mail.ru", "inbox.ru", "list.ru", "bk.ru", "internet.ru",
+    # Rambler
+    "rambler.ru", "lenta.ru", "autorambler.ru", "myrambler.ru", "ro.ru",
+    # Microsoft
+    "outlook.com", "hotmail.com", "live.com", "live.ru", "msn.com",
+    # Yahoo
+    "yahoo.com", "yahoo.co.uk", "yahoo.fr", "yahoo.de",
+    # Apple
+    "icloud.com", "me.com", "mac.com",
+    # Other popular
+    "protonmail.com", "proton.me",
+    "tutanota.com", "tuta.io",
+    "aol.com",
+    "zoho.com",
+    "ukr.net",
+    "i.ua",
+    "meta.ua",
+    "bigmir.net",
+}
+
 # Try to import Rust extension for faster parsing
 try:
     import fast_mbox_parser as _rust_parser
@@ -181,11 +209,50 @@ def parse_mbox_auto(mbox_file: str | Path, my_email: str) -> list[Contact]:
         return parse_mbox(mbox_file, my_email)
 
 
+def group_contacts_by_domain(contacts: list[Contact]) -> dict[str, list[Contact]]:
+    """
+    Group contacts by email domain, ignoring common public email providers.
+
+    Returns a dict mapping domain -> list of contacts from that domain,
+    sorted by number of users per domain (descending).
+    Only includes domains with at least 2 contacts.
+    """
+    domain_map: dict[str, list[Contact]] = {}
+
+    for contact in contacts:
+        parts = contact.email.split('@')
+        if len(parts) != 2:
+            continue
+
+        domain = parts[1].lower()
+        if domain in IGNORED_DOMAINS:
+            continue
+
+        if domain not in domain_map:
+            domain_map[domain] = []
+        domain_map[domain].append(contact)
+
+    # Filter: keep only domains with 2+ contacts (actual organizations)
+    domain_map = {
+        domain: users
+        for domain, users in domain_map.items()
+        if len(users) >= 2
+    }
+
+    # Sort by number of users descending
+    domain_map = dict(
+        sorted(domain_map.items(), key=lambda item: len(item[1]), reverse=True)
+    )
+
+    return domain_map
+
+
 def save_contacts_json(contacts: list[Contact], output_file: str | Path) -> None:
     """Save contacts to JSON file."""
     output_file = Path(output_file)
 
-    # Format for backward compatibility with existing webapp
+    domain_groups = group_contacts_by_domain(contacts)
+
     data = {
         "senders": [
             {"name": c.name, "email": c.email, "count": c.received_count}
@@ -194,7 +261,14 @@ def save_contacts_json(contacts: list[Contact], output_file: str | Path) -> None
         "recipients": [
             {"name": c.name, "email": c.email, "count": c.sent_count}
             for c in contacts if c.sent_count > 0
-        ]
+        ],
+        "domain_groups": {
+            domain: [
+                {"name": c.name, "email": c.email, "received": c.received_count, "sent": c.sent_count}
+                for c in users
+            ]
+            for domain, users in domain_groups.items()
+        }
     }
 
     output_file.parent.mkdir(parents=True, exist_ok=True)

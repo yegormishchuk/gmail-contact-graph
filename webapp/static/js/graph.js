@@ -9,6 +9,7 @@ const config = {
     sentColor: '#4ade80',      // Green for sent
     receivedColor: '#60a5fa',  // Blue for received
     centerColor: '#f87171',    // Red for center
+    domainColor: '#fbbf24',    // Amber for domain/org links
     borderWidth: 3
 };
 
@@ -26,6 +27,10 @@ let currentTransform = d3.zoomIdentity;
 let currentNodes = null;
 let currentSvg = null;
 let currentZoom = null;
+
+// Domain groups: email -> domain, domain -> [emails]
+let emailToDomain = {};
+let domainToEmails = {};
 
 // Filter data based on current filters
 function filterData(data) {
@@ -134,6 +139,9 @@ function renderGraph(data) {
         }
     });
 
+    // Create domain links group (drawn below nodes)
+    const domainLinksGroup = g.append('g').attr('class', 'domain-links');
+
     // Create nodes group
     const nodesGroup = g.append('g').attr('class', 'nodes');
 
@@ -237,6 +245,17 @@ function renderGraph(data) {
         tooltip.select('.tooltip-stat-value.received').text(`${d.received.toLocaleString()} (${receivedPercent}%)`);
         tooltip.select('.tooltip-stat-value.sent').text(`${d.sent.toLocaleString()} (${sentPercent}%)`);
 
+        // Show org domain if contact belongs to one
+        const hoveredDomain = emailToDomain[d.email];
+        const orgEl = tooltip.select('.tooltip-org');
+        if (hoveredDomain) {
+            const orgSize = (domainToEmails[hoveredDomain] || []).length;
+            orgEl.text(`@${hoveredDomain} (${orgSize} contacts)`);
+            orgEl.classed('visible', true);
+        } else {
+            orgEl.classed('visible', false);
+        }
+
         tooltip
             .style('left', (event.pageX + 15) + 'px')
             .style('top', (event.pageY - 10) + 'px')
@@ -246,16 +265,69 @@ function renderGraph(data) {
         d3.select(this).select('.node-border')
             .attr('stroke-width', config.borderWidth + 2);
 
-        // Fade other nodes
+        // Find same-domain contacts
+        const domain = emailToDomain[d.email];
+        const sameOrgEmails = domain ? domainToEmails[domain] : null;
+        const sameOrgSet = sameOrgEmails ? new Set(sameOrgEmails) : new Set();
+
+        // Get displayed nodes that belong to the same org
+        const sameOrgNodes = sameOrgSet.size > 1
+            ? data.nodes.filter(n => !n.isCenter && n.email !== d.email && sameOrgSet.has(n.email))
+            : [];
+
+        // Draw edges between same-org contacts
+        if (sameOrgNodes.length > 0) {
+            const allOrgNodes = [d, ...sameOrgNodes];
+
+            // Connect every pair in the org group
+            for (let i = 0; i < allOrgNodes.length; i++) {
+                for (let j = i + 1; j < allOrgNodes.length; j++) {
+                    domainLinksGroup.append('line')
+                        .attr('class', 'domain-link')
+                        .attr('data-src', allOrgNodes[i].email)
+                        .attr('data-tgt', allOrgNodes[j].email)
+                        .attr('x1', allOrgNodes[i].x)
+                        .attr('y1', allOrgNodes[i].y)
+                        .attr('x2', allOrgNodes[j].x)
+                        .attr('y2', allOrgNodes[j].y);
+                }
+            }
+
+            // Show domain label
+            const allEmails = allOrgNodes.map(n => n.email);
+            domainLinksGroup.append('text')
+                .attr('class', 'domain-link-label')
+                .attr('data-emails', JSON.stringify(allEmails))
+                .attr('x', d3.mean(allOrgNodes, n => n.x))
+                .attr('y', d3.min(allOrgNodes, n => n.y) - 20)
+                .attr('text-anchor', 'middle')
+                .text(`@${domain}`);
+        }
+
+        // Fade non-org nodes, keep org mates visible
         const hoveredNode = this;
         nodeGroups.filter(function() { return this !== hoveredNode; })
             .transition().duration(150)
-            .style('opacity', node => node.isCenter ? 1 : 0.25);
+            .style('opacity', function(node) {
+                if (node.isCenter) return 1;
+                if (sameOrgSet.has(node.email)) return 1;
+                return 0.25;
+            });
 
-        // Fade other labels
+        // Highlight org mate borders
+        if (sameOrgNodes.length > 0) {
+            nodeGroups.filter(n => sameOrgSet.has(n.email) && n.email !== d.email)
+                .select('.node-border')
+                .attr('stroke', config.domainColor)
+                .attr('stroke-width', config.borderWidth + 1);
+        }
+
+        // Fade non-org labels
         labels.filter((_, i, nodes) => {
             const labelData = d3.select(nodes[i]).datum();
-            return labelData !== d && !labelData.isCenter;
+            if (labelData === d || labelData.isCenter) return false;
+            if (sameOrgSet.has(labelData.email)) return false;
+            return true;
         })
             .transition().duration(150)
             .style('opacity', 0.25);
@@ -274,6 +346,24 @@ function renderGraph(data) {
                 .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
         }
 
+        // Remove domain edges and label
+        domainLinksGroup.selectAll('*').remove();
+
+        // Restore org mate borders
+        const domain = emailToDomain[d.email];
+        const sameOrgEmails = domain ? domainToEmails[domain] : null;
+        if (sameOrgEmails) {
+            const sameOrgSet = new Set(sameOrgEmails);
+            nodeGroups.filter(n => sameOrgSet.has(n.email) && n.email !== d.email)
+                .select('.node-border')
+                .each(function(n) {
+                    const hasSent = n.sent > 0;
+                    d3.select(this)
+                        .attr('stroke', hasSent ? config.sentColor : 'rgba(255,255,255,0.3)')
+                        .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
+                });
+        }
+
         // Restore all nodes opacity
         nodeGroups.transition().duration(150)
             .style('opacity', 1);
@@ -290,6 +380,30 @@ function renderGraph(data) {
         labels
             .attr('x', d => d.x)
             .attr('y', d => d.y + getNodeRadius(d, maxActivity) + 15);
+
+        // Update domain link positions if any are visible
+        domainLinksGroup.selectAll('.domain-link').each(function() {
+            const line = d3.select(this);
+            const srcEmail = line.attr('data-src');
+            const tgtEmail = line.attr('data-tgt');
+            const src = data.nodes.find(n => n.email === srcEmail);
+            const tgt = data.nodes.find(n => n.email === tgtEmail);
+            if (src && tgt) {
+                line.attr('x1', src.x).attr('y1', src.y)
+                    .attr('x2', tgt.x).attr('y2', tgt.y);
+            }
+        });
+
+        // Update domain label position
+        domainLinksGroup.selectAll('.domain-link-label').each(function() {
+            const label = d3.select(this);
+            const domainEmails = JSON.parse(label.attr('data-emails') || '[]');
+            const domainNodes = data.nodes.filter(n => domainEmails.includes(n.email));
+            if (domainNodes.length > 0) {
+                label.attr('x', d3.mean(domainNodes, n => n.x));
+                label.attr('y', d3.min(domainNodes, n => n.y) - 20);
+            }
+        });
     });
 
     // Drag functions
@@ -323,8 +437,23 @@ function applyFilters() {
 // Initialize
 async function init() {
     try {
-        const response = await fetch('/api/graph');
-        rawData = await response.json();
+        const [graphResponse, domainsResponse] = await Promise.all([
+            fetch('/api/graph'),
+            fetch('/api/domains'),
+        ]);
+        rawData = await graphResponse.json();
+
+        // Build domain lookup maps
+        const domainsData = await domainsResponse.json();
+        emailToDomain = {};
+        domainToEmails = {};
+        for (const [domain, users] of Object.entries(domainsData.domain_groups || {})) {
+            const emails = users.map(u => u.email);
+            domainToEmails[domain] = emails;
+            for (const email of emails) {
+                emailToDomain[email] = domain;
+            }
+        }
 
         document.getElementById('loading').style.display = 'none';
 
@@ -347,7 +476,7 @@ async function init() {
         });
 
     } catch (error) {
-        document.getElementById('loading').textContent = 'Ошибка загрузки: ' + error.message;
+        document.getElementById('loading').textContent = 'Loading error: ' + error.message;
         console.error('Error loading graph:', error);
     }
 }
@@ -412,7 +541,7 @@ function renderSearchResults(results) {
     selectedIndex = -1;
 
     if (results.length === 0) {
-        searchResults.innerHTML = '<div class="search-no-results">Ничего не найдено</div>';
+        searchResults.innerHTML = '<div class="search-no-results">No results found</div>';
         searchResults.classList.add('visible');
         return;
     }
