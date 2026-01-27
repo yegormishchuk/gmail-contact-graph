@@ -294,8 +294,9 @@ function renderGraph(data) {
             ? data.nodes.filter(n => !n.isCenter && n.email !== d.email && sameOrgSet.has(n.email))
             : [];
 
-        // Draw edges between same-org contacts
-        if (sameOrgNodes.length > 0) {
+        // Draw edges between same-org contacts (skip if org has >20 contacts — too cluttered)
+        const orgTotalSize = (domainToEmails[domain] || []).length;
+        if (sameOrgNodes.length > 0 && orgTotalSize <= 20) {
             const allOrgNodes = [d, ...sameOrgNodes];
 
             // Connect as a chain: each node linked to its neighbors
@@ -319,6 +320,15 @@ function renderGraph(data) {
                 .attr('y', d3.min(allOrgNodes, n => n.y) - 20)
                 .attr('text-anchor', 'middle')
                 .text(`@${domain}`);
+        } else if (sameOrgNodes.length > 0 && orgTotalSize > 20) {
+            // Large org: no edges, just show label (opacity handled in general fade below)
+            domainLinksGroup.append('text')
+                .attr('class', 'domain-link-label')
+                .attr('data-emails', JSON.stringify([d.email]))
+                .attr('x', d.x)
+                .attr('y', d.y - getNodeRadius(d, maxActivity) - 20)
+                .attr('text-anchor', 'middle')
+                .text(`@${domain} (${orgTotalSize})`);
         }
 
         // Draw edges between message group members
@@ -364,11 +374,12 @@ function renderGraph(data) {
 
         // Fade non-related nodes, keep org mates and group mates visible
         const hoveredNode = this;
+        const largeOrg = orgTotalSize > 20;
         nodeGroups.filter(function() { return this !== hoveredNode; })
             .transition().duration(150)
             .style('opacity', function(node) {
                 if (node.isCenter) return 1;
-                if (sameOrgSet.has(node.email)) return 1;
+                if (sameOrgSet.has(node.email)) return largeOrg ? 0.5 : 1;
                 if (groupMateSet.has(node.email)) return 1;
                 return 0.25;
             });
@@ -382,15 +393,13 @@ function renderGraph(data) {
         }
 
         // Fade non-related labels
-        labels.filter((_, i, nodes) => {
-            const labelData = d3.select(nodes[i]).datum();
-            if (labelData === d || labelData.isCenter) return false;
-            if (sameOrgSet.has(labelData.email)) return false;
-            if (groupMateSet.has(labelData.email)) return false;
-            return true;
-        })
+        labels.filter(labelData => !labelData.isCenter && labelData !== d)
             .transition().duration(150)
-            .style('opacity', 0.25);
+            .style('opacity', function(labelData) {
+                if (sameOrgSet.has(labelData.email)) return largeOrg ? 0.5 : 1;
+                if (groupMateSet.has(labelData.email)) return 1;
+                return 0.25;
+            });
     })
     .on('mousemove', (event) => {
         tooltip

@@ -48,12 +48,7 @@ def parse_message_groups_on_startup():
         total_recipients = sum(len(recipients) for recipients in _message_groups_cache.values())
         
         print(f"Found {total_groups} message groups with {total_recipients} total recipients in {elapsed:.2f}s")
-        print("\nMessage Groups Details:")
-        for subject, recipients in _message_groups_cache.items():
-            print(f"  Subject: {subject}")
-            print(f"    Recipients ({len(recipients)}): {', '.join(recipients)}")
-    else:
-        print("No message groups found.")
+
 
 
 def parse_contacts_on_startup():
