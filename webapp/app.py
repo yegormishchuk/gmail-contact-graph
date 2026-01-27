@@ -12,10 +12,48 @@ from flask import Flask, jsonify, render_template
 from src.parser import parse_mbox_auto, save_contacts_json, load_contacts_json, group_contacts_by_domain, RUST_AVAILABLE
 from src.config import DEFAULT_MBOX_FILE, DEFAULT_CONTACTS_FILE, MY_EMAIL, MY_NAME
 
+# Import parse_message_groups from Rust parser
+try:
+    from fast_mbox_parser import parse_message_groups
+except ImportError:
+    parse_message_groups = None
+
 app = Flask(__name__)
 
 # Global contacts cache
 _contacts_cache = None
+_message_groups_cache = None
+
+
+def parse_message_groups_on_startup():
+    """Parse message groups on startup and print results."""
+    global _message_groups_cache
+    
+    if parse_message_groups is None:
+        print("Warning: parse_message_groups is not available (Rust parser not loaded)")
+        return
+    
+    if not DEFAULT_MBOX_FILE.exists():
+        print(f"Warning: mbox file not found: {DEFAULT_MBOX_FILE}")
+        return
+    
+    print(f"Analyzing message groups from {DEFAULT_MBOX_FILE.name}...")
+    
+    start = time.perf_counter()
+    _message_groups_cache = parse_message_groups(str(DEFAULT_MBOX_FILE), MY_EMAIL)
+    elapsed = time.perf_counter() - start
+    
+    if _message_groups_cache:
+        total_groups = len(_message_groups_cache)
+        total_recipients = sum(len(recipients) for recipients in _message_groups_cache.values())
+        
+        print(f"Found {total_groups} message groups with {total_recipients} total recipients in {elapsed:.2f}s")
+        print("\nMessage Groups Details:")
+        for subject, recipients in _message_groups_cache.items():
+            print(f"  Subject: {subject}")
+            print(f"    Recipients ({len(recipients)}): {', '.join(recipients)}")
+    else:
+        print("No message groups found.")
 
 
 def parse_contacts_on_startup():
@@ -151,7 +189,25 @@ def api_domains():
     })
 
 
+@app.route('/api/message-groups')
+def api_message_groups():
+    """Get message groups (multi-recipient emails grouped by subject)."""
+    global _message_groups_cache
+    if _message_groups_cache is None:
+        parse_message_groups_on_startup()
+
+    groups = _message_groups_cache or {}
+    return jsonify({
+        "total_groups": len(groups),
+        "groups": {subject: recipients for subject, recipients in groups.items()},
+    })
+
+
 if __name__ == '__main__':
     # Parse mbox on startup
     parse_contacts_on_startup()
+    
+    # Parse message groups on startup
+    parse_message_groups_on_startup()
+    
     app.run(debug=True, port=5000)

@@ -10,6 +10,7 @@ const config = {
     receivedColor: '#60a5fa',  // Blue for received
     centerColor: '#f87171',    // Red for center
     domainColor: '#fbbf24',    // Amber for domain/org links
+    groupColor: '#c084fc',     // Purple for message groups
     borderWidth: 3
 };
 
@@ -31,6 +32,10 @@ let currentZoom = null;
 // Domain groups: email -> domain, domain -> [emails]
 let emailToDomain = {};
 let domainToEmails = {};
+
+// Message groups: email -> [subjects], subject -> [emails]
+let emailToGroups = {};
+let groupToEmails = {};
 
 // Filter data based on current filters
 function filterData(data) {
@@ -139,8 +144,9 @@ function renderGraph(data) {
         }
     });
 
-    // Create domain links group (drawn below nodes)
+    // Create link groups (drawn below nodes)
     const domainLinksGroup = g.append('g').attr('class', 'domain-links');
+    const groupLinksGroup = g.append('g').attr('class', 'group-links');
 
     // Create nodes group
     const nodesGroup = g.append('g').attr('class', 'nodes');
@@ -256,6 +262,19 @@ function renderGraph(data) {
             orgEl.classed('visible', false);
         }
 
+        // Show message groups if contact belongs to any
+        const hoveredGroups = emailToGroups[d.email] || [];
+        const groupsEl = tooltip.select('.tooltip-groups');
+        if (hoveredGroups.length > 0) {
+            groupsEl.html(hoveredGroups.map(subject => {
+                const size = (groupToEmails[subject] || []).length;
+                return `<div>"${subject}" (${size} recipients)</div>`;
+            }).join(''));
+            groupsEl.classed('visible', true);
+        } else {
+            groupsEl.classed('visible', false);
+        }
+
         tooltip
             .style('left', (event.pageX + 15) + 'px')
             .style('top', (event.pageY - 10) + 'px')
@@ -302,13 +321,55 @@ function renderGraph(data) {
                 .text(`@${domain}`);
         }
 
-        // Fade non-org nodes, keep org mates visible
+        // Draw edges between message group members
+        const groupMateSet = new Set();
+        for (const subject of hoveredGroups) {
+            const groupEmails = groupToEmails[subject] || [];
+            const groupNodes = data.nodes.filter(n => !n.isCenter && n.email !== d.email && groupEmails.includes(n.email));
+
+            if (groupNodes.length > 0) {
+                const allGroupNodes = [d, ...groupNodes];
+
+                for (let i = 0; i < allGroupNodes.length - 1; i++) {
+                    groupLinksGroup.append('line')
+                        .attr('class', 'group-link')
+                        .attr('data-src', allGroupNodes[i].email)
+                        .attr('data-tgt', allGroupNodes[i + 1].email)
+                        .attr('x1', allGroupNodes[i].x)
+                        .attr('y1', allGroupNodes[i].y)
+                        .attr('x2', allGroupNodes[i + 1].x)
+                        .attr('y2', allGroupNodes[i + 1].y);
+                }
+
+                const allEmails = allGroupNodes.map(n => n.email);
+                groupLinksGroup.append('text')
+                    .attr('class', 'group-link-label')
+                    .attr('data-emails', JSON.stringify(allEmails))
+                    .attr('x', d3.mean(allGroupNodes, n => n.x))
+                    .attr('y', d3.max(allGroupNodes, n => n.y) + 25)
+                    .attr('text-anchor', 'middle')
+                    .text(`"${subject}"`);
+
+                for (const n of groupNodes) groupMateSet.add(n.email);
+            }
+        }
+
+        // Highlight group mate borders
+        if (groupMateSet.size > 0) {
+            nodeGroups.filter(n => groupMateSet.has(n.email) && n.email !== d.email && !sameOrgSet.has(n.email))
+                .select('.node-border')
+                .attr('stroke', config.groupColor)
+                .attr('stroke-width', config.borderWidth + 1);
+        }
+
+        // Fade non-related nodes, keep org mates and group mates visible
         const hoveredNode = this;
         nodeGroups.filter(function() { return this !== hoveredNode; })
             .transition().duration(150)
             .style('opacity', function(node) {
                 if (node.isCenter) return 1;
                 if (sameOrgSet.has(node.email)) return 1;
+                if (groupMateSet.has(node.email)) return 1;
                 return 0.25;
             });
 
@@ -320,11 +381,12 @@ function renderGraph(data) {
                 .attr('stroke-width', config.borderWidth + 1);
         }
 
-        // Fade non-org labels
+        // Fade non-related labels
         labels.filter((_, i, nodes) => {
             const labelData = d3.select(nodes[i]).datum();
             if (labelData === d || labelData.isCenter) return false;
             if (sameOrgSet.has(labelData.email)) return false;
+            if (groupMateSet.has(labelData.email)) return false;
             return true;
         })
             .transition().duration(150)
@@ -344,8 +406,9 @@ function renderGraph(data) {
                 .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
         }
 
-        // Remove domain edges and label
+        // Remove domain and group edges and labels
         domainLinksGroup.selectAll('*').remove();
+        groupLinksGroup.selectAll('*').remove();
 
         // Restore org mate borders
         const domain = emailToDomain[d.email];
@@ -353,6 +416,20 @@ function renderGraph(data) {
         if (sameOrgEmails) {
             const sameOrgSet = new Set(sameOrgEmails);
             nodeGroups.filter(n => sameOrgSet.has(n.email) && n.email !== d.email)
+                .select('.node-border')
+                .each(function(n) {
+                    const hasSent = n.sent > 0;
+                    d3.select(this)
+                        .attr('stroke', hasSent ? config.sentColor : 'rgba(255,255,255,0.3)')
+                        .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
+                });
+        }
+
+        // Restore group mate borders
+        const hoveredGroups = emailToGroups[d.email] || [];
+        for (const subject of hoveredGroups) {
+            const groupEmails = groupToEmails[subject] || [];
+            nodeGroups.filter(n => groupEmails.includes(n.email) && n.email !== d.email)
                 .select('.node-border')
                 .each(function(n) {
                     const hasSent = n.sent > 0;
@@ -402,6 +479,30 @@ function renderGraph(data) {
                 label.attr('y', d3.min(domainNodes, n => n.y) - 20);
             }
         });
+
+        // Update group link positions
+        groupLinksGroup.selectAll('.group-link').each(function() {
+            const line = d3.select(this);
+            const srcEmail = line.attr('data-src');
+            const tgtEmail = line.attr('data-tgt');
+            const src = data.nodes.find(n => n.email === srcEmail);
+            const tgt = data.nodes.find(n => n.email === tgtEmail);
+            if (src && tgt) {
+                line.attr('x1', src.x).attr('y1', src.y)
+                    .attr('x2', tgt.x).attr('y2', tgt.y);
+            }
+        });
+
+        // Update group label position
+        groupLinksGroup.selectAll('.group-link-label').each(function() {
+            const label = d3.select(this);
+            const groupEmails = JSON.parse(label.attr('data-emails') || '[]');
+            const groupNodes = data.nodes.filter(n => groupEmails.includes(n.email));
+            if (groupNodes.length > 0) {
+                label.attr('x', d3.mean(groupNodes, n => n.x));
+                label.attr('y', d3.max(groupNodes, n => n.y) + 25);
+            }
+        });
     });
 
     // Drag functions
@@ -435,9 +536,10 @@ function applyFilters() {
 // Initialize
 async function init() {
     try {
-        const [graphResponse, domainsResponse] = await Promise.all([
+        const [graphResponse, domainsResponse, groupsResponse] = await Promise.all([
             fetch('/api/graph'),
             fetch('/api/domains'),
+            fetch('/api/message-groups'),
         ]);
         rawData = await graphResponse.json();
 
@@ -450,6 +552,18 @@ async function init() {
             domainToEmails[domain] = emails;
             for (const email of emails) {
                 emailToDomain[email] = domain;
+            }
+        }
+
+        // Build message group lookup maps
+        const groupsData = await groupsResponse.json();
+        emailToGroups = {};
+        groupToEmails = {};
+        for (const [subject, emails] of Object.entries(groupsData.groups || {})) {
+            groupToEmails[subject] = emails;
+            for (const email of emails) {
+                if (!emailToGroups[email]) emailToGroups[email] = [];
+                emailToGroups[email].push(subject);
             }
         }
 

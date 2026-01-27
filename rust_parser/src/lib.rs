@@ -269,9 +269,8 @@ fn parse_mbox_single(path: &str, my_email: &str) -> HashMap<String, ContactAccum
             }
         } else if looking_for_to && line.starts_with("To:") {
             let decoded = decode_mime_header(&line);
-            // Convert To: line to From: format for parsing
-            let fake_from = format!("From:{}", &decoded[3..]);
-            if let Some((name, email)) = parse_sender(&fake_from) {
+            let content = decoded.get(3..).unwrap_or("");
+            for (name, email) in parse_all_recipients(content) {
                 let entry = contacts.entry(email).or_default();
                 entry.sent += 1;
                 if entry.name.is_empty() {
@@ -355,8 +354,8 @@ fn parse_chunk(data: &[u8], my_email: &str) -> HashMap<String, ContactAccumulato
             }
         } else if looking_for_to && line.starts_with("To:") {
             let decoded = decode_mime_header(line);
-            let fake_from = format!("From:{}", &decoded[3..]);
-            if let Some((name, email)) = parse_sender(&fake_from) {
+            let content = decoded.get(3..).unwrap_or("");
+            for (name, email) in parse_all_recipients(content) {
                 let entry = contacts.entry(email).or_default();
                 entry.sent += 1;
                 if entry.name.is_empty() {
@@ -537,6 +536,22 @@ fn parse_all_emails(text: &str) -> Vec<String> {
     emails
 }
 
+/// Extract all (name, email) pairs from a header value (To/CC field content).
+fn parse_all_recipients(text: &str) -> Vec<(String, String)> {
+    let mut recipients = Vec::new();
+    for part in text.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let fake_from = format!("From: {}", part);
+        if let Some((name, email)) = parse_sender(&fake_from) {
+            recipients.push((name, email));
+        }
+    }
+    recipients
+}
+
 /// Finalize a multi-recipient message group, merging into the groups map.
 fn finalize_message_group(
     groups: &mut HashMap<String, Vec<String>>,
@@ -586,6 +601,9 @@ fn parse_message_groups(path: &str, my_email: &str) -> PyResult<HashMap<String, 
     let mut in_sent_headers = false;
     let mut current_subject = String::new();
     let mut current_recipients: Vec<String> = Vec::new();
+    // Subject may appear before From: in the same message's headers.
+    // Buffer it so we can use it when From: is encountered.
+    let mut pre_from_subject = String::new();
 
     for line in reader.lines() {
         let line = match line {
@@ -603,6 +621,7 @@ fn parse_message_groups(path: &str, my_email: &str) -> PyResult<HashMap<String, 
                 );
                 in_sent_headers = false;
             }
+            pre_from_subject.clear();
             continue;
         }
 
@@ -621,19 +640,26 @@ fn parse_message_groups(path: &str, my_email: &str) -> PyResult<HashMap<String, 
             if let Some((_, email)) = parse_sender(&decoded) {
                 if email == my_email {
                     in_sent_headers = true;
-                    current_subject = String::new();
+                    // Use subject already seen in this message's headers
+                    current_subject = std::mem::take(&mut pre_from_subject);
                     current_recipients = Vec::new();
                 }
             }
+            pre_from_subject.clear();
+        } else if line.starts_with("Subject:") {
+            let decoded = decode_mime_header(&line);
+            let subject = decoded
+                .get("Subject:".len()..)
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if in_sent_headers {
+                current_subject = subject;
+            } else {
+                pre_from_subject = subject;
+            }
         } else if in_sent_headers {
-            if line.starts_with("Subject:") {
-                let decoded = decode_mime_header(&line);
-                current_subject = decoded
-                    .get("Subject:".len()..)
-                    .unwrap_or("")
-                    .trim()
-                    .to_string();
-            } else if line.starts_with("To:")
+            if line.starts_with("To:")
                 || line.starts_with("Cc:")
                 || line.starts_with("CC:")
             {
