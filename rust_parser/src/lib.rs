@@ -8,7 +8,7 @@
 use pyo3::prelude::*;
 
 mod contact;
-mod email;
+pub mod email;
 mod groups;
 pub mod mime;
 mod parser;

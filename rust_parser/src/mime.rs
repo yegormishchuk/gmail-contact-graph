@@ -86,7 +86,7 @@ pub fn decode_mime_header(text: &str) -> String {
 }
 
 /// Decode base64 data.
-fn base64_decode(data: &str) -> Option<Vec<u8>> {
+pub fn base64_decode(data: &str) -> Option<Vec<u8>> {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD
         .decode(data)
@@ -116,8 +116,49 @@ fn quoted_printable_decode(data: &str) -> Option<Vec<u8>> {
     Some(result)
 }
 
+/// Decode quoted-printable body content (RFC 2045).
+///
+/// Unlike header QP, underscores remain literal and `=\n` is a soft line break.
+pub fn body_quoted_printable_decode(data: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(data.len());
+    let mut i = 0;
+
+    while i < data.len() {
+        if data[i] == b'=' {
+            // Soft line break: =\r\n or =\n
+            if i + 1 < data.len() && data[i + 1] == b'\n' {
+                i += 2;
+                continue;
+            }
+            if i + 2 < data.len() && data[i + 1] == b'\r' && data[i + 2] == b'\n' {
+                i += 3;
+                continue;
+            }
+            // Hex escape: =XX
+            if i + 2 < data.len() {
+                let hex = &data[i + 1..i + 3];
+                if let Ok(s) = std::str::from_utf8(hex) {
+                    if let Ok(byte) = u8::from_str_radix(s, 16) {
+                        result.push(byte);
+                        i += 3;
+                        continue;
+                    }
+                }
+            }
+            // Malformed, keep as-is
+            result.push(b'=');
+            i += 1;
+        } else {
+            result.push(data[i]);
+            i += 1;
+        }
+    }
+
+    result
+}
+
 /// Decode bytes using specified charset.
-fn decode_charset(bytes: &[u8], charset: &str) -> String {
+pub fn decode_charset(bytes: &[u8], charset: &str) -> String {
     let charset_lower = charset.to_lowercase();
     let encoding = match charset_lower.as_str() {
         "utf-8" | "utf8" => encoding_rs::UTF_8,
