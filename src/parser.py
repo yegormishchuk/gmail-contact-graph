@@ -1,7 +1,8 @@
 """Mbox file parser for extracting email contacts."""
 
 import json
-from collections import Counter
+import sqlite3
+from collections import Counter, defaultdict
 from email.header import decode_header
 from pathlib import Path
 
@@ -313,3 +314,79 @@ def load_contacts_json(input_file: str | Path) -> list[Contact]:
     contacts.sort(key=lambda c: c.total_count, reverse=True)
 
     return contacts
+
+
+def load_contacts_from_db(db_path: str | Path, my_email: str) -> list[Contact]:
+    """Load contacts from SQLite database (data/mails.db)."""
+    my_email = my_email.lower()
+    conn = sqlite3.connect(str(db_path))
+
+    # Received: emails where I am a recipient
+    received = conn.execute(
+        'SELECT "from", COUNT(*) FROM mails '
+        'WHERE "to" = ? AND "from" != ? AND length("from") > 1 '
+        'GROUP BY "from"',
+        (my_email, my_email),
+    ).fetchall()
+
+    # Sent: emails where I am the sender
+    sent = conn.execute(
+        'SELECT "to", COUNT(*) FROM mails '
+        'WHERE "from" = ? AND "to" != ? AND length("to") > 1 '
+        'GROUP BY "to"',
+        (my_email, my_email),
+    ).fetchall()
+
+    conn.close()
+
+    contacts_map: dict[str, Contact] = {}
+
+    for email, count in received:
+        contacts_map[email] = Contact(
+            name=email.split('@')[0],
+            email=email,
+            received_count=count,
+        )
+
+    for email, count in sent:
+        if email in contacts_map:
+            contacts_map[email].sent_count = count
+        else:
+            contacts_map[email] = Contact(
+                name=email.split('@')[0],
+                email=email,
+                sent_count=count,
+            )
+
+    contacts = list(contacts_map.values())
+    contacts.sort(key=lambda c: c.total_count, reverse=True)
+    return contacts
+
+
+def load_message_groups_from_db(db_path: str | Path, my_email: str) -> dict[str, list[str]]:
+    """Load message groups from SQLite database (data/mails.db).
+
+    Returns dict: subject -> list of unique recipient emails.
+    Only includes subjects with 2+ unique recipients.
+    """
+    my_email = my_email.lower()
+    conn = sqlite3.connect(str(db_path))
+
+    rows = conn.execute(
+        'SELECT subject, "to" FROM mails '
+        'WHERE "from" = ? AND "to" != ? AND subject != "" AND length("to") > 1',
+        (my_email, my_email),
+    ).fetchall()
+
+    conn.close()
+
+    groups: dict[str, set[str]] = defaultdict(set)
+    for subject, recipient in rows:
+        groups[subject].add(recipient)
+
+    # Keep only groups with 2+ unique recipients
+    return {
+        subject: list(recipients)
+        for subject, recipients in groups.items()
+        if len(recipients) >= 2
+    }

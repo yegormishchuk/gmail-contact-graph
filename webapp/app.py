@@ -9,14 +9,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from flask import Flask, jsonify, render_template
 
-from src.parser import parse_mbox_auto, save_contacts_json, load_contacts_json, group_contacts_by_domain, RUST_AVAILABLE
-from src.config import DEFAULT_MBOX_FILE, DEFAULT_CONTACTS_FILE, MY_EMAIL, MY_NAME
-
-# Import parse_message_groups from Rust parser
-try:
-    from fast_mbox_parser import parse_message_groups
-except ImportError:
-    parse_message_groups = None
+from src.parser import load_contacts_from_db, load_message_groups_from_db, group_contacts_by_domain
+from src.config import DEFAULT_DB_FILE, MY_EMAIL, MY_NAME
 
 app = Flask(__name__)
 
@@ -25,62 +19,33 @@ _contacts_cache = None
 _message_groups_cache = None
 
 
-def parse_message_groups_on_startup():
-    """Parse message groups on startup and print results."""
-    global _message_groups_cache
-    
-    if parse_message_groups is None:
-        print("Warning: parse_message_groups is not available (Rust parser not loaded)")
+def load_data_on_startup():
+    """Load contacts and message groups from SQLite database."""
+    global _contacts_cache, _message_groups_cache
+
+    if not DEFAULT_DB_FILE.exists():
+        print(f"Error: database not found: {DEFAULT_DB_FILE}")
+        print("Run fill_db first to populate the database.")
+        _contacts_cache = []
+        _message_groups_cache = {}
         return
-    
-    if not DEFAULT_MBOX_FILE.exists():
-        print(f"Warning: mbox file not found: {DEFAULT_MBOX_FILE}")
-        return
-    
-    print(f"Analyzing message groups from {DEFAULT_MBOX_FILE.name}...")
-    
+
+    print(f"Loading data from {DEFAULT_DB_FILE.name}...")
     start = time.perf_counter()
-    _message_groups_cache = parse_message_groups(str(DEFAULT_MBOX_FILE), MY_EMAIL)
+
+    _contacts_cache = load_contacts_from_db(DEFAULT_DB_FILE, MY_EMAIL)
+    _message_groups_cache = load_message_groups_from_db(DEFAULT_DB_FILE, MY_EMAIL)
+
     elapsed = time.perf_counter() - start
-    
-    if _message_groups_cache:
-        total_groups = len(_message_groups_cache)
-        total_recipients = sum(len(recipients) for recipients in _message_groups_cache.values())
-        
-        print(f"Found {total_groups} message groups with {total_recipients} total recipients in {elapsed:.2f}s")
-
-
-
-def parse_contacts_on_startup():
-    """Parse mbox file on startup and cache results."""
-    global _contacts_cache
-
-    if not DEFAULT_MBOX_FILE.exists():
-        print(f"Warning: mbox file not found: {DEFAULT_MBOX_FILE}")
-        print("Loading from existing contacts.json...")
-        _contacts_cache = load_contacts_json(DEFAULT_CONTACTS_FILE)
-        return
-
-    file_size_mb = DEFAULT_MBOX_FILE.stat().st_size / (1024 * 1024)
-    parser_name = "Rust" if RUST_AVAILABLE else "Python"
-
-    print(f"Parsing {DEFAULT_MBOX_FILE.name} ({file_size_mb:.1f} MB) with {parser_name}...")
-
-    start = time.perf_counter()
-    _contacts_cache = parse_mbox_auto(DEFAULT_MBOX_FILE, MY_EMAIL)
-    elapsed = time.perf_counter() - start
-
-    print(f"Parsed {len(_contacts_cache)} contacts in {elapsed:.2f}s ({file_size_mb/elapsed:.1f} MB/s)")
-
-    # Save to JSON for backup
-    save_contacts_json(_contacts_cache, DEFAULT_CONTACTS_FILE)
+    groups_count = len(_message_groups_cache)
+    print(f"Loaded {len(_contacts_cache)} contacts, {groups_count} message groups in {elapsed:.2f}s")
 
 
 def get_contacts():
     """Get contacts from cache."""
     global _contacts_cache
     if _contacts_cache is None:
-        parse_contacts_on_startup()
+        load_data_on_startup()
     return _contacts_cache
 
 
@@ -189,7 +154,7 @@ def api_message_groups():
     """Get message groups (multi-recipient emails grouped by subject)."""
     global _message_groups_cache
     if _message_groups_cache is None:
-        parse_message_groups_on_startup()
+        load_data_on_startup()
 
     groups = _message_groups_cache or {}
     return jsonify({
@@ -199,10 +164,6 @@ def api_message_groups():
 
 
 if __name__ == '__main__':
-    # Parse mbox on startup
-    parse_contacts_on_startup()
-    
-    # Parse message groups on startup
-    parse_message_groups_on_startup()
+    load_data_on_startup()
     
     app.run(debug=True, port=5000)
