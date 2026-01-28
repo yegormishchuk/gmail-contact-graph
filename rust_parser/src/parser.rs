@@ -5,13 +5,59 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::contact::{convert_to_contact_data, ContactAccumulator, ContactData};
-use crate::email::{parse_all_recipients, parse_sender};
+use crate::email::{parse_all_recipients, parse_email_date, parse_sender};
 use crate::mime::decode_mime_header;
+
+/// State for current message being parsed
+struct MessageState {
+    /// Is this message from me (need to look for To:)
+    is_from_me: bool,
+    /// Current message date timestamp
+    current_date: Option<i64>,
+    /// Contacts found in this message (email -> (name, is_sent))
+    pending_contacts: Vec<(String, String, bool)>,
+    /// Are we still in headers
+    in_headers: bool,
+}
+
+impl Default for MessageState {
+    fn default() -> Self {
+        Self {
+            is_from_me: false,
+            current_date: None,
+            pending_contacts: Vec::new(),
+            in_headers: true,
+        }
+    }
+}
+
+/// Flush pending contacts from message state into contacts map
+fn flush_message_contacts(
+    state: &mut MessageState,
+    contacts: &mut HashMap<String, ContactAccumulator>,
+) {
+    for (email, name, is_sent) in state.pending_contacts.drain(..) {
+        let entry = contacts.entry(email).or_default();
+        if is_sent {
+            entry.sent += 1;
+        } else {
+            entry.received += 1;
+        }
+        if entry.name.is_empty() && !name.is_empty() {
+            entry.name = name;
+        }
+        if let Some(ts) = state.current_date {
+            entry.update_timestamps(ts);
+        }
+    }
+    *state = MessageState::default();
+}
 
 /// Parse mbox file and return contacts (single-threaded version).
 fn parse_mbox_single(path: &str, my_email: &str) -> HashMap<String, ContactAccumulator> {
     let my_email = my_email.to_lowercase();
     let mut contacts: HashMap<String, ContactAccumulator> = HashMap::new();
+    let mut state = MessageState::default();
 
     let file = match File::open(path) {
         Ok(f) => f,
@@ -19,7 +65,6 @@ fn parse_mbox_single(path: &str, my_email: &str) -> HashMap<String, ContactAccum
     };
 
     let reader = BufReader::with_capacity(1024 * 1024, file); // 1MB buffer
-    let mut looking_for_to = false;
 
     for line in reader.lines() {
         let line = match line {
@@ -27,38 +72,46 @@ fn parse_mbox_single(path: &str, my_email: &str) -> HashMap<String, ContactAccum
             Err(_) => continue,
         };
 
-        if line.trim().is_empty() {
-            looking_for_to = false;
+        // New message separator in mbox format
+        if line.starts_with("From ") && line.len() > 5 {
+            flush_message_contacts(&mut state, &mut contacts);
             continue;
         }
 
-        if line.starts_with("From:") {
+        // Empty line marks end of headers
+        if line.trim().is_empty() {
+            state.in_headers = false;
+            continue;
+        }
+
+        if !state.in_headers {
+            continue;
+        }
+
+        if line.starts_with("Date:") {
+            let decoded = decode_mime_header(&line);
+            state.current_date = parse_email_date(&decoded);
+        } else if line.starts_with("From:") {
             let decoded = decode_mime_header(&line);
             if let Some((name, email)) = parse_sender(&decoded) {
                 if email == my_email {
-                    looking_for_to = true;
+                    state.is_from_me = true;
                 } else {
-                    looking_for_to = false;
-                    let entry = contacts.entry(email).or_default();
-                    entry.received += 1;
-                    if entry.name.is_empty() {
-                        entry.name = name;
-                    }
+                    state.is_from_me = false;
+                    state.pending_contacts.push((email, name, false));
                 }
             }
-        } else if looking_for_to && line.starts_with("To:") {
+        } else if state.is_from_me && line.starts_with("To:") {
             let decoded = decode_mime_header(&line);
             let content = decoded.get(3..).unwrap_or("");
             for (name, email) in parse_all_recipients(content) {
-                let entry = contacts.entry(email).or_default();
-                entry.sent += 1;
-                if entry.name.is_empty() {
-                    entry.name = name;
-                }
+                state.pending_contacts.push((email, name, true));
             }
-            looking_for_to = false;
         }
     }
+
+    // Flush last message
+    flush_message_contacts(&mut state, &mut contacts);
 
     contacts
 }
@@ -106,44 +159,52 @@ fn find_next_message_boundary(data: &[u8], from: usize) -> Option<usize> {
 fn parse_chunk(data: &[u8], my_email: &str) -> HashMap<String, ContactAccumulator> {
     let my_email = my_email.to_lowercase();
     let mut contacts: HashMap<String, ContactAccumulator> = HashMap::new();
-    let mut looking_for_to = false;
+    let mut state = MessageState::default();
 
     // Convert to string, handling invalid UTF-8
     let text = String::from_utf8_lossy(data);
 
     for line in text.lines() {
-        if line.trim().is_empty() {
-            looking_for_to = false;
+        // New message separator in mbox format
+        if line.starts_with("From ") && line.len() > 5 {
+            flush_message_contacts(&mut state, &mut contacts);
             continue;
         }
 
-        if line.starts_with("From:") {
+        // Empty line marks end of headers
+        if line.trim().is_empty() {
+            state.in_headers = false;
+            continue;
+        }
+
+        if !state.in_headers {
+            continue;
+        }
+
+        if line.starts_with("Date:") {
+            let decoded = decode_mime_header(line);
+            state.current_date = parse_email_date(&decoded);
+        } else if line.starts_with("From:") {
             let decoded = decode_mime_header(line);
             if let Some((name, email)) = parse_sender(&decoded) {
                 if email == my_email {
-                    looking_for_to = true;
+                    state.is_from_me = true;
                 } else {
-                    looking_for_to = false;
-                    let entry = contacts.entry(email).or_default();
-                    entry.received += 1;
-                    if entry.name.is_empty() {
-                        entry.name = name;
-                    }
+                    state.is_from_me = false;
+                    state.pending_contacts.push((email, name, false));
                 }
             }
-        } else if looking_for_to && line.starts_with("To:") {
+        } else if state.is_from_me && line.starts_with("To:") {
             let decoded = decode_mime_header(line);
             let content = decoded.get(3..).unwrap_or("");
             for (name, email) in parse_all_recipients(content) {
-                let entry = contacts.entry(email).or_default();
-                entry.sent += 1;
-                if entry.name.is_empty() {
-                    entry.name = name;
-                }
+                state.pending_contacts.push((email, name, true));
             }
-            looking_for_to = false;
         }
     }
+
+    // Flush last message
+    flush_message_contacts(&mut state, &mut contacts);
 
     contacts
 }
@@ -161,6 +222,13 @@ fn merge_contacts(
             entry.sent += acc.sent;
             if entry.name.is_empty() && !acc.name.is_empty() {
                 entry.name = acc.name;
+            }
+            // Merge timestamps: take earliest first and latest last
+            if let Some(ts) = acc.first_timestamp {
+                entry.update_timestamps(ts);
+            }
+            if let Some(ts) = acc.last_timestamp {
+                entry.update_timestamps(ts);
             }
         }
     }

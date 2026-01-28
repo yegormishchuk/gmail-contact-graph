@@ -1,3 +1,46 @@
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+
+/// Parse email Date header and return Unix timestamp.
+/// Handles common formats: RFC 2822 and variations.
+pub fn parse_email_date(line: &str) -> Option<i64> {
+    // Remove "Date: " prefix
+    let date_str = line.strip_prefix("Date:")?.trim();
+
+    // Try RFC 2822 format first (most common in emails)
+    if let Ok(dt) = DateTime::parse_from_rfc2822(date_str) {
+        return Some(dt.timestamp());
+    }
+
+    // Try common variations
+    let formats = [
+        "%a, %d %b %Y %H:%M:%S %z",      // Mon, 25 Dec 2023 10:30:00 +0000
+        "%d %b %Y %H:%M:%S %z",           // 25 Dec 2023 10:30:00 +0000
+        "%a, %d %b %Y %H:%M:%S",          // Mon, 25 Dec 2023 10:30:00
+        "%d %b %Y %H:%M:%S",              // 25 Dec 2023 10:30:00
+        "%Y-%m-%d %H:%M:%S %z",           // 2023-12-25 10:30:00 +0000
+        "%Y-%m-%d %H:%M:%S",              // 2023-12-25 10:30:00
+    ];
+
+    // Clean up date string - remove timezone name in parentheses like "(PST)"
+    let cleaned = if let Some(paren_pos) = date_str.find('(') {
+        date_str[..paren_pos].trim()
+    } else {
+        date_str
+    };
+
+    for fmt in formats {
+        if let Ok(dt) = DateTime::parse_from_str(cleaned, fmt) {
+            return Some(dt.timestamp());
+        }
+        // Try without timezone
+        if let Ok(naive) = NaiveDateTime::parse_from_str(cleaned, fmt) {
+            return Some(Utc.from_utc_datetime(&naive).timestamp());
+        }
+    }
+
+    None
+}
+
 /// Extract name and email from a "From: " line.
 pub fn parse_sender(line: &str) -> Option<(String, String)> {
     let sender = line.get(5..)?.trim();
