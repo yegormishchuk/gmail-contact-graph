@@ -5,7 +5,7 @@
 RUST_PARSER_DIR = rust_parser
 TOOLS_DIR = rust_parser/tools
 DATA_DIR = data
-MBOX_FILE = $(DATA_DIR)/unused_data/gmail_data.mbox
+MBOX_FILE = $(DATA_DIR)/gmail_data.mbox
 CONTACTS_DB = $(DATA_DIR)/contacts.db
 MAILS_DB = $(DATA_DIR)/mails.db
 

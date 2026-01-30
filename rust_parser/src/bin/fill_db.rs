@@ -18,6 +18,7 @@ struct EmailMessage {
     from_email: String,
     from_name: String,
     to: Vec<(String, String)>, // Vec<(email, name)>
+    delivered_to: String,      // Gmail uses this for the actual recipient
     subject: String,
     date: Option<i64>,
     content_type: String,
@@ -206,8 +207,8 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
     let mut stmt = conn
         .prepare(
-            "INSERT INTO contacts (name, email, received, sent, emails_per_month, average_chars, duration) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO contacts (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .unwrap();
 
@@ -219,10 +220,13 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
             continue;
         }
 
-        // Calculate emails_per_month
-        let emails_per_month = match (stats.first_timestamp, stats.last_timestamp) {
-            (Some(first), Some(last)) => Some(calculate_emails_per_month(first, last, total)),
-            _ => None,
+        // Calculate sent_per_month and received_per_month
+        let (sent_per_month, received_per_month) = match (stats.first_timestamp, stats.last_timestamp) {
+            (Some(first), Some(last)) => (
+                Some(calculate_emails_per_month(first, last, stats.sent)),
+                Some(calculate_emails_per_month(first, last, stats.received)),
+            ),
+            _ => (None, None),
         };
 
         // Calculate average_chars
@@ -253,7 +257,8 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
                 email,
                 stats.received,
                 stats.sent,
-                emails_per_month,
+                sent_per_month,
+                received_per_month,
                 average_chars,
                 duration
             ])
@@ -318,7 +323,8 @@ fn setup_contacts_db(conn: &Connection) {
              email           TEXT NOT NULL UNIQUE,
              received        INTEGER NOT NULL DEFAULT 0,
              sent            INTEGER NOT NULL DEFAULT 0,
-             emails_per_month REAL,
+             sent_per_month  REAL,
+             received_per_month REAL,
              average_chars   REAL,
              duration        REAL
          );
@@ -341,7 +347,7 @@ fn flush_header(name: &str, value: &str, msg: &mut EmailMessage) {
             let full_line = format!("From:{}", value);
             let decoded = decode_mime_header(&full_line);
             if let Some((sender_name, email)) = parse_sender(&decoded) {
-                msg.from_email = email;
+                msg.from_email = email.to_lowercase();
                 msg.from_name = sender_name;
             }
         }
@@ -349,16 +355,25 @@ fn flush_header(name: &str, value: &str, msg: &mut EmailMessage) {
             let decoded = decode_mime_header(value);
             let recipients = parse_all_recipients(&decoded);
             // parse_all_recipients returns (name, email), but we store (email, name)
-            msg.to.extend(recipients.into_iter().map(|(name, email)| (email, name)));
+            msg.to.extend(recipients.into_iter().map(|(name, email)| (email.to_lowercase(), name)));
         }
         "cc" => {
             let decoded = decode_mime_header(value);
             let recipients = parse_all_recipients(&decoded);
             // parse_all_recipients returns (name, email), but we store (email, name)
-            msg.to.extend(recipients.into_iter().map(|(name, email)| (email, name)));
+            msg.to.extend(recipients.into_iter().map(|(name, email)| (email.to_lowercase(), name)));
         }
         "subject" => {
             msg.subject = decode_mime_header(value).trim().to_string();
+        }
+        "delivered-to" => {
+            // Gmail uses Delivered-To to indicate the actual recipient
+            msg.delivered_to = value.trim().to_lowercase();
+        }
+        "x-delivered-to" => {
+            if msg.delivered_to.is_empty() {
+                msg.delivered_to = value.trim().to_lowercase();
+            }
         }
         "date" => {
             msg.date = parse_date(value.trim());
@@ -443,33 +458,38 @@ fn insert_message(
         }
     }
 
-    // Insert rows into mails database
-    if msg.to.is_empty() {
-        // No recipients but user is sender - skip
-        if user_is_sender {
-            return (0, false);
-        }
-        // User received email with no To field (rare case)
-        let _ = stmt.execute(params![
-            msg.from_email,
-            msg.from_name,
-            "",
-            "",
-            msg.subject,
-            content,
-            msg.date
-        ]);
-        return (1, false);
-    }
-
+    // Insert rows into mails database - only rows involving the user
     let mut rows = 0u64;
-    for (recipient_email, recipient_name) in &msg.to {
+
+    if user_is_sender {
+        // User sent this email - insert row for each recipient (except self)
+        for (recipient_email, recipient_name) in &msg.to {
+            if recipient_email == user_email {
+                continue;
+            }
+            if stmt
+                .execute(params![
+                    msg.from_email,
+                    msg.from_name,
+                    recipient_email,
+                    recipient_name,
+                    msg.subject,
+                    content,
+                    msg.date
+                ])
+                .is_ok()
+            {
+                rows += 1;
+            }
+        }
+    } else {
+        // User received this email - insert one row: sender -> user
         if stmt
             .execute(params![
                 msg.from_email,
                 msg.from_name,
-                recipient_email,
-                recipient_name,
+                user_email,
+                "", // user's name not stored in msg
                 msg.subject,
                 content,
                 msg.date
@@ -479,6 +499,7 @@ fn insert_message(
             rows += 1;
         }
     }
+
     (rows, false)
 }
 

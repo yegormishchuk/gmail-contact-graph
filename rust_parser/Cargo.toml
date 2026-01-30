@@ -5,10 +5,10 @@ edition = "2021"
 
 [lib]
 name = "fast_mbox_parser"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["extension-module"] }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"], optional = true }
 rayon = "1.10"
 memmap2 = "0.9"
 charset = "0.1"
@@ -16,6 +16,10 @@ base64 = "0.22"
 encoding_rs = "0.8"
 rusqlite = { version = "0.32", features = ["bundled"] }
 chrono = "0.4"
+
+[features]
+default = []
+python = ["pyo3"]
 
 [[bin]]
 name = "fill_db"
