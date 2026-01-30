@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -5,7 +6,7 @@ use std::io::{BufRead, BufReader};
 use chrono::DateTime;
 use rusqlite::{params, Connection};
 
-use fast_mbox_parser::email::{parse_all_emails, parse_sender};
+use fast_mbox_parser::email::{parse_all_recipients, parse_sender};
 use fast_mbox_parser::mime::{base64_decode, body_quoted_printable_decode, decode_charset, decode_mime_header};
 
 // ---------------------------------------------------------------------------
@@ -14,8 +15,9 @@ use fast_mbox_parser::mime::{base64_decode, body_quoted_printable_decode, decode
 
 #[derive(Default)]
 struct EmailMessage {
-    from: String,
-    to: Vec<String>,
+    from_email: String,
+    from_name: String,
+    to: Vec<(String, String)>, // Vec<(email, name)>
     subject: String,
     date: Option<i64>,
     content_type: String,
@@ -31,6 +33,33 @@ enum ParseState {
     Body,
 }
 
+/// Accumulator for contact statistics
+#[derive(Default)]
+struct ContactStats {
+    name: String,
+    received: u32,
+    sent: u32,
+    first_timestamp: Option<i64>,
+    last_timestamp: Option<i64>,
+    total_chars: u64,
+    email_count: u32,
+}
+
+impl ContactStats {
+    fn update_timestamps(&mut self, timestamp: i64) {
+        match self.first_timestamp {
+            None => self.first_timestamp = Some(timestamp),
+            Some(first) if timestamp < first => self.first_timestamp = Some(timestamp),
+            _ => {}
+        }
+        match self.last_timestamp {
+            None => self.last_timestamp = Some(timestamp),
+            Some(last) if timestamp > last => self.last_timestamp = Some(timestamp),
+            _ => {}
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -38,19 +67,35 @@ enum ParseState {
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        eprintln!("Usage: fill_db <mbox_file> [db_path]");
+    if args.len() < 3 {
+        eprintln!("Usage: fill_db <mbox_file> <user_email> [mails_db_path] [contacts_db_path]");
         std::process::exit(1);
     }
 
     let mbox_path = &args[1];
-    let db_path = args.get(2).map(|s| s.as_str()).unwrap_or("data/mails.db");
+    let user_email = args[2].to_lowercase();
+    let mails_db_path = args.get(3).map(|s| s.as_str()).unwrap_or("data/mails.db");
+    let contacts_db_path = args.get(4).map(|s| s.as_str()).unwrap_or("data/contacts.db");
 
-    eprintln!("mbox: {}", mbox_path);
-    eprintln!("  db: {}", db_path);
+    eprintln!("     mbox: {}", mbox_path);
+    eprintln!("user_email: {}", user_email);
+    eprintln!(" mails db: {}", mails_db_path);
+    eprintln!("contacts db: {}", contacts_db_path);
 
-    let conn = Connection::open(db_path).expect("failed to open database");
-    setup_db(&conn);
+    // Phase 1: Fill mails.db
+    let contact_stats = fill_mails_db(mbox_path, &user_email, mails_db_path);
+
+    // Phase 2: Fill contacts.db from accumulated statistics
+    fill_contacts_db(&contact_stats, contacts_db_path);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1: Fill mails database
+// ---------------------------------------------------------------------------
+
+fn fill_mails_db(mbox_path: &str, user_email: &str, db_path: &str) -> HashMap<String, ContactStats> {
+    let conn = Connection::open(db_path).expect("failed to open mails database");
+    setup_mails_db(&conn);
 
     let file = File::open(mbox_path).expect("failed to open mbox file");
     let reader = BufReader::with_capacity(1024 * 1024, file);
@@ -61,12 +106,16 @@ fn main() {
     let mut header_value = String::new();
     let mut msg_count: u64 = 0;
     let mut row_count: u64 = 0;
+    let mut skipped_count: u64 = 0;
+
+    // Contact statistics accumulator
+    let mut contact_stats: HashMap<String, ContactStats> = HashMap::new();
 
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
     let mut stmt = conn
         .prepare(
-            "INSERT INTO mails (\"from\", \"to\", subject, content, date) \
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO mails (\"from\", from_name, \"to\", to_name, subject, content, date) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
         .unwrap();
 
@@ -106,10 +155,14 @@ fn main() {
             ParseState::Body => {
                 if line.starts_with("From ") {
                     // New message — finalize current
-                    row_count += insert_message(&mut stmt, &msg);
+                    let result = insert_message(&mut stmt, &msg, user_email, &mut contact_stats);
+                    row_count += result.0;
+                    if result.1 {
+                        skipped_count += 1;
+                    }
                     msg_count += 1;
                     if msg_count % 5000 == 0 {
-                        eprintln!("[progress] {} messages, {} rows", msg_count, row_count);
+                        eprintln!("[progress] {} messages, {} rows, {} skipped", msg_count, row_count, skipped_count);
                     }
                     msg = EmailMessage::default();
                     header_name.clear();
@@ -126,21 +179,101 @@ fn main() {
     // Finalize last message
     if matches!(state, ParseState::Body | ParseState::Headers) {
         flush_header(&header_name, &header_value, &mut msg);
-        row_count += insert_message(&mut stmt, &msg);
+        let result = insert_message(&mut stmt, &msg, user_email, &mut contact_stats);
+        row_count += result.0;
+        if result.1 {
+            skipped_count += 1;
+        }
         msg_count += 1;
     }
 
     drop(stmt);
     conn.execute_batch("COMMIT").unwrap();
 
-    eprintln!("Done: {} messages, {} rows inserted.", msg_count, row_count);
+    eprintln!("Mails DB: {} messages, {} rows inserted, {} skipped.", msg_count, row_count, skipped_count);
+
+    contact_stats
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Fill contacts database
+// ---------------------------------------------------------------------------
+
+fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str) {
+    let conn = Connection::open(db_path).expect("failed to open contacts database");
+    setup_contacts_db(&conn);
+
+    conn.execute_batch("BEGIN TRANSACTION").unwrap();
+    let mut stmt = conn
+        .prepare(
+            "INSERT INTO contacts (name, email, received, sent, emails_per_month, average_chars, duration) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        )
+        .unwrap();
+
+    let mut inserted = 0u64;
+
+    for (email, stats) in contact_stats {
+        let total = stats.received + stats.sent;
+        if total == 0 {
+            continue;
+        }
+
+        // Calculate emails_per_month
+        let emails_per_month = match (stats.first_timestamp, stats.last_timestamp) {
+            (Some(first), Some(last)) => Some(calculate_emails_per_month(first, last, total)),
+            _ => None,
+        };
+
+        // Calculate average_chars
+        let average_chars = if stats.email_count > 0 {
+            Some((stats.total_chars as f64 / stats.email_count as f64 * 100.0).round() / 100.0)
+        } else {
+            None
+        };
+
+        // Calculate duration in days
+        let duration = match (stats.first_timestamp, stats.last_timestamp) {
+            (Some(first), Some(last)) if last > first => {
+                Some(((last - first) as f64 / (24.0 * 60.0 * 60.0) * 100.0).round() / 100.0)
+            }
+            _ => Some(0.0),
+        };
+
+        // Use name from stats, fallback to email prefix
+        let name = if stats.name.is_empty() {
+            email.split('@').next().unwrap_or(email).to_string()
+        } else {
+            stats.name.clone()
+        };
+
+        if stmt
+            .execute(params![
+                name,
+                email,
+                stats.received,
+                stats.sent,
+                emails_per_month,
+                average_chars,
+                duration
+            ])
+            .is_ok()
+        {
+            inserted += 1;
+        }
+    }
+
+    drop(stmt);
+    conn.execute_batch("COMMIT").unwrap();
+
+    eprintln!("Contacts DB: {} contacts inserted.", inserted);
 }
 
 // ---------------------------------------------------------------------------
 // Database setup
 // ---------------------------------------------------------------------------
 
-fn setup_db(conn: &Connection) {
+fn setup_mails_db(conn: &Connection) {
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
          PRAGMA synchronous = NORMAL;
@@ -152,16 +285,44 @@ fn setup_db(conn: &Connection) {
     conn.execute_batch(
         "DROP TABLE IF EXISTS mails;
          CREATE TABLE mails (
-             id      INTEGER PRIMARY KEY AUTOINCREMENT,
+             id        INTEGER PRIMARY KEY AUTOINCREMENT,
              \"from\"  TEXT NOT NULL,
+             from_name TEXT NOT NULL DEFAULT '',
              \"to\"    TEXT NOT NULL,
-             subject TEXT NOT NULL DEFAULT '',
-             content TEXT NOT NULL DEFAULT '',
-             date    INTEGER
+             to_name   TEXT NOT NULL DEFAULT '',
+             subject   TEXT NOT NULL DEFAULT '',
+             content   TEXT NOT NULL DEFAULT '',
+             date      INTEGER
          );
          CREATE INDEX IF NOT EXISTS idx_mails_from ON mails(\"from\");
          CREATE INDEX IF NOT EXISTS idx_mails_to   ON mails(\"to\");
          CREATE INDEX IF NOT EXISTS idx_mails_date ON mails(date);",
+    )
+    .unwrap();
+}
+
+fn setup_contacts_db(conn: &Connection) {
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA cache_size = -64000;
+         PRAGMA temp_store = MEMORY;",
+    )
+    .unwrap();
+
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS contacts;
+         CREATE TABLE contacts (
+             id              INTEGER PRIMARY KEY AUTOINCREMENT,
+             name            TEXT NOT NULL,
+             email           TEXT NOT NULL UNIQUE,
+             received        INTEGER NOT NULL DEFAULT 0,
+             sent            INTEGER NOT NULL DEFAULT 0,
+             emails_per_month REAL,
+             average_chars   REAL,
+             duration        REAL
+         );
+         CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);",
     )
     .unwrap();
 }
@@ -179,19 +340,22 @@ fn flush_header(name: &str, value: &str, msg: &mut EmailMessage) {
         "from" => {
             let full_line = format!("From:{}", value);
             let decoded = decode_mime_header(&full_line);
-            if let Some((_name, email)) = parse_sender(&decoded) {
-                msg.from = email;
+            if let Some((sender_name, email)) = parse_sender(&decoded) {
+                msg.from_email = email;
+                msg.from_name = sender_name;
             }
         }
         "to" => {
             let decoded = decode_mime_header(value);
-            let emails = parse_all_emails(&decoded);
-            msg.to.extend(emails);
+            let recipients = parse_all_recipients(&decoded);
+            // parse_all_recipients returns (name, email), but we store (email, name)
+            msg.to.extend(recipients.into_iter().map(|(name, email)| (email, name)));
         }
         "cc" => {
             let decoded = decode_mime_header(value);
-            let emails = parse_all_emails(&decoded);
-            msg.to.extend(emails);
+            let recipients = parse_all_recipients(&decoded);
+            // parse_all_recipients returns (name, email), but we store (email, name)
+            msg.to.extend(recipients.into_iter().map(|(name, email)| (email, name)));
         }
         "subject" => {
             msg.subject = decode_mime_header(value).trim().to_string();
@@ -218,7 +382,22 @@ fn flush_header(name: &str, value: &str, msg: &mut EmailMessage) {
 // Insert into DB
 // ---------------------------------------------------------------------------
 
-fn insert_message(stmt: &mut rusqlite::Statement, msg: &EmailMessage) -> u64 {
+/// Returns (rows_inserted, was_skipped)
+fn insert_message(
+    stmt: &mut rusqlite::Statement,
+    msg: &EmailMessage,
+    user_email: &str,
+    contact_stats: &mut HashMap<String, ContactStats>,
+) -> (u64, bool) {
+    // Check if user is involved in this email
+    let user_is_sender = msg.from_email == user_email;
+    let user_is_recipient = msg.to.iter().any(|(email, _)| email == user_email);
+
+    // Skip emails where user is not involved
+    if !user_is_sender && !user_is_recipient {
+        return (0, true);
+    }
+
     let content = extract_text_content(
         &msg.body,
         &msg.content_type,
@@ -228,21 +407,98 @@ fn insert_message(stmt: &mut rusqlite::Statement, msg: &EmailMessage) -> u64 {
         0,
     );
 
+    let content_chars = content.chars().count() as u64;
+
+    // Update contact statistics
+    if user_is_sender {
+        // User sent this email - update 'sent' count for all recipients
+        for (recipient_email, recipient_name) in &msg.to {
+            if recipient_email == user_email {
+                continue; // Skip self
+            }
+            let stats = contact_stats.entry(recipient_email.clone()).or_default();
+            stats.sent += 1;
+            if stats.name.is_empty() && !recipient_name.is_empty() {
+                stats.name = recipient_name.clone();
+            }
+            if let Some(ts) = msg.date {
+                stats.update_timestamps(ts);
+            }
+            stats.total_chars += content_chars;
+            stats.email_count += 1;
+        }
+    } else {
+        // User received this email - update 'received' count for sender
+        if !msg.from_email.is_empty() && msg.from_email != user_email {
+            let stats = contact_stats.entry(msg.from_email.clone()).or_default();
+            stats.received += 1;
+            if stats.name.is_empty() && !msg.from_name.is_empty() {
+                stats.name = msg.from_name.clone();
+            }
+            if let Some(ts) = msg.date {
+                stats.update_timestamps(ts);
+            }
+            stats.total_chars += content_chars;
+            stats.email_count += 1;
+        }
+    }
+
+    // Insert rows into mails database
     if msg.to.is_empty() {
-        let _ = stmt.execute(params![msg.from, "", msg.subject, content, msg.date]);
-        return 1;
+        // No recipients but user is sender - skip
+        if user_is_sender {
+            return (0, false);
+        }
+        // User received email with no To field (rare case)
+        let _ = stmt.execute(params![
+            msg.from_email,
+            msg.from_name,
+            "",
+            "",
+            msg.subject,
+            content,
+            msg.date
+        ]);
+        return (1, false);
     }
 
     let mut rows = 0u64;
-    for recipient in &msg.to {
+    for (recipient_email, recipient_name) in &msg.to {
         if stmt
-            .execute(params![msg.from, recipient, msg.subject, content, msg.date])
+            .execute(params![
+                msg.from_email,
+                msg.from_name,
+                recipient_email,
+                recipient_name,
+                msg.subject,
+                content,
+                msg.date
+            ])
             .is_ok()
         {
             rows += 1;
         }
     }
-    rows
+    (rows, false)
+}
+
+// ---------------------------------------------------------------------------
+// Statistics calculation
+// ---------------------------------------------------------------------------
+
+fn calculate_emails_per_month(first: i64, last: i64, total: u32) -> f64 {
+    if first >= last {
+        return total as f64;
+    }
+
+    let days = (last - first) as f64 / (24.0 * 60.0 * 60.0);
+    let months = days / 30.44; // Average days per month
+
+    if months < 1.0 {
+        total as f64
+    } else {
+        (total as f64 / months * 100.0).round() / 100.0
+    }
 }
 
 // ---------------------------------------------------------------------------
