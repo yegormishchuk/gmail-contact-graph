@@ -23,7 +23,7 @@ python = ["pyo3"]
 
 [[bin]]
 name = "fill_db"
-path = "src/bin/fill_db.rs"
+path = "src/bin/fill_db/main.rs"
 
 [profile.release]
 opt-level = 3
