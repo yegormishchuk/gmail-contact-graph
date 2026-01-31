@@ -2,6 +2,7 @@ mod content;
 mod db;
 mod models;
 mod parsing;
+mod spam;
 
 use std::collections::HashMap;
 use std::env;
@@ -11,6 +12,7 @@ use std::io::{BufRead, BufReader};
 use rusqlite::{params, Connection};
 
 use models::{ContactStats, EmailMessage, ParseState};
+use spam::is_spam_contact;
 
 // ---------------------------------------------------------------------------
 // Main
@@ -280,16 +282,7 @@ fn fill_filtered_contacts_db(db_path: &str) {
 
         total += 1;
 
-        // TODO: Add spam detection logic here
-        // Possible criteria to check:
-        // - No-reply addresses (noreply@, no-reply@, donotreply@)
-        // - Automated senders (mailer-daemon@, postmaster@)
-        // - Marketing/newsletter patterns (newsletter@, marketing@, promo@)
-        // - One-way communication (received > 0 && sent == 0, especially high volume)
-        // - Domain blocklist (known spam domains)
-        // - Low engagement ratio (many received, zero replies)
-        // - Suspicious patterns in name (all caps, excessive punctuation)
-        let is_spam = false; // Placeholder - will be implemented later
+        let is_spam = is_spam_contact(&email, &name, received, sent);
 
         if is_spam {
             continue;
