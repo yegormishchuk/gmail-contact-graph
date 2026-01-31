@@ -39,6 +39,9 @@ fn main() {
 
     // Phase 2: Fill contacts.db from accumulated statistics
     fill_contacts_db(&contact_stats, contacts_db_path);
+
+    // Phase 3: Fill filtered contacts table (without spam)
+    fill_filtered_contacts_db(contacts_db_path);
 }
 
 // ---------------------------------------------------------------------------
@@ -223,4 +226,100 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
     conn.execute_batch("COMMIT").unwrap();
 
     eprintln!("Contacts DB: {} contacts inserted.", inserted);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3: Fill filtered contacts table (without spam)
+// ---------------------------------------------------------------------------
+
+fn fill_filtered_contacts_db(db_path: &str) {
+    let conn = Connection::open(db_path).expect("failed to open contacts database");
+    db::setup_filtered_contacts_table(&conn);
+
+    conn.execute_batch("BEGIN TRANSACTION").unwrap();
+
+    // Query all contacts and filter out spam
+    let mut select_stmt = conn
+        .prepare(
+            "SELECT name, email, received, sent, sent_per_month, received_per_month, average_chars, duration \
+             FROM contacts",
+        )
+        .unwrap();
+
+    let mut insert_stmt = conn
+        .prepare(
+            "INSERT INTO contacts_filtered (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        )
+        .unwrap();
+
+    let mut total = 0u64;
+    let mut filtered = 0u64;
+
+    let contacts_iter = select_stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,      // name
+                row.get::<_, String>(1)?,      // email
+                row.get::<_, u32>(2)?,         // received
+                row.get::<_, u32>(3)?,         // sent
+                row.get::<_, Option<f64>>(4)?, // sent_per_month
+                row.get::<_, Option<f64>>(5)?, // received_per_month
+                row.get::<_, Option<f64>>(6)?, // average_chars
+                row.get::<_, Option<f64>>(7)?, // duration
+            ))
+        })
+        .unwrap();
+
+    for contact_result in contacts_iter {
+        let (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration) =
+            match contact_result {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+
+        total += 1;
+
+        // TODO: Add spam detection logic here
+        // Possible criteria to check:
+        // - No-reply addresses (noreply@, no-reply@, donotreply@)
+        // - Automated senders (mailer-daemon@, postmaster@)
+        // - Marketing/newsletter patterns (newsletter@, marketing@, promo@)
+        // - One-way communication (received > 0 && sent == 0, especially high volume)
+        // - Domain blocklist (known spam domains)
+        // - Low engagement ratio (many received, zero replies)
+        // - Suspicious patterns in name (all caps, excessive punctuation)
+        let is_spam = false; // Placeholder - will be implemented later
+
+        if is_spam {
+            continue;
+        }
+
+        if insert_stmt
+            .execute(params![
+                name,
+                email,
+                received,
+                sent,
+                sent_per_month,
+                received_per_month,
+                average_chars,
+                duration
+            ])
+            .is_ok()
+        {
+            filtered += 1;
+        }
+    }
+
+    drop(select_stmt);
+    drop(insert_stmt);
+    conn.execute_batch("COMMIT").unwrap();
+
+    eprintln!(
+        "Filtered Contacts: {} total, {} kept, {} removed as spam.",
+        total,
+        filtered,
+        total - filtered
+    );
 }

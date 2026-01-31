@@ -64,6 +64,25 @@ pub fn setup_contacts_db(conn: &Connection) {
     .unwrap();
 }
 
+pub fn setup_filtered_contacts_table(conn: &Connection) {
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS contacts_filtered;
+         CREATE TABLE contacts_filtered (
+             id              INTEGER PRIMARY KEY AUTOINCREMENT,
+             name            TEXT NOT NULL,
+             email           TEXT NOT NULL UNIQUE,
+             received        INTEGER NOT NULL DEFAULT 0,
+             sent            INTEGER NOT NULL DEFAULT 0,
+             sent_per_month  REAL,
+             received_per_month REAL,
+             average_chars   REAL,
+             duration        REAL
+         );
+         CREATE INDEX IF NOT EXISTS idx_contacts_filtered_email ON contacts_filtered(email);",
+    )
+    .unwrap();
+}
+
 // ---------------------------------------------------------------------------
 // Insert message into database
 // ---------------------------------------------------------------------------
