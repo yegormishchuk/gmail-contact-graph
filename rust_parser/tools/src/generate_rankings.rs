@@ -47,7 +47,7 @@ fn load_contacts(db_path: &str) -> Result<Vec<Contact>> {
         "SELECT name, email, sent, received,
                 COALESCE(duration, 0) as duration,
                 COALESCE(average_chars, 0) as average_chars
-         FROM contacts"
+         FROM contacts_filtered"
     )?;
 
     let contacts = stmt.query_map([], |row| {
@@ -168,9 +168,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fs::create_dir_all(output_dir)?;
     }
 
-    println!("Loading contacts from {}...", db_path);
+    println!("Loading filtered contacts from {}...", db_path);
     let contacts = load_contacts(db_path)?;
-    println!("Loaded {} contacts", contacts.len());
+    println!("Loaded {} filtered contacts", contacts.len());
 
     // Generate rankings for each criterion
     // All rankings are descending (highest value = rank 1)
