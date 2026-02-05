@@ -16,6 +16,11 @@ base64 = "0.22"
 encoding_rs = "0.8"
 rusqlite = { version = "0.32", features = ["bundled"] }
 chrono = "0.4"
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+dotenvy = "0.15"
 
 [features]
 default = []
@@ -24,6 +29,10 @@ python = ["pyo3"]
 [[bin]]
 name = "fill_db"
 path = "src/bin/fill_db/main.rs"
+
+[[bin]]
+name = "verify_contacts"
+path = "src/bin/verify_contacts/main.rs"
 
 [profile.release]
 opt-level = 3
