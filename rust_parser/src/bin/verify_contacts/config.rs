@@ -23,17 +23,19 @@ impl HFConfig {
             .map_err(|_| "HF_API_KEY environment variable not set")?;
 
         let model = std::env::var("HF_MODEL")
-            .unwrap_or_else(|_| "meta-llama/Llama-3.1-8B-Instruct".to_string());
+            .unwrap_or_else(|_| "moonshotai/Kimi-K2.5".to_string());
 
         let timeout_secs = std::env::var("HF_TIMEOUT")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(120);
 
+        // Llama 3 70B: 8K context, ~20 tokens per contact input, ~2 tokens output
+        // Safe max: (8000 - 500 overhead) / 22 ≈ 340, use 250 for safety margin
         let batch_size = std::env::var("HF_BATCH_SIZE")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or(50);
+            .unwrap_or(250);
 
         Ok(Self {
             api_key,

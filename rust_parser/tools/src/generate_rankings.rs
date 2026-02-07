@@ -148,6 +148,144 @@ fn format_float(v: f64) -> String {
     format!("{:.2}", v)
 }
 
+// ============================================================================
+// Composite Ranking System
+// ============================================================================
+
+/// Configuration for a ranking that participates in the composite score
+struct RankingConfig {
+    name: &'static str,
+    coefficient: f64,
+    value_fn: fn(&Contact) -> f64,
+}
+
+/// Stores contact's position in each ranking
+struct ContactRankings {
+    email: String,
+    name: String,
+    /// (ranking_name, rank, points) for each participating ranking
+    rankings: Vec<(&'static str, usize, f64)>,
+    total_score: f64,
+}
+
+/// Calculates points based on rank: 1st place = n points, 2nd = n-1, etc.
+fn rank_to_points(rank: usize, total_contacts: usize) -> f64 {
+    if rank > total_contacts {
+        0.0
+    } else {
+        (total_contacts - rank + 1) as f64
+    }
+}
+
+/// Generates composite ranking from multiple rankings with coefficients
+fn generate_composite_ranking(
+    contacts: &[Contact],
+    ranking_configs: &[RankingConfig],
+) -> Vec<ContactRankings> {
+    use std::collections::HashMap;
+
+    let total_contacts = contacts.len();
+
+    // Map email -> ContactRankings
+    let mut contact_scores: HashMap<String, ContactRankings> = HashMap::new();
+
+    // Initialize all contacts
+    for contact in contacts {
+        contact_scores.insert(
+            contact.email.clone(),
+            ContactRankings {
+                email: contact.email.clone(),
+                name: contact.name.clone(),
+                rankings: Vec::new(),
+                total_score: 0.0,
+            },
+        );
+    }
+
+    // Process each ranking
+    for config in ranking_configs {
+        let ranks = assign_ranks(contacts, config.value_fn, true);
+
+        for (rank, idx) in ranks {
+            let contact = &contacts[idx];
+            let points = rank_to_points(rank, total_contacts);
+            let weighted_points = points * config.coefficient;
+
+            if let Some(cr) = contact_scores.get_mut(&contact.email) {
+                cr.rankings.push((config.name, rank, weighted_points));
+                cr.total_score += weighted_points;
+            }
+        }
+    }
+
+    // Convert to vector and sort by total score (descending)
+    let mut result: Vec<ContactRankings> = contact_scores.into_values().collect();
+    result.sort_by(|a, b| b.total_score.partial_cmp(&a.total_score).unwrap());
+
+    result
+}
+
+/// Writes composite ranking to file in a readable format
+fn write_composite_ranking(
+    composite: &[ContactRankings],
+    ranking_configs: &[RankingConfig],
+    output_path: &str,
+) -> std::io::Result<()> {
+    let file = File::create(output_path)?;
+    let mut writer = BufWriter::new(file);
+
+    // Header with ranking info
+    writeln!(writer, "# Composite Contact Ranking")?;
+    writeln!(writer, "# Rankings used:")?;
+    for config in ranking_configs {
+        writeln!(writer, "#   - {} (coefficient: {})", config.name, config.coefficient)?;
+    }
+    writeln!(writer, "#")?;
+    writeln!(writer, "# Score formula: sum of (n - rank + 1) * coefficient for each ranking")?;
+    writeln!(writer, "# where n = total number of contacts ({})", composite.len())?;
+    writeln!(writer, "#")?;
+    writeln!(writer)?;
+
+    // Assign final ranks with ties
+    let mut final_rank = 1;
+    let mut prev_score: Option<f64> = None;
+    let mut same_score_count = 0;
+
+    for cr in composite {
+        if let Some(prev) = prev_score {
+            if (cr.total_score - prev).abs() < 1e-9 {
+                same_score_count += 1;
+            } else {
+                final_rank += same_score_count;
+                same_score_count = 1;
+            }
+        } else {
+            same_score_count = 1;
+        }
+
+        // Build ranking details string
+        let ranking_details: Vec<String> = cr
+            .rankings
+            .iter()
+            .map(|(name, rank, points)| format!("{}:#{} ({:.1})", name, rank, points))
+            .collect();
+
+        writeln!(
+            writer,
+            "{}. {} {} | score: {:.1} | {}",
+            final_rank,
+            cr.name,
+            cr.email,
+            cr.total_score,
+            ranking_details.join(", ")
+        )?;
+
+        prev_score = Some(cr.total_score);
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
@@ -233,6 +371,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         |c| c.average_chars,
         format_float,
         true,
+    )?;
+
+    // ========================================================================
+    // Composite Ranking
+    // ========================================================================
+    // Configure which rankings to use and their coefficients
+    // Easy to modify: just add/remove configs or change coefficients
+    let ranking_configs = vec![
+        RankingConfig {
+            name: "sent",
+            coefficient: 1.0,
+            value_fn: |c| c.sent as f64,
+        },
+        RankingConfig {
+            name: "received",
+            coefficient: 0.2,
+            value_fn: |c| c.received as f64,
+        },
+    ];
+
+    println!("Generating composite_ranking...");
+    let composite = generate_composite_ranking(&contacts, &ranking_configs);
+    write_composite_ranking(
+        &composite,
+        &ranking_configs,
+        &format!("{}/composite_ranking.txt", output_dir),
     )?;
 
     println!("All rankings generated in {}/", output_dir);

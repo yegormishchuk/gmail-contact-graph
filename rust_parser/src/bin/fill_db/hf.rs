@@ -6,7 +6,74 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
-use crate::config::{ContactClassification, ContactForVerification, HFConfig, VerificationResult};
+/// Contact data for verification
+#[derive(Debug, Clone)]
+pub struct ContactForVerification {
+    pub name: String,
+    pub email: String,
+}
+
+/// Classification result
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ContactClassification {
+    NotHuman = 0,
+    Human = 1,
+    Unknown = 2,
+}
+
+impl ContactClassification {
+    pub fn as_u8(&self) -> u8 {
+        *self as u8
+    }
+}
+
+/// Verification result for a single contact
+#[derive(Debug, Clone)]
+pub struct VerificationResult {
+    pub email: String,
+    pub classification: u8,
+}
+
+/// HF Configuration
+#[derive(Debug, Clone)]
+pub struct HFConfig {
+    pub api_key: String,
+    pub model: String,
+    pub timeout_secs: u64,
+    pub batch_size: usize,
+}
+
+impl HFConfig {
+    pub fn from_env() -> Result<Self, String> {
+        let api_key = std::env::var("HF_API_KEY")
+            .map_err(|_| "HF_API_KEY environment variable not set")?;
+
+        let model = std::env::var("HF_MODEL")
+            .unwrap_or_else(|_| "moonshotai/Kimi-K2.5".to_string());
+
+        let timeout_secs = std::env::var("HF_TIMEOUT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(120);
+
+        let batch_size = std::env::var("HF_BATCH_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(250);
+
+        Ok(Self {
+            api_key,
+            model,
+            timeout_secs,
+            batch_size,
+        })
+    }
+
+    pub fn api_url(&self) -> String {
+        "https://router.huggingface.co/v1/chat/completions".to_string()
+    }
+}
 
 /// OpenAI-compatible chat request
 #[derive(Debug, Serialize)]
@@ -54,6 +121,9 @@ const MAX_RETRIES: usize = 2;
 /// Delay between requests in milliseconds (rate limiting)
 const REQUEST_DELAY_MS: u64 = 200;
 
+/// Default max concurrent requests
+const DEFAULT_MAX_CONCURRENT: usize = 4;
+
 /// HuggingFace API client (async)
 pub struct HFClient {
     client: Client,
@@ -63,7 +133,7 @@ pub struct HFClient {
 
 impl HFClient {
     /// Create a new HF client with concurrency limit
-    pub fn new(config: HFConfig, max_concurrent_requests: usize) -> Result<Self, reqwest::Error> {
+    pub fn new(config: HFConfig) -> Result<Self, reqwest::Error> {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .build()?;
@@ -71,7 +141,7 @@ impl HFClient {
         Ok(Self {
             client,
             config,
-            semaphore: Arc::new(Semaphore::new(max_concurrent_requests)),
+            semaphore: Arc::new(Semaphore::new(DEFAULT_MAX_CONCURRENT)),
         })
     }
 
@@ -112,7 +182,6 @@ Contacts:
     }
 
     /// Parse batch response into individual classifications
-    /// Returns None if response is incomplete (not enough 0/1 digits)
     fn parse_batch_response(response: &str, count: usize) -> Option<Vec<ContactClassification>> {
         let mut results = Vec::with_capacity(count);
 
@@ -127,7 +196,6 @@ Contacts:
             }
         }
 
-        // Return None if incomplete - caller should retry
         if results.len() < count {
             return None;
         }
@@ -135,7 +203,7 @@ Contacts:
         Some(results)
     }
 
-    /// Single API request (no retry logic)
+    /// Single API request
     async fn make_api_request(
         &self,
         contacts: &[ContactForVerification],
@@ -146,7 +214,6 @@ Contacts:
             .await
             .map_err(|e| format!("Semaphore error: {}", e))?;
 
-        // max_tokens: ~3 tokens per contact (for "0," or "1,") + buffer
         let max_tokens = (contacts.len() * 3 + 50).max(100) as u32;
 
         let request = ChatRequest {
@@ -191,13 +258,12 @@ Contacts:
             .map(|c| c.message.content)
             .unwrap_or_default();
 
-        // Rate limiting delay
         sleep(Duration::from_millis(REQUEST_DELAY_MS)).await;
 
         Ok(result)
     }
 
-    /// Single API call for a batch with retry on incomplete response
+    /// Single API call with retry on incomplete response
     async fn classify_batch_once(
         &self,
         contacts: &[ContactForVerification],
@@ -211,7 +277,6 @@ Contacts:
                 return Ok(results);
             }
 
-            // Incomplete response - retry if we have attempts left
             if attempt < MAX_RETRIES {
                 eprintln!("  [WARN] Incomplete response, retrying ({}/{})", attempt + 1, MAX_RETRIES);
                 continue;
@@ -224,9 +289,7 @@ Contacts:
         ))
     }
 
-    /// Vote on the most common classification for a contact
-    /// Requires unanimous vote (all 4 votes same) for 0 or 1
-    /// Any disagreement → Unknown
+    /// Vote on classification (unanimous required)
     fn vote_classification(votes: &[ContactClassification]) -> ContactClassification {
         let mut count_0: usize = 0;
         let mut count_1: usize = 0;
@@ -239,7 +302,6 @@ Contacts:
             }
         }
 
-        // Unanimous only
         if count_0 == VOTES_PER_BATCH {
             ContactClassification::NotHuman
         } else if count_1 == VOTES_PER_BATCH {
@@ -249,20 +311,18 @@ Contacts:
         }
     }
 
-    /// Classify a batch of contacts with voting (6 API calls, retry until all succeed)
-    pub async fn classify_batch_with_voting(
+    /// Classify a batch with voting
+    async fn classify_batch_with_voting(
         &self,
         contacts: &[ContactForVerification],
     ) -> Vec<Result<VerificationResult, String>> {
         let mut vote_results: Vec<Vec<ContactClassification>> = Vec::new();
         let mut total_attempts = 0;
-        const MAX_TOTAL_ATTEMPTS: usize = 20; // prevent infinite loop
+        const MAX_TOTAL_ATTEMPTS: usize = 20;
 
-        // Keep trying until we have all required votes
         while vote_results.len() < VOTES_PER_BATCH && total_attempts < MAX_TOTAL_ATTEMPTS {
             let needed = VOTES_PER_BATCH - vote_results.len();
 
-            // Launch needed number of parallel requests
             let futures: Vec<_> = (0..needed)
                 .map(|_| self.classify_batch_once(contacts))
                 .collect();
@@ -270,7 +330,6 @@ Contacts:
             let results = join_all(futures).await;
             total_attempts += needed;
 
-            // Collect successful results, log errors
             for result in results {
                 match result {
                     Ok(classifications) => {
@@ -286,23 +345,20 @@ Contacts:
             }
         }
 
-        // If we couldn't get enough votes, return error
         if vote_results.len() < VOTES_PER_BATCH {
             return contacts
                 .iter()
                 .map(|c| Err(format!(
-                    "Could not collect {} votes for {} after {} attempts (got {})",
-                    VOTES_PER_BATCH, c.email, total_attempts, vote_results.len()
+                    "Could not collect {} votes for {} after {} attempts",
+                    VOTES_PER_BATCH, c.email, total_attempts
                 )))
                 .collect();
         }
 
-        // Aggregate votes for each contact
         contacts
             .iter()
             .enumerate()
             .map(|(i, contact)| {
-                // Collect votes for this contact from all successful calls
                 let votes: Vec<ContactClassification> = vote_results
                     .iter()
                     .filter_map(|results| results.get(i).copied())
@@ -312,50 +368,37 @@ Contacts:
 
                 Ok(VerificationResult {
                     email: contact.email.clone(),
-                    name: contact.name.clone(),
                     classification: classification.as_u8(),
-                    raw_response: format!("votes: {:?}", votes.iter().map(|v| v.as_u8()).collect::<Vec<_>>()),
                 })
             })
             .collect()
     }
 
-    /// Classify all contacts in batches with parallel execution
-    pub async fn classify_all<F>(
+    /// Classify all contacts in batches
+    pub async fn classify_all(
         &self,
         contacts: &[ContactForVerification],
-        batch_size: usize,
-        progress_callback: F,
-    ) -> Vec<Result<VerificationResult, String>>
-    where
-        F: Fn(usize, usize, usize) + Send + Sync,
-    {
+    ) -> Vec<Result<VerificationResult, String>> {
+        let batch_size = self.config.batch_size;
         let total_batches = (contacts.len() + batch_size - 1) / batch_size;
         let batches: Vec<Vec<ContactForVerification>> = contacts
             .chunks(batch_size)
             .map(|c| c.to_vec())
             .collect();
 
-        let progress_callback = Arc::new(progress_callback);
-
-        // Create futures for all batches
         let futures: Vec<_> = batches
             .into_iter()
             .enumerate()
             .map(|(batch_idx, chunk)| {
                 let chunk_len = chunk.len();
-                let progress = Arc::clone(&progress_callback);
                 async move {
-                    progress(batch_idx + 1, total_batches, chunk_len);
+                    eprintln!("  [Batch {}/{}] Processing {} contacts...", batch_idx + 1, total_batches, chunk_len);
                     self.classify_batch_with_voting(&chunk).await
                 }
             })
             .collect();
 
-        // Execute all batches in parallel
         let all_batch_results = join_all(futures).await;
-
-        // Flatten results
         all_batch_results.into_iter().flatten().collect()
     }
 }

@@ -76,9 +76,30 @@ pub fn setup_filtered_contacts_table(conn: &Connection) {
              sent_per_month  REAL,
              received_per_month REAL,
              average_chars   REAL,
-             duration        REAL
+             duration        REAL,
+             not_clear       INTEGER NOT NULL DEFAULT 0
          );
          CREATE INDEX IF NOT EXISTS idx_contacts_filtered_email ON contacts_filtered(email);",
+    )
+    .unwrap();
+}
+
+/// Setup candidates table (contacts that passed basic spam filter, awaiting AI verification)
+pub fn setup_candidates_table(conn: &Connection) {
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS contacts_candidates;
+         CREATE TABLE contacts_candidates (
+             id              INTEGER PRIMARY KEY AUTOINCREMENT,
+             name            TEXT NOT NULL,
+             email           TEXT NOT NULL UNIQUE,
+             received        INTEGER NOT NULL DEFAULT 0,
+             sent            INTEGER NOT NULL DEFAULT 0,
+             sent_per_month  REAL,
+             received_per_month REAL,
+             average_chars   REAL,
+             duration        REAL
+         );
+         CREATE INDEX IF NOT EXISTS idx_contacts_candidates_email ON contacts_candidates(email);",
     )
     .unwrap();
 }

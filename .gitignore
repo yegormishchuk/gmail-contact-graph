@@ -27,6 +27,7 @@ env/
 # Rust
 /target
 gmail_api/target/
+rust_parser/target/
 
 # OS
 .DS_Store
