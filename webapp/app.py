@@ -297,6 +297,36 @@ def mark_contact_clear():
     return jsonify({"success": True, "email": email})
 
 
+@app.route('/api/contacts/mark-not-human', methods=['POST'])
+def mark_contact_not_human():
+    """Mark a contact as not a human (delete from contacts_filtered)."""
+    global _contacts_cache, _composite_scores_cache, _excluded_contacts_cache
+
+    data = request.get_json()
+    email = data.get('email')
+
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
+    # Delete from contacts_filtered table
+    conn = sqlite3.connect(str(CONTACTS_DB_FILE))
+    conn.execute('DELETE FROM contacts_filtered WHERE email = ?', (email,))
+    conn.commit()
+    conn.close()
+
+    # Remove from contacts cache
+    if _contacts_cache:
+        _contacts_cache = [c for c in _contacts_cache if c.email != email]
+
+    # Recalculate composite scores
+    _composite_scores_cache = calculate_composite_scores(_contacts_cache)
+
+    # Reload excluded contacts
+    _excluded_contacts_cache = load_excluded_contacts(CONTACTS_DB_FILE)
+
+    return jsonify({"success": True, "email": email})
+
+
 @app.route('/api/excluded-contacts')
 def api_excluded_contacts():
     """Get contacts that are in candidates but not in filtered (spam/not humans)."""

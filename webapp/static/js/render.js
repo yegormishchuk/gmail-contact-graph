@@ -196,6 +196,7 @@ export function renderGraph(data) {
     // Tooltip
     const tooltip = d3.select('#tooltip');
     const markHumanBtn = document.getElementById('mark-human-btn');
+    const markNotHumanBtn = document.getElementById('mark-not-human-btn');
     const tooltipCloseBtn = document.getElementById('tooltip-close');
 
     // Track currently selected node
@@ -312,6 +313,101 @@ export function renderGraph(data) {
             }
         } catch (err) {
             console.error('Failed to mark contact as clear:', err);
+        }
+    });
+
+    // Mark as not human button click handler
+    markNotHumanBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentSelectedNode) return;
+
+        const contactEmail = currentSelectedNode.email;
+        const contactName = currentSelectedNode.name;
+        const contactTotal = (currentSelectedNode.received || 0) + (currentSelectedNode.sent || 0);
+
+        try {
+            const response = await fetch('/api/contacts/mark-not-human', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: contactEmail })
+            });
+
+            if (response.ok) {
+                // Close tooltip first
+                closeTooltip();
+
+                // Remove from state
+                state.removeContact(contactEmail);
+
+                // Remove node from graph visualization
+                nodeGroups.filter(n => n.email === contactEmail).remove();
+                labels.filter(n => n.email === contactEmail).remove();
+
+                // Remove from simulation
+                if (state.currentSimulation) {
+                    const nodes = state.currentSimulation.nodes();
+                    const filtered = nodes.filter(n => n.email !== contactEmail);
+                    state.currentSimulation.nodes(filtered);
+                }
+
+                // Remove from ranking list and recalculate places
+                const rankingItem = document.querySelector(`.ranking-item[data-email="${contactEmail}"]`);
+                if (rankingItem) {
+                    rankingItem.remove();
+
+                    // Recalculate all ranking places
+                    const rankingList = document.getElementById('ranking-list');
+                    const items = Array.from(rankingList.querySelectorAll('.ranking-item'));
+
+                    // Get scores and sort (items are already sorted, but we need scores for ties)
+                    const itemsWithScores = items.map(item => ({
+                        element: item,
+                        score: parseInt(item.querySelector('.ranking-score').textContent, 10)
+                    }));
+
+                    // Recalculate places with tie handling
+                    let currentPlace = 0;
+                    let prevScore = null;
+
+                    itemsWithScores.forEach((item, index) => {
+                        if (prevScore !== item.score) {
+                            currentPlace = index + 1;
+                        }
+                        prevScore = item.score;
+
+                        const placeEl = item.element.querySelector('.ranking-place');
+                        placeEl.textContent = currentPlace;
+                        placeEl.className = 'ranking-place';
+                        if (currentPlace === 1) placeEl.classList.add('top-1');
+                        else if (currentPlace === 2) placeEl.classList.add('top-2');
+                        else if (currentPlace === 3) placeEl.classList.add('top-3');
+                    });
+                }
+
+                // Add to spam list
+                const spamList = document.getElementById('spam-list');
+                const spamItem = document.createElement('div');
+                spamItem.className = 'spam-item';
+                spamItem.dataset.email = contactEmail;
+                spamItem.dataset.name = contactName.toLowerCase();
+                spamItem.innerHTML = `
+                    <span class="spam-name" title="${contactEmail}">${contactName}</span>
+                    <span class="spam-count">${contactTotal}</span>
+                `;
+                spamList.insertBefore(spamItem, spamList.firstChild);
+
+                // Update displayed contacts count
+                const displayedEl = document.getElementById('displayed-contacts');
+                const current = parseInt(displayedEl.textContent.replace(/,/g, ''), 10);
+                displayedEl.textContent = (current - 1).toLocaleString();
+
+                // Update total contacts count
+                const totalEl = document.getElementById('total-contacts');
+                const total = parseInt(totalEl.textContent.replace(/,/g, ''), 10);
+                totalEl.textContent = (total - 1).toLocaleString();
+            }
+        } catch (err) {
+            console.error('Failed to mark contact as not human:', err);
         }
     });
 

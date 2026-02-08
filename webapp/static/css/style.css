@@ -259,9 +259,15 @@ svg {
     color: #4ade80;
 }
 
+.tooltip-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
 .mark-human-btn {
     display: none;
-    margin-top: 12px;
+    flex: 1;
     padding: 8px 12px;
     background: rgba(74, 222, 128, 0.15);
     border: 1px solid rgba(74, 222, 128, 0.4);
@@ -270,13 +276,31 @@ svg {
     font-size: 12px;
     cursor: pointer;
     transition: all 0.2s;
-    width: 100%;
     pointer-events: auto;
 }
 
 .mark-human-btn:hover {
     background: rgba(74, 222, 128, 0.25);
     border-color: rgba(74, 222, 128, 0.6);
+}
+
+.mark-not-human-btn {
+    display: block;
+    flex: 1;
+    padding: 8px 12px;
+    background: rgba(248, 113, 113, 0.15);
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    border-radius: 6px;
+    color: #f87171;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    pointer-events: auto;
+}
+
+.mark-not-human-btn:hover {
+    background: rgba(248, 113, 113, 0.25);
+    border-color: rgba(248, 113, 113, 0.6);
 }
 
 /* Legend */

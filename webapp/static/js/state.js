@@ -63,3 +63,18 @@ export function setEmailToGroups(data) {
 export function setGroupToEmails(data) {
     groupToEmails = data;
 }
+
+export function removeContact(email) {
+    // Remove from rawData.nodes
+    if (rawData && rawData.nodes) {
+        rawData.nodes = rawData.nodes.filter(n => n.email !== email);
+    }
+    // Remove from rawData.links
+    if (rawData && rawData.links) {
+        rawData.links = rawData.links.filter(l => l.source !== email && l.target !== email);
+    }
+    // Update stats
+    if (rawData && rawData.stats) {
+        rawData.stats.totalContacts = Math.max(0, rawData.stats.totalContacts - 1);
+    }
+}
