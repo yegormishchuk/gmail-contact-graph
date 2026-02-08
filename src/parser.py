@@ -368,7 +368,7 @@ def load_contacts_from_filtered(db_path: str | Path) -> list[Contact]:
     conn = sqlite3.connect(str(db_path))
 
     rows = conn.execute(
-        'SELECT name, email, received, sent FROM contacts_filtered'
+        'SELECT name, email, received, sent, not_clear FROM contacts_filtered'
     ).fetchall()
 
     conn.close()
@@ -379,8 +379,9 @@ def load_contacts_from_filtered(db_path: str | Path) -> list[Contact]:
             email=email,
             received_count=received,
             sent_count=sent,
+            not_clear=bool(not_clear),
         )
-        for name, email, received, sent in rows
+        for name, email, received, sent, not_clear in rows
     ]
 
     contacts.sort(key=lambda c: c.total_count, reverse=True)

@@ -10,6 +10,7 @@ class Contact:
     email: str
     received_count: int = 0  # emails received FROM this contact
     sent_count: int = 0      # emails sent TO this contact
+    not_clear: bool = False  # contact may not be a real person
 
     @property
     def total_count(self) -> int:
@@ -22,5 +23,6 @@ class Contact:
             "name": self.name,
             "email": self.email,
             "received": self.received_count,
-            "sent": self.sent_count
+            "sent": self.sent_count,
+            "not_clear": self.not_clear
         }

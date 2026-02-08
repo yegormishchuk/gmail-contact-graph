@@ -26,6 +26,20 @@ export function renderGraph(data) {
     svg.selectAll('*').remove();
     svg.attr('width', width).attr('height', height);
 
+    // Add hatching pattern for unclear contacts
+    const defs = svg.append('defs');
+    const hatchPattern = defs.append('pattern')
+        .attr('id', 'hatch-pattern')
+        .attr('patternUnits', 'userSpaceOnUse')
+        .attr('width', 6)
+        .attr('height', 6)
+        .attr('patternTransform', 'rotate(45)');
+    hatchPattern.append('line')
+        .attr('x1', 0).attr('y1', 0)
+        .attr('x2', 0).attr('y2', 6)
+        .attr('stroke', 'rgba(255, 255, 255, 0.4)')
+        .attr('stroke-width', 1.5);
+
     // Add zoom behavior
     const g = svg.append('g');
 
@@ -87,7 +101,11 @@ export function renderGraph(data) {
         .data(data.nodes)
         .enter()
         .append('g')
-        .attr('class', d => d.isCenter ? 'node node-center' : 'node node-contact');
+        .attr('class', d => {
+            let classes = d.isCenter ? 'node node-center' : 'node node-contact';
+            if (d.notClear) classes += ' node-unclear';
+            return classes;
+        });
 
     // Add fill-level circles to each node
     nodeGroups.each(function(d, i) {
@@ -143,6 +161,14 @@ export function renderGraph(data) {
                 .attr('stroke', hasSent ? config.sentColor : 'rgba(255,255,255,0.3)')
                 .attr('stroke-width', hasSent ? config.borderWidth : 1.5)
                 .attr('class', 'node-border');
+
+            // Hatching overlay for unclear contacts
+            if (d.notClear) {
+                group.append('circle')
+                    .attr('r', radius)
+                    .attr('fill', 'url(#hatch-pattern)')
+                    .attr('class', 'node-hatch');
+            }
         }
     });
 
@@ -210,6 +236,11 @@ export function renderGraph(data) {
             .style('left', (event.pageX + 15) + 'px')
             .style('top', (event.pageY - 10) + 'px')
             .classed('visible', true);
+
+        // Hide hatching on all unclear nodes during hover
+        nodeGroups.selectAll('.node-hatch')
+            .transition().duration(150)
+            .style('opacity', 0);
 
         // Highlight node
         d3.select(this).select('.node-border')
@@ -339,6 +370,11 @@ export function renderGraph(data) {
     })
     .on('mouseout', function(event, d) {
         tooltip.classed('visible', false);
+
+        // Restore hatching on all unclear nodes
+        nodeGroups.selectAll('.node-hatch')
+            .transition().duration(150)
+            .style('opacity', 1);
 
         if (!d.isCenter) {
             const hasSent = d.sent > 0;

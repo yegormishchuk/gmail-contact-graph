@@ -183,7 +183,8 @@ def get_graph():
             "received": contact.received_count,
             "sent": contact.sent_count,
             "compositeScore": score_data["score"],
-            "rankings": score_data["rankings"]
+            "rankings": score_data["rankings"],
+            "notClear": contact.not_clear
         })
 
     # Build links
