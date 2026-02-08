@@ -172,12 +172,6 @@ export function renderGraph(data) {
         }
     });
 
-    // Add drag behavior
-    nodeGroups.call(d3.drag()
-        .on('start', dragstarted)
-        .on('drag', dragged)
-        .on('end', dragended));
-
     // Create labels
     const labels = g.append('g')
         .attr('class', 'labels')
@@ -647,24 +641,4 @@ export function renderGraph(data) {
             }
         });
     });
-
-    // Drag functions
-    function dragstarted(event, d) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-    }
-
-    function dragged(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-    }
-
-    function dragended(event, d) {
-        if (!event.active) simulation.alphaTarget(0);
-        if (!d.isCenter) {
-            d.fx = null;
-            d.fy = null;
-        }
-    }
 }
