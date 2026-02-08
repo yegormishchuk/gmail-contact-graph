@@ -35,7 +35,22 @@
             <div class="loading" id="loading">Loading graph...</div>
             <svg id="graph"></svg>
 
+            <div class="ranking-panel" id="ranking-panel">
+                <div class="ranking-header">
+                    <div class="ranking-tabs">
+                        <button class="ranking-tab active" data-tab="ranking">Ranking</button>
+                        <button class="ranking-tab" data-tab="spam">Spam</button>
+                    </div>
+                    <button class="ranking-toggle" id="ranking-toggle" title="Hide panel">−</button>
+                </div>
+                <input type="text" class="ranking-search" id="ranking-search" placeholder="Search...">
+                <div class="ranking-list" id="ranking-list"></div>
+                <div class="ranking-list hidden" id="spam-list"></div>
+            </div>
+            <button class="ranking-show-btn hidden" id="ranking-show-btn" title="Show ranking">☰</button>
+
             <div class="tooltip" id="tooltip">
+                <button class="tooltip-close" id="tooltip-close">&times;</button>
                 <div class="tooltip-name"></div>
                 <div class="tooltip-email"></div>
                 <div class="tooltip-org"></div>
@@ -50,6 +65,7 @@
                         <span class="tooltip-stat-value sent"></span>
                     </div>
                 </div>
+                <button class="mark-human-btn" id="mark-human-btn">It's a human</button>
             </div>
 
             <div class="legend">

@@ -195,9 +195,137 @@ export function renderGraph(data) {
 
     // Tooltip
     const tooltip = d3.select('#tooltip');
+    const markHumanBtn = document.getElementById('mark-human-btn');
+    const tooltipCloseBtn = document.getElementById('tooltip-close');
 
-    nodeGroups.on('mouseover', function(event, d) {
+    // Track currently selected node
+    let currentSelectedNode = null;
+    let tooltipOpen = false;
+
+    function closeTooltip() {
+        if (!tooltipOpen) return;
+
+        tooltip.classed('visible', false);
+        tooltipOpen = false;
+
+        // Restore hatching on all unclear nodes
+        nodeGroups.selectAll('.node-hatch')
+            .transition().duration(150)
+            .style('opacity', 1);
+
+        // Restore all nodes opacity
+        nodeGroups.transition().duration(150)
+            .style('opacity', 1);
+
+        // Restore all labels opacity
+        labels.transition().duration(150)
+            .style('opacity', 1);
+
+        // Remove domain and group edges and labels
+        domainLinksGroup.selectAll('*').remove();
+        groupLinksGroup.selectAll('*').remove();
+
+        if (currentSelectedNode && !currentSelectedNode.isCenter) {
+            // Restore border of selected node
+            const hasSent = currentSelectedNode.sent > 0;
+            nodeGroups.filter(n => n.email === currentSelectedNode.email)
+                .select('.node-border')
+                .attr('stroke', hasSent ? config.sentColor : 'rgba(255,255,255,0.3)')
+                .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
+
+            // Restore org mate borders
+            const domain = state.emailToDomain[currentSelectedNode.email];
+            const sameOrgEmails = domain ? state.domainToEmails[domain] : null;
+            if (sameOrgEmails) {
+                const sameOrgSet = new Set(sameOrgEmails);
+                nodeGroups.filter(n => sameOrgSet.has(n.email) && n.email !== currentSelectedNode.email)
+                    .select('.node-border')
+                    .each(function(n) {
+                        const hasSent = n.sent > 0;
+                        d3.select(this)
+                            .attr('stroke', hasSent ? config.sentColor : 'rgba(255,255,255,0.3)')
+                            .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
+                    });
+            }
+
+            // Restore group mate borders
+            const selectedGroups = state.emailToGroups[currentSelectedNode.email] || [];
+            for (const subject of selectedGroups) {
+                const groupEmails = state.groupToEmails[subject] || [];
+                nodeGroups.filter(n => groupEmails.includes(n.email) && n.email !== currentSelectedNode.email)
+                    .select('.node-border')
+                    .each(function(n) {
+                        const hasSent = n.sent > 0;
+                        d3.select(this)
+                            .attr('stroke', hasSent ? config.sentColor : 'rgba(255,255,255,0.3)')
+                            .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
+                    });
+            }
+        }
+
+        currentSelectedNode = null;
+    }
+
+    // Close button click handler
+    tooltipCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeTooltip();
+    });
+
+    // Click outside to close tooltip
+    document.addEventListener('click', (e) => {
+        if (!tooltipOpen) return;
+
+        const tooltipEl = document.getElementById('tooltip');
+        if (!tooltipEl.contains(e.target)) {
+            // Check if click was on a node (handled separately)
+            const clickedOnNode = e.target.closest('.node');
+            if (!clickedOnNode) {
+                closeTooltip();
+            }
+        }
+    });
+
+    // Mark as human button click handler
+    markHumanBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!currentSelectedNode || !currentSelectedNode.notClear) return;
+
+        try {
+            const response = await fetch('/api/contacts/mark-clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: currentSelectedNode.email })
+            });
+
+            if (response.ok) {
+                // Update node data
+                currentSelectedNode.notClear = false;
+
+                // Remove unclear class and hatching from the node
+                const nodeGroup = nodeGroups.filter(n => n.email === currentSelectedNode.email);
+                nodeGroup.classed('node-unclear', false);
+                nodeGroup.select('.node-hatch').remove();
+
+                // Hide the button
+                markHumanBtn.style.display = 'none';
+            }
+        } catch (err) {
+            console.error('Failed to mark contact as clear:', err);
+        }
+    });
+
+    nodeGroups.on('click', function(event, d) {
         if (d.isCenter) return;
+        event.stopPropagation();
+
+        // Close previous tooltip if clicking a different node
+        if (currentSelectedNode && currentSelectedNode.email !== d.email) {
+            closeTooltip();
+        }
+
+        currentSelectedNode = d;
+        tooltipOpen = true;
 
         const total = d.received + d.sent;
         const sentPercent = total > 0 ? Math.round((d.sent / total) * 100) : 0;
@@ -232,12 +360,15 @@ export function renderGraph(data) {
             groupsEl.classed('visible', false);
         }
 
+        // Show "It's a human" button only for unclear contacts
+        markHumanBtn.style.display = d.notClear ? 'block' : 'none';
+
         tooltip
             .style('left', (event.pageX + 15) + 'px')
             .style('top', (event.pageY - 10) + 'px')
             .classed('visible', true);
 
-        // Hide hatching on all unclear nodes during hover
+        // Hide hatching on all unclear nodes when tooltip is open
         nodeGroups.selectAll('.node-hatch')
             .transition().duration(150)
             .style('opacity', 0);
@@ -335,9 +466,9 @@ export function renderGraph(data) {
         }
 
         // Fade non-related nodes, keep org mates and group mates visible
-        const hoveredNode = this;
+        const selectedNode = this;
         const largeOrg = orgTotalSize > 20;
-        nodeGroups.filter(function() { return this !== hoveredNode; })
+        nodeGroups.filter(function() { return this !== selectedNode; })
             .transition().duration(150)
             .style('opacity', function(node) {
                 if (node.isCenter) return 1;
@@ -362,66 +493,6 @@ export function renderGraph(data) {
                 if (groupMateSet.has(labelData.email)) return 1;
                 return 0.25;
             });
-    })
-    .on('mousemove', (event) => {
-        tooltip
-            .style('left', (event.pageX + 15) + 'px')
-            .style('top', (event.pageY - 10) + 'px');
-    })
-    .on('mouseout', function(event, d) {
-        tooltip.classed('visible', false);
-
-        // Restore hatching on all unclear nodes
-        nodeGroups.selectAll('.node-hatch')
-            .transition().duration(150)
-            .style('opacity', 1);
-
-        if (!d.isCenter) {
-            const hasSent = d.sent > 0;
-            d3.select(this).select('.node-border')
-                .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
-        }
-
-        // Remove domain and group edges and labels
-        domainLinksGroup.selectAll('*').remove();
-        groupLinksGroup.selectAll('*').remove();
-
-        // Restore org mate borders
-        const domain = state.emailToDomain[d.email];
-        const sameOrgEmails = domain ? state.domainToEmails[domain] : null;
-        if (sameOrgEmails) {
-            const sameOrgSet = new Set(sameOrgEmails);
-            nodeGroups.filter(n => sameOrgSet.has(n.email) && n.email !== d.email)
-                .select('.node-border')
-                .each(function(n) {
-                    const hasSent = n.sent > 0;
-                    d3.select(this)
-                        .attr('stroke', hasSent ? config.sentColor : 'rgba(255,255,255,0.3)')
-                        .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
-                });
-        }
-
-        // Restore group mate borders
-        const hoveredGroups = state.emailToGroups[d.email] || [];
-        for (const subject of hoveredGroups) {
-            const groupEmails = state.groupToEmails[subject] || [];
-            nodeGroups.filter(n => groupEmails.includes(n.email) && n.email !== d.email)
-                .select('.node-border')
-                .each(function(n) {
-                    const hasSent = n.sent > 0;
-                    d3.select(this)
-                        .attr('stroke', hasSent ? config.sentColor : 'rgba(255,255,255,0.3)')
-                        .attr('stroke-width', hasSent ? config.borderWidth : 1.5);
-                });
-        }
-
-        // Restore all nodes opacity
-        nodeGroups.transition().duration(150)
-            .style('opacity', 1);
-
-        // Restore all labels opacity
-        labels.transition().duration(150)
-            .style('opacity', 1);
     });
 
     // Update positions on tick

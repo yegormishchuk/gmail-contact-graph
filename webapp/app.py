@@ -8,9 +8,11 @@ from typing import Dict, List, Callable, Any
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from flask import Flask, jsonify, render_template
+import sqlite3
 
-from src.parser import load_contacts_from_filtered, load_message_groups_from_db, group_contacts_by_domain
+from flask import Flask, jsonify, render_template, request
+
+from src.parser import load_contacts_from_filtered, load_message_groups_from_db, group_contacts_by_domain, load_excluded_contacts
 from src.config import DEFAULT_DB_FILE, CONTACTS_DB_FILE, MY_EMAIL, MY_NAME
 
 app = Flask(__name__)
@@ -19,6 +21,7 @@ app = Flask(__name__)
 _contacts_cache = None
 _message_groups_cache = None
 _composite_scores_cache = None
+_excluded_contacts_cache = None
 
 
 # =============================================================================
@@ -101,7 +104,7 @@ def calculate_composite_scores(contacts: List) -> Dict[str, Dict[str, Any]]:
 
 def load_data_on_startup():
     """Load contacts and message groups from SQLite database."""
-    global _contacts_cache, _message_groups_cache, _composite_scores_cache
+    global _contacts_cache, _message_groups_cache, _composite_scores_cache, _excluded_contacts_cache
 
     if not CONTACTS_DB_FILE.exists():
         print(f"Error: contacts database not found: {CONTACTS_DB_FILE}")
@@ -109,6 +112,7 @@ def load_data_on_startup():
         _contacts_cache = []
         _message_groups_cache = {}
         _composite_scores_cache = {}
+        _excluded_contacts_cache = []
         return
 
     if not DEFAULT_DB_FILE.exists():
@@ -121,10 +125,12 @@ def load_data_on_startup():
     _contacts_cache = load_contacts_from_filtered(CONTACTS_DB_FILE)
     _message_groups_cache = load_message_groups_from_db(DEFAULT_DB_FILE, MY_EMAIL) if DEFAULT_DB_FILE.exists() else {}
     _composite_scores_cache = calculate_composite_scores(_contacts_cache)
+    _excluded_contacts_cache = load_excluded_contacts(CONTACTS_DB_FILE)
 
     elapsed = time.perf_counter() - start
     groups_count = len(_message_groups_cache)
-    print(f"Loaded {len(_contacts_cache)} contacts, {groups_count} message groups in {elapsed:.2f}s")
+    excluded_count = len(_excluded_contacts_cache)
+    print(f"Loaded {len(_contacts_cache)} contacts, {excluded_count} excluded, {groups_count} message groups in {elapsed:.2f}s")
     print(f"Composite ranking: {len(RANKING_CONFIGS)} rankings with coefficients: {', '.join(f'{c.name}={c.coefficient}' for c in RANKING_CONFIGS)}")
 
 
@@ -262,6 +268,52 @@ def api_message_groups():
         "total_groups": len(groups),
         "groups": {subject: recipients for subject, recipients in groups.items()},
     })
+
+
+@app.route('/api/contacts/mark-clear', methods=['POST'])
+def mark_contact_clear():
+    """Mark a contact as clear (definitely a person)."""
+    global _contacts_cache
+
+    data = request.get_json()
+    email = data.get('email')
+
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
+    # Update database
+    conn = sqlite3.connect(str(CONTACTS_DB_FILE))
+    conn.execute('UPDATE contacts_filtered SET not_clear = 0 WHERE email = ?', (email,))
+    conn.commit()
+    conn.close()
+
+    # Update cache
+    if _contacts_cache:
+        for contact in _contacts_cache:
+            if contact.email == email:
+                contact.not_clear = False
+                break
+
+    return jsonify({"success": True, "email": email})
+
+
+@app.route('/api/excluded-contacts')
+def api_excluded_contacts():
+    """Get contacts that are in candidates but not in filtered (spam/not humans)."""
+    global _excluded_contacts_cache
+    if _excluded_contacts_cache is None:
+        load_data_on_startup()
+
+    return jsonify([
+        {
+            "name": c.name,
+            "email": c.email,
+            "received": c.received_count,
+            "sent": c.sent_count,
+            "total": c.total_count,
+        }
+        for c in _excluded_contacts_cache
+    ])
 
 
 if __name__ == '__main__':

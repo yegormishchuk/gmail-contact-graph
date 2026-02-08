@@ -388,6 +388,32 @@ def load_contacts_from_filtered(db_path: str | Path) -> list[Contact]:
     return contacts
 
 
+def load_excluded_contacts(db_path: str | Path) -> list[Contact]:
+    """Load contacts that are in contacts_candidates but NOT in contacts_filtered (spam/not humans)."""
+    conn = sqlite3.connect(str(db_path))
+
+    rows = conn.execute(
+        '''SELECT c.name, c.email, c.received, c.sent
+           FROM contacts_candidates c
+           WHERE c.email NOT IN (SELECT email FROM contacts_filtered)'''
+    ).fetchall()
+
+    conn.close()
+
+    contacts = [
+        Contact(
+            name=name if name else email.split('@')[0],
+            email=email,
+            received_count=received,
+            sent_count=sent,
+        )
+        for name, email, received, sent in rows
+    ]
+
+    contacts.sort(key=lambda c: c.total_count, reverse=True)
+    return contacts
+
+
 def load_message_groups_from_db(db_path: str | Path, my_email: str) -> dict[str, list[str]]:
     """Load message groups from SQLite database (data/mails.db).
 
