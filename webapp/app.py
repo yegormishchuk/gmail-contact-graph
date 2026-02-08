@@ -3,42 +3,129 @@
 import sys
 import time
 from pathlib import Path
+from typing import Dict, List, Callable, Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from flask import Flask, jsonify, render_template
 
-from src.parser import load_contacts_from_db, load_message_groups_from_db, group_contacts_by_domain
-from src.config import DEFAULT_DB_FILE, MY_EMAIL, MY_NAME
+from src.parser import load_contacts_from_filtered, load_message_groups_from_db, group_contacts_by_domain
+from src.config import DEFAULT_DB_FILE, CONTACTS_DB_FILE, MY_EMAIL, MY_NAME
 
 app = Flask(__name__)
 
 # Global contacts cache
 _contacts_cache = None
 _message_groups_cache = None
+_composite_scores_cache = None
+
+
+# =============================================================================
+# Composite Ranking System
+# =============================================================================
+
+class RankingConfig:
+    """Configuration for a ranking that participates in composite score."""
+    def __init__(self, name: str, coefficient: float, value_fn: Callable):
+        self.name = name
+        self.coefficient = coefficient
+        self.value_fn = value_fn
+
+
+# Configure rankings and their coefficients (easy to modify)
+RANKING_CONFIGS = [
+    RankingConfig("sent", 1.0, lambda c: c.sent_count),
+    RankingConfig("received", 0.2, lambda c: c.received_count),
+]
+
+
+def assign_ranks(contacts: List, value_fn: Callable) -> Dict[str, int]:
+    """Assign ranks to contacts based on value function (descending order)."""
+    # Sort by value descending
+    sorted_contacts = sorted(contacts, key=lambda c: value_fn(c), reverse=True)
+
+    email_to_rank = {}
+    current_rank = 1
+    prev_value = None
+    same_value_count = 0
+
+    for contact in sorted_contacts:
+        value = value_fn(contact)
+        if prev_value is not None:
+            if value == prev_value:
+                same_value_count += 1
+            else:
+                current_rank += same_value_count
+                same_value_count = 1
+        else:
+            same_value_count = 1
+
+        email_to_rank[contact.email] = current_rank
+        prev_value = value
+
+    return email_to_rank
+
+
+def calculate_composite_scores(contacts: List) -> Dict[str, Dict[str, Any]]:
+    """
+    Calculate composite scores for all contacts.
+    Returns dict: email -> {score, rankings: [(name, rank, points), ...]}
+    """
+    if not contacts:
+        return {}
+
+    total_contacts = len(contacts)
+
+    # Initialize scores
+    scores = {c.email: {"score": 0.0, "rankings": []} for c in contacts}
+
+    # Process each ranking
+    for config in RANKING_CONFIGS:
+        ranks = assign_ranks(contacts, config.value_fn)
+
+        for email, rank in ranks.items():
+            # Points: 1st place = n, 2nd = n-1, etc.
+            points = max(0, total_contacts - rank + 1)
+            weighted_points = points * config.coefficient
+
+            scores[email]["score"] += weighted_points
+            scores[email]["rankings"].append({
+                "name": config.name,
+                "rank": rank,
+                "points": weighted_points
+            })
+
+    return scores
 
 
 def load_data_on_startup():
     """Load contacts and message groups from SQLite database."""
-    global _contacts_cache, _message_groups_cache
+    global _contacts_cache, _message_groups_cache, _composite_scores_cache
 
-    if not DEFAULT_DB_FILE.exists():
-        print(f"Error: database not found: {DEFAULT_DB_FILE}")
+    if not CONTACTS_DB_FILE.exists():
+        print(f"Error: contacts database not found: {CONTACTS_DB_FILE}")
         print("Run fill_db first to populate the database.")
         _contacts_cache = []
         _message_groups_cache = {}
+        _composite_scores_cache = {}
         return
 
-    print(f"Loading data from {DEFAULT_DB_FILE.name}...")
+    if not DEFAULT_DB_FILE.exists():
+        print(f"Error: mails database not found: {DEFAULT_DB_FILE}")
+        _message_groups_cache = {}
+
+    print(f"Loading contacts from {CONTACTS_DB_FILE.name}, mails from {DEFAULT_DB_FILE.name}...")
     start = time.perf_counter()
 
-    _contacts_cache = load_contacts_from_db(DEFAULT_DB_FILE, MY_EMAIL)
-    _message_groups_cache = load_message_groups_from_db(DEFAULT_DB_FILE, MY_EMAIL)
+    _contacts_cache = load_contacts_from_filtered(CONTACTS_DB_FILE)
+    _message_groups_cache = load_message_groups_from_db(DEFAULT_DB_FILE, MY_EMAIL) if DEFAULT_DB_FILE.exists() else {}
+    _composite_scores_cache = calculate_composite_scores(_contacts_cache)
 
     elapsed = time.perf_counter() - start
     groups_count = len(_message_groups_cache)
     print(f"Loaded {len(_contacts_cache)} contacts, {groups_count} message groups in {elapsed:.2f}s")
+    print(f"Composite ranking: {len(RANKING_CONFIGS)} rankings with coefficients: {', '.join(f'{c.name}={c.coefficient}' for c in RANKING_CONFIGS)}")
 
 
 def get_contacts():
@@ -47,6 +134,14 @@ def get_contacts():
     if _contacts_cache is None:
         load_data_on_startup()
     return _contacts_cache
+
+
+def get_composite_scores():
+    """Get composite scores from cache."""
+    global _composite_scores_cache
+    if _composite_scores_cache is None:
+        load_data_on_startup()
+    return _composite_scores_cache
 
 
 @app.route('/')
@@ -62,6 +157,7 @@ def get_graph():
     Returns nodes and links in D3 force-directed graph format.
     """
     contacts = get_contacts()
+    composite_scores = get_composite_scores()
 
     # Build nodes
     nodes = [
@@ -71,19 +167,23 @@ def get_graph():
             "email": MY_EMAIL,
             "isCenter": True,
             "received": 0,
-            "sent": 0
+            "sent": 0,
+            "compositeScore": 999999999  # Center always first
         }
     ]
 
     for contact in contacts:
         display_name = contact.name if contact.name else contact.email.split('@')[0]
+        score_data = composite_scores.get(contact.email, {"score": 0, "rankings": []})
         nodes.append({
             "id": contact.email,
             "name": display_name,
             "email": contact.email,
             "isCenter": False,
             "received": contact.received_count,
-            "sent": contact.sent_count
+            "sent": contact.sent_count,
+            "compositeScore": score_data["score"],
+            "rankings": score_data["rankings"]
         })
 
     # Build links

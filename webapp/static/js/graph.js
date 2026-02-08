@@ -1,8 +1,8 @@
 // Graph configuration
 const config = {
     centerNodeRadius: 30,
-    minNodeRadius: 15,
-    maxNodeRadius: 40,
+    minNodeRadius: 11,
+    maxNodeRadius: 30,
     chargeStrength: -150,
     centerStrength: 0.05,
     collisionPadding: 10,
@@ -48,8 +48,8 @@ function filterData(data) {
         return false;
     });
 
-    // Sort by total activity and limit
-    filteredContacts.sort((a, b) => (b.received + b.sent) - (a.received + a.sent));
+    // Sort by composite score (descending) and limit
+    filteredContacts.sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0));
     filteredContacts = filteredContacts.slice(0, filters.limit);
 
     nodes = nodes.concat(filteredContacts);
@@ -64,14 +64,14 @@ function filterData(data) {
     };
 }
 
-// Calculate node radius based on activity
-function getNodeRadius(d, maxActivity) {
+// Calculate node radius based on composite ranking score
+function getNodeRadius(d, maxScore) {
     if (d.isCenter) return config.centerNodeRadius;
-    const total = d.received + d.sent;
+    const score = d.compositeScore || 0;
     const scale = d3.scaleSqrt()
-        .domain([1, maxActivity])
+        .domain([1, maxScore])
         .range([config.minNodeRadius, config.maxNodeRadius]);
-    return scale(total || 1);
+    return scale(score || 1);
 }
 
 // Render graph with current filters
@@ -86,7 +86,7 @@ function renderGraph(data) {
     document.getElementById('displayed-contacts').textContent = data.stats.displayedContacts;
 
     // Calculate max activity for scaling
-    const maxActivity = d3.max(data.nodes.slice(1), d => d.received + d.sent) || 1;
+    const maxScore = d3.max(data.nodes.slice(1), d => d.compositeScore || 0) || 1;
 
     // Store current nodes for search
     currentNodes = data.nodes;
@@ -132,7 +132,7 @@ function renderGraph(data) {
             .strength(config.chargeStrength))
         .force('center', d3.forceCenter(centerX, centerY))
         .force('collision', d3.forceCollide()
-            .radius(d => getNodeRadius(d, maxActivity) + config.collisionPadding))
+            .radius(d => getNodeRadius(d, maxScore) + config.collisionPadding))
         .force('x', d3.forceX(centerX).strength(config.centerStrength))
         .force('y', d3.forceY(centerY).strength(config.centerStrength));
 
@@ -161,7 +161,7 @@ function renderGraph(data) {
     // Add fill-level circles to each node
     nodeGroups.each(function(d, i) {
         const group = d3.select(this);
-        const radius = getNodeRadius(d, maxActivity);
+        const radius = getNodeRadius(d, maxScore);
 
         if (d.isCenter) {
             // Center node - solid circle
@@ -326,7 +326,7 @@ function renderGraph(data) {
                 .attr('class', 'domain-link-label')
                 .attr('data-emails', JSON.stringify([d.email]))
                 .attr('x', d.x)
-                .attr('y', d.y - getNodeRadius(d, maxActivity) - 20)
+                .attr('y', d.y - getNodeRadius(d, maxScore) - 20)
                 .attr('text-anchor', 'middle')
                 .text(`@${domain} (${orgTotalSize})`);
         }
@@ -463,7 +463,7 @@ function renderGraph(data) {
 
         labels
             .attr('x', d => d.x)
-            .attr('y', d => d.y + getNodeRadius(d, maxActivity) + 15);
+            .attr('y', d => d.y + getNodeRadius(d, maxScore) + 15);
 
         // Update domain link positions if any are visible
         domainLinksGroup.selectAll('.domain-link').each(function() {
@@ -652,8 +652,8 @@ function searchContacts(query) {
             if ((aStartsName || aStartsEmail) && !(bStartsName || bStartsEmail)) return -1;
             if (!(aStartsName || aStartsEmail) && (bStartsName || bStartsEmail)) return 1;
 
-            // Then by activity
-            return (b.received + b.sent) - (a.received + a.sent);
+            // Then by composite score
+            return (b.compositeScore || 0) - (a.compositeScore || 0);
         })
         .slice(0, 10);
 }
@@ -739,7 +739,7 @@ function focusOnContactByEmail(email) {
 
     // Calculate what limit we need
     const allContacts = rawData.nodes.filter(n => !n.isCenter);
-    allContacts.sort((a, b) => (b.received + b.sent) - (a.received + a.sent));
+    allContacts.sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0));
 
     const contactIndex = allContacts.findIndex(c => c.email === email);
     const neededLimit = contactIndex + 1;
