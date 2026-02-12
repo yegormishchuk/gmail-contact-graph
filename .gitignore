@@ -28,7 +28,8 @@ env/
 /target/*
 gmail_api/target/*
 rust_parser/target/*
-
+*.exe
+*.pdb
 # OS
 .DS_Store
 Thumbs.db
