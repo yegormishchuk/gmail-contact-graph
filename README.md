@@ -10,10 +10,23 @@ A tool to visualize your Gmail communication patterns. Parse your Gmail export, 
 - **Composite ranking** - Score contacts based on communication frequency and patterns
 - **Domain grouping** - View contacts grouped by organization (email domain)
 
+## Quick Start
+
+```bash
+git clone https://github.com/YOUR_USERNAME/gmail-contact-graph.git
+cd gmail-contact-graph
+make setup
+# Place your .mbox file in data/ directory
+make fill-db USER_EMAIL=your.email@gmail.com
+make run
+# Open http://localhost:5000
+```
+
 ## Prerequisites
 
 - **Python 3.8+**
 - **Rust** (for building the parser)
+- **Make** (available on Linux/macOS, use `choco install make` on Windows)
 - **Gmail data export** (.mbox file from Google Takeout)
 - **Hugging Face API key** (optional, for AI contact verification)
 
@@ -26,29 +39,26 @@ git clone https://github.com/YOUR_USERNAME/gmail-contact-graph.git
 cd gmail-contact-graph
 ```
 
-### 2. Set up Python environment
+### 2. Run setup
 
 ```bash
-python -m venv venv
+make setup
+```
 
+This will:
+- Create a Python virtual environment
+- Install Python dependencies
+- Build the Rust parser and tools
+
+### 3. Activate the virtual environment
+
+```bash
 # Windows
 venv\Scripts\activate
 
 # Linux/macOS
 source venv/bin/activate
-
-pip install -r requirements.txt
 ```
-
-### 3. Build the Rust parser
-
-```bash
-cd rust_parser
-cargo build --release
-cd ..
-```
-
-The compiled binaries will be in `rust_parser/target/release/`.
 
 ## Getting Your Gmail Data
 
@@ -89,19 +99,16 @@ Without the API key, contacts will still be filtered but marked as "unclear".
 
 ### Step 1: Parse your Gmail data
 
-Run the parser to create the SQLite databases:
+Place your `.mbox` file in the `data/` directory (or specify a custom path), then run:
 
 ```bash
-# Windows
-rust_parser\target\release\fill_db.exe path\to\your\mail.mbox your.email@gmail.com
-
-# Linux/macOS
-./rust_parser/target/release/fill_db path/to/your/mail.mbox your.email@gmail.com
+make fill-db USER_EMAIL=your.email@gmail.com
 ```
 
-Optional arguments:
+Or with a custom mbox path:
+
 ```bash
-fill_db <mbox_file> <user_email> [mails_db_path] [contacts_db_path]
+make fill-db USER_EMAIL=your.email@gmail.com MBOX_FILE=path/to/mail.mbox
 ```
 
 This will:
@@ -113,10 +120,19 @@ This will:
 ### Step 2: Run the web interface
 
 ```bash
-python webapp/app.py
+make run
 ```
 
 Open http://localhost:5000 in your browser.
+
+### Additional commands
+
+```bash
+make help           # Show all available commands
+make rankings       # Generate ranking files
+make process-all    # Run fill-db + rankings
+make clean-db       # Remove databases and start fresh
+```
 
 ## Project Structure
 

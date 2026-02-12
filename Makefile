@@ -5,18 +5,26 @@
 RUST_PARSER_DIR = rust_parser
 TOOLS_DIR = rust_parser/tools
 DATA_DIR = data
-MBOX_FILE = $(DATA_DIR)/gmail_data.mbox
+MBOX_FILE ?= $(DATA_DIR)/mail.mbox
 CONTACTS_DB = $(DATA_DIR)/contacts.db
 MAILS_DB = $(DATA_DIR)/mails.db
 
 # User email (set via environment or override)
 USER_EMAIL ?= your_email@example.com
 
-# Detect OS for executable extension
+# Python
+PYTHON ?= python
+VENV_DIR = venv
+
+# Detect OS for executable extension and venv activation
 ifeq ($(OS),Windows_NT)
     EXE = .exe
+    VENV_ACTIVATE = $(VENV_DIR)\Scripts\activate
+    VENV_PYTHON = $(VENV_DIR)\Scripts\python
 else
     EXE =
+    VENV_ACTIVATE = $(VENV_DIR)/bin/activate
+    VENV_PYTHON = $(VENV_DIR)/bin/python
 endif
 
 # Binaries
@@ -27,12 +35,36 @@ GENERATE_RANKINGS = $(TOOLS_DIR)/target/release/generate_rankings$(EXE)
 # Main targets
 # ============================================
 
-.PHONY: all build build-parser build-tools clean help
+.PHONY: all build build-parser build-tools clean help setup run
 
 all: build
 
 build: build-parser build-tools
 	@echo "All builds complete."
+
+# ============================================
+# Setup targets
+# ============================================
+
+setup: venv build
+	@echo "Setup complete. Activate venv and run 'make run' to start."
+
+venv:
+	@echo "Creating Python virtual environment..."
+	$(PYTHON) -m venv $(VENV_DIR)
+	$(VENV_PYTHON) -m pip install --upgrade pip
+	$(VENV_PYTHON) -m pip install -r requirements.txt
+	@echo "Virtual environment ready. Activate with:"
+	@echo "  Windows: $(VENV_DIR)\\Scripts\\activate"
+	@echo "  Linux/macOS: source $(VENV_DIR)/bin/activate"
+
+# ============================================
+# Run targets
+# ============================================
+
+run:
+	@echo "Starting web application..."
+	$(VENV_PYTHON) webapp/app.py
 
 # ============================================
 # Build targets
@@ -103,14 +135,20 @@ clean-all: clean clean-data clean-db
 help:
 	@echo "Gmail Contact Graph - Available targets:"
 	@echo ""
+	@echo "  Setup:"
+	@echo "    make setup          - Full setup (venv + build)"
+	@echo "    make venv           - Create Python virtual environment"
+	@echo ""
 	@echo "  Build:"
 	@echo "    make build          - Build all (parser + tools)"
 	@echo "    make build-parser   - Build rust_parser (fill_db)"
 	@echo "    make build-tools    - Build ranking tools"
 	@echo ""
+	@echo "  Run:"
+	@echo "    make run            - Start the web application"
+	@echo ""
 	@echo "  Data processing:"
 	@echo "    make fill-db        - Parse mbox and fill databases"
-	@echo "                          Set USER_EMAIL=your@email.com"
 	@echo "    make rankings       - Generate ranking files"
 	@echo "    make process-all    - Run fill-db + rankings"
 	@echo ""
@@ -120,6 +158,11 @@ help:
 	@echo "    make clean-db       - Remove databases"
 	@echo "    make clean-all      - Clean everything"
 	@echo ""
+	@echo "  Variables:"
+	@echo "    USER_EMAIL          - Your Gmail address (required for fill-db)"
+	@echo "    MBOX_FILE           - Path to mbox file (default: data/mail.mbox)"
+	@echo ""
 	@echo "  Example:"
-	@echo "    make fill-db USER_EMAIL=john@gmail.com"
-	@echo "    make rankings"
+	@echo "    make setup"
+	@echo "    make fill-db USER_EMAIL=john@gmail.com MBOX_FILE=path/to/mail.mbox"
+	@echo "    make run"
