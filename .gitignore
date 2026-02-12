@@ -25,11 +25,7 @@ env/
 *.swo
 
 # Rust
-/target/*
-gmail_api/target/*
-rust_parser/target/*
-*.exe
-*.pdb
+**/target/
 # OS
 .DS_Store
 Thumbs.db
