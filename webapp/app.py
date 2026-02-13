@@ -327,6 +327,46 @@ def mark_contact_not_human():
     return jsonify({"success": True, "email": email})
 
 
+@app.route('/api/contacts/restore', methods=['POST'])
+def restore_contact():
+    """Restore a contact from spam back to contacts_filtered."""
+    global _contacts_cache, _composite_scores_cache, _excluded_contacts_cache
+
+    data = request.get_json()
+    email = data.get('email')
+
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
+    # Get contact data from contacts_candidates
+    conn = sqlite3.connect(str(CONTACTS_DB_FILE))
+    row = conn.execute(
+        'SELECT name, email, received, sent FROM contacts_candidates WHERE email = ?',
+        (email,)
+    ).fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({"error": "Contact not found in candidates"}), 404
+
+    name, email, received, sent = row
+
+    # Insert into contacts_filtered
+    conn.execute(
+        'INSERT OR REPLACE INTO contacts_filtered (name, email, received, sent, not_clear) VALUES (?, ?, ?, ?, 0)',
+        (name, email, received, sent)
+    )
+    conn.commit()
+    conn.close()
+
+    # Reload all caches
+    _contacts_cache = load_contacts_from_filtered(CONTACTS_DB_FILE)
+    _composite_scores_cache = calculate_composite_scores(_contacts_cache)
+    _excluded_contacts_cache = load_excluded_contacts(CONTACTS_DB_FILE)
+
+    return jsonify({"success": True, "email": email})
+
+
 @app.route('/api/excluded-contacts')
 def api_excluded_contacts():
     """Get contacts that are in candidates but not in filtered (spam/not humans)."""

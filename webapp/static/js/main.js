@@ -82,6 +82,7 @@ async function initRankingPanel(rawData) {
             item.innerHTML = `
                 <span class="spam-name" title="${contact.email}">${contact.name}</span>
                 <span class="spam-count">${contact.total}</span>
+                <button class="spam-restore">not spam</button>
             `;
             spamList.appendChild(item);
         });
@@ -217,6 +218,32 @@ async function initRankingPanel(rawData) {
             const total = contact ? (contact.received || 0) + (contact.sent || 0) : 0;
 
             showConfirmModal({ email, name, total });
+        }
+    });
+
+    // Event delegation for restore buttons on spam items
+    spamList.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('spam-restore')) {
+            e.stopPropagation();
+            const item = e.target.closest('.spam-item');
+            if (!item) return;
+
+            const email = item.dataset.email;
+
+            try {
+                const response = await fetch('/api/contacts/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                if (response.ok) {
+                    // Reload page to get fresh data with recalculated rankings
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error('Failed to restore contact:', err);
+            }
         }
     });
 
