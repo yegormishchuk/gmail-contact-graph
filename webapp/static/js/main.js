@@ -95,11 +95,19 @@ async function initRankingPanel(rawData) {
     const confirmContactName = document.getElementById('confirm-contact-name');
     const confirmCancelBtn = document.getElementById('confirm-cancel');
     const confirmDeleteBtn = document.getElementById('confirm-delete');
+    const confirmDontShow = document.getElementById('confirm-dont-show');
     let pendingDeleteContact = null;
+
+    const SKIP_CONFIRM_KEY = 'skipDeleteConfirmation';
+
+    function shouldSkipConfirmation() {
+        return localStorage.getItem(SKIP_CONFIRM_KEY) === 'true';
+    }
 
     function showConfirmModal(contact) {
         pendingDeleteContact = contact;
         confirmContactName.textContent = contact.name;
+        confirmDontShow.checked = false;
         confirmModal.classList.remove('hidden');
     }
 
@@ -113,12 +121,7 @@ async function initRankingPanel(rawData) {
         if (e.target === confirmModal) hideConfirmModal();
     });
 
-    confirmDeleteBtn.addEventListener('click', async () => {
-        if (!pendingDeleteContact) return;
-
-        const contact = pendingDeleteContact;
-        hideConfirmModal();
-
+    async function deleteContact(contact) {
         try {
             const response = await fetch('/api/contacts/mark-not-human', {
                 method: 'POST',
@@ -181,6 +184,7 @@ async function initRankingPanel(rawData) {
                 spamItem.innerHTML = `
                     <span class="spam-name" title="${contact.email}">${contact.name}</span>
                     <span class="spam-count">${contact.total}</span>
+                    <button class="spam-restore">not spam</button>
                 `;
                 spamList.insertBefore(spamItem, spamList.firstChild);
 
@@ -201,10 +205,23 @@ async function initRankingPanel(rawData) {
         } catch (err) {
             console.error('Failed to mark contact as not human:', err);
         }
+    }
+
+    confirmDeleteBtn.addEventListener('click', async () => {
+        if (!pendingDeleteContact) return;
+
+        // Save preference if checkbox is checked
+        if (confirmDontShow.checked) {
+            localStorage.setItem(SKIP_CONFIRM_KEY, 'true');
+        }
+
+        const contact = pendingDeleteContact;
+        hideConfirmModal();
+        await deleteContact(contact);
     });
 
     // Event delegation for delete buttons on ranking items
-    rankingList.addEventListener('click', (e) => {
+    rankingList.addEventListener('click', async (e) => {
         if (e.target.classList.contains('ranking-delete')) {
             e.stopPropagation();
             const item = e.target.closest('.ranking-item');
@@ -217,7 +234,12 @@ async function initRankingPanel(rawData) {
             const contact = rawData.nodes.find(n => n.email === email);
             const total = contact ? (contact.received || 0) + (contact.sent || 0) : 0;
 
-            showConfirmModal({ email, name, total });
+            // Skip confirmation if user chose "don't show again"
+            if (shouldSkipConfirmation()) {
+                await deleteContact({ email, name, total });
+            } else {
+                showConfirmModal({ email, name, total });
+            }
         }
     });
 

@@ -948,6 +948,28 @@ input[type="range"]::-moz-range-thumb {
     color: #fff;
 }
 
+.confirm-modal-checkbox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+}
+
+.confirm-modal-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: #f87171;
+}
+
+.confirm-modal-checkbox:hover {
+    color: #aaa;
+}
+
 .confirm-modal-buttons {
     display: flex;
     gap: 12px;
