@@ -50,10 +50,12 @@ async function initRankingPanel(rawData) {
             <span class="ranking-place ${placeClass}">${currentPlace}</span>
             <span class="ranking-name" title="${contact.name}">${contact.name}</span>
             <span class="ranking-score">${Math.round(contact.compositeScore)}</span>
+            <button class="ranking-delete" title="Remove contact">🗑</button>
         `;
 
-        // Click to highlight contact on graph
-        item.addEventListener('click', () => {
+        // Click to highlight contact on graph (only on name/place, not delete button)
+        item.addEventListener('click', (e) => {
+            if (e.target.classList.contains('ranking-delete')) return;
             const graphSearchInput = document.getElementById('contact-search');
             graphSearchInput.value = contact.email;
             graphSearchInput.dispatchEvent(new Event('input'));
@@ -86,6 +88,137 @@ async function initRankingPanel(rawData) {
     } catch (err) {
         console.error('Failed to load excluded contacts:', err);
     }
+
+    // Confirmation modal for delete
+    const confirmModal = document.getElementById('confirm-modal');
+    const confirmContactName = document.getElementById('confirm-contact-name');
+    const confirmCancelBtn = document.getElementById('confirm-cancel');
+    const confirmDeleteBtn = document.getElementById('confirm-delete');
+    let pendingDeleteContact = null;
+
+    function showConfirmModal(contact) {
+        pendingDeleteContact = contact;
+        confirmContactName.textContent = contact.name;
+        confirmModal.classList.remove('hidden');
+    }
+
+    function hideConfirmModal() {
+        confirmModal.classList.add('hidden');
+        pendingDeleteContact = null;
+    }
+
+    confirmCancelBtn.addEventListener('click', hideConfirmModal);
+    confirmModal.addEventListener('click', (e) => {
+        if (e.target === confirmModal) hideConfirmModal();
+    });
+
+    confirmDeleteBtn.addEventListener('click', async () => {
+        if (!pendingDeleteContact) return;
+
+        const contact = pendingDeleteContact;
+        hideConfirmModal();
+
+        try {
+            const response = await fetch('/api/contacts/mark-not-human', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: contact.email })
+            });
+
+            if (response.ok) {
+                // Remove from state
+                state.removeContact(contact.email);
+
+                // Remove node from graph if visible
+                if (state.currentSvg) {
+                    state.currentSvg.selectAll('.node').filter(n => n.email === contact.email).remove();
+                    state.currentSvg.selectAll('.label').filter(n => n.email === contact.email).remove();
+                }
+
+                // Remove from simulation
+                if (state.currentSimulation) {
+                    const nodes = state.currentSimulation.nodes();
+                    const filtered = nodes.filter(n => n.email !== contact.email);
+                    state.currentSimulation.nodes(filtered);
+                }
+
+                // Remove from ranking list and recalculate places
+                const rankingItem = document.querySelector(`.ranking-item[data-email="${contact.email}"]`);
+                if (rankingItem) {
+                    rankingItem.remove();
+
+                    // Recalculate all ranking places
+                    const items = Array.from(rankingList.querySelectorAll('.ranking-item'));
+                    const itemsWithScores = items.map(item => ({
+                        element: item,
+                        score: parseInt(item.querySelector('.ranking-score').textContent, 10)
+                    }));
+
+                    let currentPlace = 0;
+                    let prevScore = null;
+
+                    itemsWithScores.forEach((item, index) => {
+                        if (prevScore !== item.score) {
+                            currentPlace = index + 1;
+                        }
+                        prevScore = item.score;
+
+                        const placeEl = item.element.querySelector('.ranking-place');
+                        placeEl.textContent = currentPlace;
+                        placeEl.className = 'ranking-place';
+                        if (currentPlace === 1) placeEl.classList.add('top-1');
+                        else if (currentPlace === 2) placeEl.classList.add('top-2');
+                        else if (currentPlace === 3) placeEl.classList.add('top-3');
+                    });
+                }
+
+                // Add to spam list
+                const spamItem = document.createElement('div');
+                spamItem.className = 'spam-item';
+                spamItem.dataset.email = contact.email;
+                spamItem.dataset.name = contact.name.toLowerCase();
+                spamItem.innerHTML = `
+                    <span class="spam-name" title="${contact.email}">${contact.name}</span>
+                    <span class="spam-count">${contact.total}</span>
+                `;
+                spamList.insertBefore(spamItem, spamList.firstChild);
+
+                // Update displayed contacts count
+                const displayedEl = document.getElementById('displayed-contacts');
+                const current = parseInt(displayedEl.textContent.replace(/,/g, ''), 10);
+                if (!isNaN(current)) {
+                    displayedEl.textContent = (current - 1).toLocaleString();
+                }
+
+                // Update total contacts count
+                const totalEl = document.getElementById('total-contacts');
+                const total = parseInt(totalEl.textContent.replace(/,/g, ''), 10);
+                if (!isNaN(total)) {
+                    totalEl.textContent = (total - 1).toLocaleString();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to mark contact as not human:', err);
+        }
+    });
+
+    // Event delegation for delete buttons on ranking items
+    rankingList.addEventListener('click', (e) => {
+        if (e.target.classList.contains('ranking-delete')) {
+            e.stopPropagation();
+            const item = e.target.closest('.ranking-item');
+            if (!item) return;
+
+            const email = item.dataset.email;
+            const name = item.querySelector('.ranking-name').textContent;
+
+            // Find the contact in rawData to get the total
+            const contact = rawData.nodes.find(n => n.email === email);
+            const total = contact ? (contact.received || 0) + (contact.sent || 0) : 0;
+
+            showConfirmModal({ email, name, total });
+        }
+    });
 
     // Search filtering
     searchInput.addEventListener('input', () => {

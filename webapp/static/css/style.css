@@ -788,6 +788,33 @@ input[type="range"]::-moz-range-thumb {
     font-weight: 500;
 }
 
+.ranking-delete {
+    display: none;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: none;
+    color: #f87171;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.ranking-delete:hover {
+    color: #ef4444;
+    transform: scale(1.1);
+}
+
+.ranking-item:hover .ranking-score {
+    display: none;
+}
+
+.ranking-item:hover .ranking-delete {
+    display: block;
+}
+
 /* Spam list specific styles */
 .spam-item {
     display: flex;
@@ -842,4 +869,92 @@ input[type="range"]::-moz-range-thumb {
 .ranking-show-btn.hidden {
     opacity: 0;
     pointer-events: none;
+}
+
+/* Confirmation modal */
+.confirm-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    backdrop-filter: blur(4px);
+    opacity: 1;
+    transition: opacity 0.2s;
+}
+
+.confirm-modal.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.confirm-modal-content {
+    background: rgba(15, 15, 26, 0.98);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 16px;
+    padding: 24px 28px;
+    max-width: 340px;
+    text-align: center;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.confirm-modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 12px;
+}
+
+.confirm-modal-text {
+    font-size: 13px;
+    color: #aaa;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.confirm-modal-text strong {
+    color: #fff;
+}
+
+.confirm-modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.confirm-modal-btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.confirm-modal-btn.cancel {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #ccc;
+}
+
+.confirm-modal-btn.cancel:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #fff;
+}
+
+.confirm-modal-btn.confirm {
+    background: rgba(248, 113, 113, 0.2);
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    color: #f87171;
+}
+
+.confirm-modal-btn.confirm:hover {
+    background: rgba(248, 113, 113, 0.3);
+    border-color: rgba(248, 113, 113, 0.6);
 }

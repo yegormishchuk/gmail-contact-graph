@@ -49,6 +49,17 @@
             </div>
             <button class="ranking-show-btn hidden" id="ranking-show-btn" title="Show ranking">☰</button>
 
+            <div class="confirm-modal hidden" id="confirm-modal">
+                <div class="confirm-modal-content">
+                    <div class="confirm-modal-title">Remove Contact</div>
+                    <div class="confirm-modal-text">Are you sure you want to mark <strong id="confirm-contact-name"></strong> as spam?</div>
+                    <div class="confirm-modal-buttons">
+                        <button class="confirm-modal-btn cancel" id="confirm-cancel">Cancel</button>
+                        <button class="confirm-modal-btn confirm" id="confirm-delete">Remove</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="tooltip" id="tooltip">
                 <button class="tooltip-close" id="tooltip-close">&times;</button>
                 <div class="tooltip-name"></div>
