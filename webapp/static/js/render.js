@@ -208,13 +208,13 @@ export function renderGraph(data) {
             .transition().duration(150)
             .style('opacity', 1);
 
-        // Restore all nodes opacity
+        // Restore nodes opacity - make unclear contacts more transparent
         nodeGroups.transition().duration(150)
-            .style('opacity', 1);
+            .style('opacity', d => d.notClear ? 0.4 : 1);
 
-        // Restore all labels opacity
+        // Restore labels opacity - match node transparency
         labels.transition().duration(150)
-            .style('opacity', 1);
+            .style('opacity', d => d.notClear ? 0.4 : 1);
 
         // Remove domain and group edges and labels
         domainLinksGroup.selectAll('*').remove();
