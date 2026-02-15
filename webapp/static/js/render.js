@@ -453,10 +453,41 @@ export function renderGraph(data) {
         // Show "It's a human" button only for unclear contacts
         markHumanBtn.style.display = d.notClear ? 'block' : 'none';
 
+        // Position tooltip with boundary checking
+        const tooltipNode = tooltip.node();
+        tooltip.classed('visible', true);
+
+        // Get tooltip dimensions after making visible
+        const tooltipRect = tooltipNode.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        let left = event.pageX + 15;
+        let top = event.pageY - tooltipRect.height * 2 - 15;
+
+        // Check right boundary
+        if (left + tooltipRect.width > viewportWidth - 10) {
+            left = event.pageX - tooltipRect.width - 15;
+        }
+
+        // Check bottom boundary - flip to above click point
+        if (top + tooltipRect.height > viewportHeight - 10) {
+            top = event.pageY - tooltipRect.height * 2 - 15;
+        }
+
+        // Check left boundary
+        if (left < 10) {
+            left = 10;
+        }
+
+        // Check top boundary
+        if (top < 10) {
+            top = 10;
+        }
+
         tooltip
-            .style('left', (event.pageX + 15) + 'px')
-            .style('top', (event.pageY - 10) + 'px')
-            .classed('visible', true);
+            .style('left', left + 'px')
+            .style('top', top + 'px');
 
         // Hide hatching on all unclear nodes when tooltip is open
         nodeGroups.selectAll('.node-hatch')
