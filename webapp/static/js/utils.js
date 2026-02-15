@@ -6,12 +6,8 @@ import { filters } from './state.js';
 export function filterData(data) {
     let nodes = [data.nodes[0]]; // Always include center node
 
-    // Filter contacts based on checkboxes
-    let filteredContacts = data.nodes.slice(1).filter(node => {
-        if (filters.showSenders && node.received > 0) return true;
-        if (filters.showRecipients && node.sent > 0) return true;
-        return false;
-    });
+    // Get all contacts (excluding center)
+    let filteredContacts = data.nodes.slice(1);
 
     // Sort by composite score (descending) and limit
     filteredContacts.sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0));

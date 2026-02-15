@@ -2,8 +2,6 @@
 
 // Filter state
 export const filters = {
-    showSenders: true,
-    showRecipients: true,
     limit: 50
 };
 
