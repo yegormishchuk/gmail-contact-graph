@@ -37,15 +37,7 @@ pub fn setup_mails_db(conn: &Connection) {
     .unwrap();
 }
 
-pub fn setup_contacts_db(conn: &Connection) {
-    conn.execute_batch(
-        "PRAGMA journal_mode = WAL;
-         PRAGMA synchronous = NORMAL;
-         PRAGMA cache_size = -64000;
-         PRAGMA temp_store = MEMORY;",
-    )
-    .unwrap();
-
+pub fn setup_contacts_table(conn: &Connection) {
     conn.execute_batch(
         "DROP TABLE IF EXISTS contacts;
          CREATE TABLE contacts (

@@ -5,9 +5,8 @@
 RUST_PARSER_DIR = rust_parser
 TOOLS_DIR = rust_parser/tools
 DATA_DIR = data
-MBOX_FILE ?= $(DATA_DIR)/mail.mbox
+MBOX_FILE ?= $(DATA_DIR)/gmail_data.mbox
 CONTACTS_DB = $(DATA_DIR)/contacts.db
-MAILS_DB = $(DATA_DIR)/mails.db
 
 # User email (set via environment or override)
 USER_EMAIL ?= your_email@example.com
@@ -85,9 +84,9 @@ build-tools:
 .PHONY: fill-db rankings
 
 fill-db: build-parser
-	@echo "Filling databases from mbox..."
+	@echo "Filling database from mbox..."
 	@echo "Using email: $(USER_EMAIL)"
-	$(FILL_DB) "$(MBOX_FILE)" "$(USER_EMAIL)" "$(MAILS_DB)" "$(CONTACTS_DB)"
+	$(FILL_DB) "$(MBOX_FILE)" "$(USER_EMAIL)" "$(CONTACTS_DB)"
 
 rankings: build-tools
 	@echo "Generating rankings..."
@@ -122,9 +121,8 @@ clean-data:
 	rm -f $(DATA_DIR)/email_length_ranking.txt
 
 clean-db:
-	@echo "Removing databases..."
+	@echo "Removing database..."
 	rm -f $(CONTACTS_DB)
-	rm -f $(MAILS_DB)
 
 clean-all: clean clean-data clean-db
 

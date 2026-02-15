@@ -28,43 +28,41 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {
-        eprintln!("Usage: fill_db <mbox_file> <user_email> [mails_db_path] [contacts_db_path]");
+        eprintln!("Usage: fill_db <mbox_file> <user_email> [db_path]");
         std::process::exit(1);
     }
 
     let mbox_path = &args[1];
     let user_email = args[2].to_lowercase();
-    let mails_db_path = args.get(3).map(|s| s.as_str()).unwrap_or("data/mails.db");
-    let contacts_db_path = args.get(4).map(|s| s.as_str()).unwrap_or("data/contacts.db");
+    let db_path = args.get(3).map(|s| s.as_str()).unwrap_or("data/contacts.db");
 
     eprintln!("     mbox: {}", mbox_path);
     eprintln!("user_email: {}", user_email);
-    eprintln!(" mails db: {}", mails_db_path);
-    eprintln!("contacts db: {}", contacts_db_path);
+    eprintln!("       db: {}", db_path);
 
-    // Phase 1: Fill mails.db
-    let contact_stats = fill_mails_db(mbox_path, &user_email, mails_db_path);
+    // Phase 1: Fill mails table
+    let contact_stats = fill_mails_db(mbox_path, &user_email, db_path);
 
-    // Phase 2: Fill contacts.db from accumulated statistics
-    fill_contacts_db(&contact_stats, contacts_db_path);
+    // Phase 2: Fill contacts table from accumulated statistics
+    fill_contacts_db(&contact_stats, db_path);
 
     // Phase 3: Fill candidates table (basic spam filter)
-    let candidates = fill_candidates_db(contacts_db_path);
+    let candidates = fill_candidates_db(db_path);
 
     // Phase 4: AI verification and fill filtered contacts table
     if !candidates.is_empty() {
-        fill_filtered_with_ai(contacts_db_path, candidates).await;
+        fill_filtered_with_ai(db_path, candidates).await;
     } else {
         eprintln!("No candidates for AI verification.");
     }
 }
 
 // ---------------------------------------------------------------------------
-// Phase 1: Fill mails database
+// Phase 1: Fill mails table
 // ---------------------------------------------------------------------------
 
 fn fill_mails_db(mbox_path: &str, user_email: &str, db_path: &str) -> HashMap<String, ContactStats> {
-    let conn = Connection::open(db_path).expect("failed to open mails database");
+    let conn = Connection::open(db_path).expect("failed to open database");
     db::setup_mails_db(&conn);
 
     let file = File::open(mbox_path).expect("failed to open mbox file");
@@ -166,12 +164,12 @@ fn fill_mails_db(mbox_path: &str, user_email: &str, db_path: &str) -> HashMap<St
 }
 
 // ---------------------------------------------------------------------------
-// Phase 2: Fill contacts database
+// Phase 2: Fill contacts table
 // ---------------------------------------------------------------------------
 
 fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str) {
-    let conn = Connection::open(db_path).expect("failed to open contacts database");
-    db::setup_contacts_db(&conn);
+    let conn = Connection::open(db_path).expect("failed to open database");
+    db::setup_contacts_table(&conn);
 
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
     let mut stmt = conn
@@ -240,7 +238,7 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
     drop(stmt);
     conn.execute_batch("COMMIT").unwrap();
 
-    eprintln!("Contacts DB: {} contacts inserted.", inserted);
+    eprintln!("Contacts table: {} contacts inserted.", inserted);
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +259,7 @@ struct ContactCandidate {
 }
 
 fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
-    let conn = Connection::open(db_path).expect("failed to open contacts database");
+    let conn = Connection::open(db_path).expect("failed to open database");
     db::setup_candidates_table(&conn);
 
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
@@ -406,7 +404,7 @@ async fn fill_filtered_with_ai(db_path: &str, candidates: Vec<ContactCandidate>)
     }
 
     // Fill contacts_filtered based on AI results
-    let conn = Connection::open(db_path).expect("failed to open contacts database");
+    let conn = Connection::open(db_path).expect("failed to open database");
     db::setup_filtered_contacts_table(&conn);
 
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
@@ -487,7 +485,7 @@ async fn fill_filtered_with_ai(db_path: &str, candidates: Vec<ContactCandidate>)
 fn fallback_fill_filtered(db_path: &str, candidates: &[ContactCandidate]) {
     eprintln!("Fallback: Adding all candidates with not_clear = true");
 
-    let conn = Connection::open(db_path).expect("failed to open contacts database");
+    let conn = Connection::open(db_path).expect("failed to open database");
     db::setup_filtered_contacts_table(&conn);
 
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
