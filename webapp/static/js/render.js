@@ -520,6 +520,7 @@ export function renderGraph(data) {
             const groupEmails = state.groupToEmails[subject] || [];
             const groupNodes = data.nodes.filter(n => !n.isCenter && n.email !== d.email && groupEmails.includes(n.email));
 
+            // Only draw lines and label if there are other visible group members
             if (groupNodes.length > 0) {
                 const allGroupNodes = [d, ...groupNodes];
 
@@ -528,20 +529,12 @@ export function renderGraph(data) {
                         .attr('class', 'group-link')
                         .attr('data-src', allGroupNodes[i].email)
                         .attr('data-tgt', allGroupNodes[i + 1].email)
+                        .attr('data-group', subject)
                         .attr('x1', allGroupNodes[i].x)
                         .attr('y1', allGroupNodes[i].y)
                         .attr('x2', allGroupNodes[i + 1].x)
                         .attr('y2', allGroupNodes[i + 1].y);
                 }
-
-                const allEmails = allGroupNodes.map(n => n.email);
-                groupLinksGroup.append('text')
-                    .attr('class', 'group-link-label')
-                    .attr('data-emails', JSON.stringify(allEmails))
-                    .attr('x', d3.mean(allGroupNodes, n => n.x))
-                    .attr('y', d3.max(allGroupNodes, n => n.y) + 25)
-                    .attr('text-anchor', 'middle')
-                    .text(`"${subject}"`);
 
                 for (const n of groupNodes) groupMateSet.add(n.email);
             }
@@ -630,15 +623,5 @@ export function renderGraph(data) {
             }
         });
 
-        // Update group label position
-        groupLinksGroup.selectAll('.group-link-label').each(function() {
-            const label = d3.select(this);
-            const groupEmails = JSON.parse(label.attr('data-emails') || '[]');
-            const groupNodes = data.nodes.filter(n => groupEmails.includes(n.email));
-            if (groupNodes.length > 0) {
-                label.attr('x', d3.mean(groupNodes, n => n.x));
-                label.attr('y', d3.max(groupNodes, n => n.y) + 25);
-            }
-        });
     });
 }
