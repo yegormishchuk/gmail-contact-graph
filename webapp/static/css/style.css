@@ -578,6 +578,42 @@ input[type="range"]::-moz-range-thumb {
     box-shadow: 0 2px 8px rgba(96, 165, 250, 0.4);
 }
 
+/* Filter radio buttons */
+.filter-group {
+    margin-bottom: 12px;
+}
+
+.filter-radio {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.filter-radio:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.filter-radio input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #60a5fa;
+}
+
+.filter-label.received {
+    color: #60a5fa;
+}
+
+.filter-label.sent {
+    color: #4ade80;
+}
+
 .control-btn {
     background: rgba(96, 165, 250, 0.1);
     border: 1px solid rgba(96, 165, 250, 0.3);
@@ -594,6 +630,18 @@ input[type="range"]::-moz-range-thumb {
 .control-btn:hover {
     background: rgba(96, 165, 250, 0.2);
     border-color: rgba(96, 165, 250, 0.5);
+}
+
+.control-btn.clear-btn {
+    margin-top: 4px;
+    background: rgba(248, 113, 113, 0.1);
+    border-color: rgba(248, 113, 113, 0.3);
+    color: #f87171;
+}
+
+.control-btn.clear-btn:hover {
+    background: rgba(248, 113, 113, 0.2);
+    border-color: rgba(248, 113, 113, 0.5);
 }
 
 /* Loading */
@@ -662,6 +710,10 @@ input[type="range"]::-moz-range-thumb {
 .ranking-tab.active {
     background: rgba(96, 165, 250, 0.2);
     color: #60a5fa;
+}
+
+.ranking-tab.hidden {
+    display: none;
 }
 
 .ranking-title {

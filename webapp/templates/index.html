@@ -39,12 +39,14 @@
                 <div class="ranking-header">
                     <div class="ranking-tabs">
                         <button class="ranking-tab active" data-tab="ranking">Ranking</button>
+                        <button class="ranking-tab hidden" data-tab="filtered" id="filtered-tab">Filtered</button>
                         <button class="ranking-tab" data-tab="spam">Spam</button>
                     </div>
                     <button class="ranking-toggle" id="ranking-toggle" title="Hide panel">−</button>
                 </div>
                 <input type="text" class="ranking-search" id="ranking-search" placeholder="Search...">
                 <div class="ranking-list" id="ranking-list"></div>
+                <div class="ranking-list hidden" id="filtered-list"></div>
                 <div class="ranking-list hidden" id="spam-list"></div>
             </div>
             <button class="ranking-show-btn hidden" id="ranking-show-btn" title="Show ranking">☰</button>
@@ -121,6 +123,19 @@
                     <input type="text" id="contact-search" placeholder="Search by name or email..." autocomplete="off">
                     <div class="search-results" id="search-results"></div>
                 </div>
+
+                <div class="filter-group">
+                    <label class="filter-radio">
+                        <input type="radio" name="filter-type" value="moreReceived">
+                        <span class="filter-label received">More received</span>
+                    </label>
+                    <label class="filter-radio">
+                        <input type="radio" name="filter-type" value="moreSent">
+                        <span class="filter-label sent">More sent</span>
+                    </label>
+                </div>
+
+                <button class="control-btn clear-btn" id="clear-filters">Clear filters</button>
 
                 <div class="slider-group">
                     <div class="slider-label">

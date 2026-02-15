@@ -2,7 +2,8 @@
 
 // Filter state
 export const filters = {
-    limit: 50
+    limit: 50,
+    filterType: null // null, 'moreReceived', or 'moreSent'
 };
 
 // Store raw data

@@ -9,6 +9,13 @@ export function filterData(data) {
     // Get all contacts (excluding center)
     let filteredContacts = data.nodes.slice(1);
 
+    // Apply filter type
+    if (filters.filterType === 'moreReceived') {
+        filteredContacts = filteredContacts.filter(node => node.received > node.sent);
+    } else if (filters.filterType === 'moreSent') {
+        filteredContacts = filteredContacts.filter(node => node.sent > node.received);
+    }
+
     // Sort by composite score (descending) and limit
     filteredContacts.sort((a, b) => (b.compositeScore || 0) - (a.compositeScore || 0));
     filteredContacts = filteredContacts.slice(0, filters.limit);

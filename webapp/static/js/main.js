@@ -1,21 +1,80 @@
 // Main entry point
 import * as state from './state.js';
+import { filters } from './state.js';
 import { filterData } from './utils.js';
 import { renderGraph } from './render.js';
 import { initSearchListeners } from './search.js';
 import { initFilterListeners } from './events.js';
+
+// Update filtered ranking list
+function updateFilteredList(filteredData) {
+    const filteredList = document.getElementById('filtered-list');
+    if (!filteredList) return;
+
+    filteredList.innerHTML = '';
+
+    // Get contacts excluding center node
+    const contacts = filteredData.nodes.filter(n => !n.isCenter);
+
+    if (contacts.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'filtered-empty';
+        emptyMsg.textContent = filters.filterType ? 'No contacts match this filter' : 'Select a filter to see results';
+        emptyMsg.style.cssText = 'padding: 12px; text-align: center; color: #666; font-size: 12px;';
+        filteredList.appendChild(emptyMsg);
+        return;
+    }
+
+    let currentPlace = 0;
+    let prevScore = null;
+
+    contacts.forEach((contact, index) => {
+        if (prevScore !== contact.compositeScore) {
+            currentPlace = index + 1;
+        }
+        prevScore = contact.compositeScore;
+
+        const item = document.createElement('div');
+        item.className = 'ranking-item';
+        item.dataset.email = contact.email;
+        item.dataset.name = contact.name.toLowerCase();
+
+        const placeClass = currentPlace === 1 ? 'top-1' : currentPlace === 2 ? 'top-2' : currentPlace === 3 ? 'top-3' : '';
+
+        item.innerHTML = `
+            <span class="ranking-place ${placeClass}">${currentPlace}</span>
+            <span class="ranking-name" title="${contact.name}">${contact.name}</span>
+            <span class="ranking-score">${Math.round(contact.compositeScore)}</span>
+        `;
+
+        // Click to highlight contact on graph
+        item.addEventListener('click', () => {
+            const graphSearchInput = document.getElementById('contact-search');
+            graphSearchInput.value = contact.email;
+            graphSearchInput.dispatchEvent(new Event('input'));
+            setTimeout(() => {
+                const firstResult = document.querySelector('.search-result-item');
+                if (firstResult) firstResult.click();
+            }, 100);
+        });
+
+        filteredList.appendChild(item);
+    });
+}
 
 // Apply filters and re-render
 function applyFilters() {
     if (!state.rawData) return;
     const filteredData = filterData(state.rawData);
     renderGraph(filteredData);
+    updateFilteredList(filteredData);
 }
 
 // Initialize ranking panel
 async function initRankingPanel(rawData) {
     const panel = document.getElementById('ranking-panel');
     const rankingList = document.getElementById('ranking-list');
+    const filteredList = document.getElementById('filtered-list');
     const spamList = document.getElementById('spam-list');
     const toggleBtn = document.getElementById('ranking-toggle');
     const showBtn = document.getElementById('ranking-show-btn');
@@ -273,7 +332,10 @@ async function initRankingPanel(rawData) {
     searchInput.addEventListener('input', () => {
         const query = searchInput.value.toLowerCase().trim();
         const activeTab = document.querySelector('.ranking-tab.active').dataset.tab;
-        const activeList = activeTab === 'ranking' ? rankingList : spamList;
+        let activeList;
+        if (activeTab === 'ranking') activeList = rankingList;
+        else if (activeTab === 'filtered') activeList = filteredList;
+        else activeList = spamList;
 
         activeList.querySelectorAll('.ranking-item, .spam-item').forEach(item => {
             const name = item.dataset.name || '';
@@ -290,11 +352,15 @@ async function initRankingPanel(rawData) {
             tab.classList.add('active');
 
             const tabName = tab.dataset.tab;
+            rankingList.classList.add('hidden');
+            filteredList.classList.add('hidden');
+            spamList.classList.add('hidden');
+
             if (tabName === 'ranking') {
                 rankingList.classList.remove('hidden');
-                spamList.classList.add('hidden');
+            } else if (tabName === 'filtered') {
+                filteredList.classList.remove('hidden');
             } else {
-                rankingList.classList.add('hidden');
                 spamList.classList.remove('hidden');
             }
 
