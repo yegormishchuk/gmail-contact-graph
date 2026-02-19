@@ -1,6 +1,7 @@
 mod content;
 mod db;
 mod hf;
+mod meetings;
 mod models;
 mod parsing;
 mod spam;
@@ -174,8 +175,8 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
     let mut stmt = conn
         .prepare(
-            "INSERT INTO contacts (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO contacts (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .unwrap();
 
@@ -227,7 +228,8 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
                 sent_per_month,
                 received_per_month,
                 average_chars,
-                duration
+                duration,
+                stats.meetings
             ])
             .is_ok()
         {
@@ -256,6 +258,7 @@ struct ContactCandidate {
     received_per_month: Option<f64>,
     average_chars: Option<f64>,
     duration: Option<f64>,
+    meetings: u32,
 }
 
 fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
@@ -266,15 +269,15 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
 
     let mut select_stmt = conn
         .prepare(
-            "SELECT name, email, received, sent, sent_per_month, received_per_month, average_chars, duration \
+            "SELECT name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings \
              FROM contacts",
         )
         .unwrap();
 
     let mut insert_stmt = conn
         .prepare(
-            "INSERT INTO contacts_candidates (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO contacts_candidates (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .unwrap();
 
@@ -293,6 +296,7 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
                 received_per_month: row.get(5)?,
                 average_chars: row.get(6)?,
                 duration: row.get(7)?,
+                meetings: row.get(8)?,
             })
         })
         .unwrap();
@@ -318,7 +322,8 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
                 candidate.sent_per_month,
                 candidate.received_per_month,
                 candidate.average_chars,
-                candidate.duration
+                candidate.duration,
+                candidate.meetings
             ])
             .is_ok()
         {
@@ -411,8 +416,8 @@ async fn fill_filtered_with_ai(db_path: &str, candidates: Vec<ContactCandidate>)
 
     let mut insert_stmt = conn
         .prepare(
-            "INSERT INTO contacts_filtered (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, not_clear) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO contacts_filtered (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings, not_clear) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .unwrap();
 
@@ -440,6 +445,7 @@ async fn fill_filtered_with_ai(db_path: &str, candidates: Vec<ContactCandidate>)
                         candidate.received_per_month,
                         candidate.average_chars,
                         candidate.duration,
+                        candidate.meetings,
                         0 // not_clear = false
                     ])
                     .is_ok()
@@ -459,6 +465,7 @@ async fn fill_filtered_with_ai(db_path: &str, candidates: Vec<ContactCandidate>)
                         candidate.received_per_month,
                         candidate.average_chars,
                         candidate.duration,
+                        candidate.meetings,
                         1 // not_clear = true
                     ])
                     .is_ok()
@@ -492,8 +499,8 @@ fn fallback_fill_filtered(db_path: &str, candidates: &[ContactCandidate]) {
 
     let mut insert_stmt = conn
         .prepare(
-            "INSERT INTO contacts_filtered (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, not_clear) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO contacts_filtered (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings, not_clear) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .unwrap();
 
@@ -510,6 +517,7 @@ fn fallback_fill_filtered(db_path: &str, candidates: &[ContactCandidate]) {
                 candidate.received_per_month,
                 candidate.average_chars,
                 candidate.duration,
+                candidate.meetings,
                 1 // not_clear = true (no AI verification)
             ])
             .is_ok()

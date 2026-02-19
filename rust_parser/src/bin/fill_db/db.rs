@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use rusqlite::{params, Connection};
 
 use crate::content::extract_text_content;
+use crate::meetings::contains_meeting_content;
 use crate::models::{ContactStats, EmailMessage};
 
 // ---------------------------------------------------------------------------
@@ -49,7 +50,8 @@ pub fn setup_contacts_table(conn: &Connection) {
              sent_per_month  REAL,
              received_per_month REAL,
              average_chars   REAL,
-             duration        REAL
+             duration        REAL,
+             meetings        INTEGER NOT NULL DEFAULT 0
          );
          CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);",
     )
@@ -69,6 +71,7 @@ pub fn setup_filtered_contacts_table(conn: &Connection) {
              received_per_month REAL,
              average_chars   REAL,
              duration        REAL,
+             meetings        INTEGER NOT NULL DEFAULT 0,
              not_clear       INTEGER NOT NULL DEFAULT 0
          );
          CREATE INDEX IF NOT EXISTS idx_contacts_filtered_email ON contacts_filtered(email);",
@@ -89,7 +92,8 @@ pub fn setup_candidates_table(conn: &Connection) {
              sent_per_month  REAL,
              received_per_month REAL,
              average_chars   REAL,
-             duration        REAL
+             duration        REAL,
+             meetings        INTEGER NOT NULL DEFAULT 0
          );
          CREATE INDEX IF NOT EXISTS idx_contacts_candidates_email ON contacts_candidates(email);",
     )
@@ -127,6 +131,9 @@ pub fn insert_message(
 
     let content_chars = content.chars().count() as u64;
 
+    // Check if this email contains meeting-related content
+    let is_meeting = contains_meeting_content(&msg.subject, &content);
+
     // Update contact statistics
     if user_is_sender {
         // User sent this email - update 'sent' count for all recipients
@@ -144,6 +151,9 @@ pub fn insert_message(
             }
             stats.total_chars += content_chars;
             stats.email_count += 1;
+            if is_meeting {
+                stats.meetings += 1;
+            }
         }
     } else {
         // User received this email - update 'received' count for sender
@@ -158,6 +168,9 @@ pub fn insert_message(
             }
             stats.total_chars += content_chars;
             stats.email_count += 1;
+            if is_meeting {
+                stats.meetings += 1;
+            }
         }
     }
 

@@ -31,6 +31,7 @@ pub struct ContactStats {
     pub last_timestamp: Option<i64>,
     pub total_chars: u64,
     pub email_count: u32,
+    pub meetings: u32,
 }
 
 impl ContactStats {
