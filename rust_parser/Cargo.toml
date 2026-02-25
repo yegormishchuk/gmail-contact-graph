@@ -31,10 +31,6 @@ python = ["pyo3"]
 name = "fill_db"
 path = "src/bin/fill_db/main.rs"
 
-[[bin]]
-name = "verify_contacts"
-path = "src/bin/verify_contacts/main.rs"
-
 [profile.release]
 opt-level = 3
 lto = true

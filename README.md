@@ -144,8 +144,7 @@ gmail-contact-graph/
 ├── rust_parser/            # High-performance Rust parser
 │   └── src/
 │       └── bin/
-│           ├── fill_db/    # Main parsing pipeline
-│           └── verify_contacts/  # Standalone AI verification
+│           └── fill_db/    # Main parsing pipeline with AI verification
 ├── src/                    # Python utilities
 │   ├── config.py          # Project configuration
 │   ├── models.py          # Data models
