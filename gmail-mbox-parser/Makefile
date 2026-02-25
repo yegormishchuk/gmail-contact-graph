@@ -3,18 +3,21 @@
 
 # Paths
 TOOLS_DIR = tools
-DATA_DIR ?= data
-MBOX_FILE ?= $(DATA_DIR)/mail.mbox
+DATA_DIR ?= ../data
+MBOX_NAME ?= mail.mbox
+MBOX_FILE = $(DATA_DIR)/$(MBOX_NAME)
 CONTACTS_DB = $(DATA_DIR)/contacts.db
 
 # User email (required for fill-db)
 USER_EMAIL ?= your_email@example.com
 
-# Detect OS for executable extension
+# Detect OS for executable extension and commands
 ifeq ($(OS),Windows_NT)
     EXE = .exe
+    MKDIR = if not exist "$(DATA_DIR)" mkdir "$(DATA_DIR)"
 else
     EXE =
+    MKDIR = mkdir -p $(DATA_DIR)
 endif
 
 # Binaries
@@ -54,7 +57,7 @@ fill-db: build-parser
 	@echo "Filling database from mbox..."
 	@echo "Using email: $(USER_EMAIL)"
 	@echo "Output dir: $(DATA_DIR)"
-	@mkdir -p $(DATA_DIR)
+	@$(MKDIR)
 	$(FILL_DB) "$(MBOX_FILE)" "$(USER_EMAIL)" "$(CONTACTS_DB)"
 
 rankings: build-tools
@@ -115,8 +118,8 @@ help:
 	@echo ""
 	@echo "  Variables:"
 	@echo "    USER_EMAIL          - Your Gmail address (required)"
-	@echo "    MBOX_FILE           - Path to mbox file (default: data/mail.mbox)"
-	@echo "    DATA_DIR            - Output directory (default: data)"
+	@echo "    MBOX_NAME           - Mbox filename (default: mail.mbox)"
+	@echo "    DATA_DIR            - Data directory (default: ./../data)"
 	@echo ""
 	@echo "  Example:"
-	@echo "    make fill-db USER_EMAIL=john@gmail.com MBOX_FILE=~/takeout/mail.mbox DATA_DIR=~/gmail-data"
+	@echo "    make fill-db USER_EMAIL=john@gmail.com MBOX_NAME=gmail_data.mbox"
