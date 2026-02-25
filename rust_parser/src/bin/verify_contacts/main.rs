@@ -1,6 +1,5 @@
 mod config;
 mod contacts;
-mod hf;
 
 use std::env;
 use std::fs::File;
@@ -9,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use config::{HFConfig, HFConfigSummary, VerificationOutput, VerificationStats};
 use contacts::load_filtered_contacts;
-use hf::HFClient;
+use fast_mbox_parser::hf::HFClient;
 
 /// Default max concurrent requests (reduced to respect rate limits)
 const DEFAULT_MAX_CONCURRENT: usize = 4;
@@ -72,7 +71,7 @@ async fn main() {
     }
 
     // Create HF client
-    let client = match HFClient::new(config.clone(), max_concurrent) {
+    let client = match HFClient::with_concurrency(config.clone(), max_concurrent) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error creating HF client: {}", e);
@@ -91,7 +90,7 @@ async fn main() {
     let completed_batches = AtomicUsize::new(0);
 
     let results = client
-        .classify_all(&contacts, batch_size, |batch, total, count| {
+        .classify_all_with_progress(&contacts, batch_size, |batch, total, count| {
             let completed = completed_batches.fetch_add(1, Ordering::SeqCst);
             eprintln!(
                 "[Batch {}/{} ({} contacts)] Starting... ({} batches completed)",

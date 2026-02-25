@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-use crate::config::ContactForVerification;
+use fast_mbox_parser::hf::ContactForVerification;
 
 /// Load contacts from the database that passed the initial spam filter
 /// (i.e., contacts that are in contacts_filtered table)
@@ -9,7 +9,7 @@ pub fn load_filtered_contacts(db_path: &str) -> Result<Vec<ContactForVerificatio
         .map_err(|e| format!("Failed to open database {}: {}", db_path, e))?;
 
     let mut stmt = conn
-        .prepare("SELECT name, email, received, sent FROM contacts_filtered")
+        .prepare("SELECT name, email FROM contacts_filtered")
         .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
     let contacts_iter = stmt
@@ -17,8 +17,6 @@ pub fn load_filtered_contacts(db_path: &str) -> Result<Vec<ContactForVerificatio
             Ok(ContactForVerification {
                 name: row.get(0)?,
                 email: row.get(1)?,
-                received: row.get(2)?,
-                sent: row.get(3)?,
             })
         })
         .map_err(|e| format!("Failed to execute query: {}", e))?;
@@ -40,7 +38,7 @@ pub fn load_all_contacts(db_path: &str) -> Result<Vec<ContactForVerification>, S
         .map_err(|e| format!("Failed to open database {}: {}", db_path, e))?;
 
     let mut stmt = conn
-        .prepare("SELECT name, email, received, sent FROM contacts")
+        .prepare("SELECT name, email FROM contacts")
         .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
     let contacts_iter = stmt
@@ -48,8 +46,6 @@ pub fn load_all_contacts(db_path: &str) -> Result<Vec<ContactForVerification>, S
             Ok(ContactForVerification {
                 name: row.get(0)?,
                 email: row.get(1)?,
-                received: row.get(2)?,
-                sent: row.get(3)?,
             })
         })
         .map_err(|e| format!("Failed to execute query: {}", e))?;

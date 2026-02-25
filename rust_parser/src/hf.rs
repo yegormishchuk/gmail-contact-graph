@@ -1,3 +1,8 @@
+//! HuggingFace API client for contact classification.
+//!
+//! Classifies email contacts as human (1), not human (0), or unknown (2)
+//! using LLM inference via the HuggingFace Inference API.
+
 use futures::future::join_all;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -6,51 +11,31 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
-/// Contact data for verification
-#[derive(Debug, Clone)]
-pub struct ContactForVerification {
-    pub name: String,
-    pub email: String,
-}
+// ============================================================================
+// Public Types
+// ============================================================================
 
-/// Classification result
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum ContactClassification {
-    NotHuman = 0,
-    Human = 1,
-    Unknown = 2,
-}
-
-impl ContactClassification {
-    pub fn as_u8(&self) -> u8 {
-        *self as u8
-    }
-}
-
-/// Verification result for a single contact
-#[derive(Debug, Clone)]
-pub struct VerificationResult {
-    pub email: String,
-    pub classification: u8,
-}
-
-/// HF Configuration
-#[derive(Debug, Clone)]
+/// Configuration for Hugging Face Inference API
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HFConfig {
+    /// API key for Hugging Face
     pub api_key: String,
+    /// Model ID (e.g., "meta-llama/Llama-3.2-3B-Instruct")
     pub model: String,
+    /// Request timeout in seconds
     pub timeout_secs: u64,
+    /// Number of contacts per batch
     pub batch_size: usize,
 }
 
 impl HFConfig {
+    /// Create config from environment variables
     pub fn from_env() -> Result<Self, String> {
-        let api_key = std::env::var("HF_API_KEY")
-            .map_err(|_| "HF_API_KEY environment variable not set")?;
+        let api_key =
+            std::env::var("HF_API_KEY").map_err(|_| "HF_API_KEY environment variable not set")?;
 
-        let model = std::env::var("HF_MODEL")
-            .unwrap_or_else(|_| "meta-llama/Llama-3.2-3B-Instruct".to_string());
+        let model =
+            std::env::var("HF_MODEL").unwrap_or_else(|_| "moonshotai/Kimi-K2.5".to_string());
 
         let timeout_secs = std::env::var("HF_TIMEOUT")
             .ok()
@@ -70,10 +55,61 @@ impl HFConfig {
         })
     }
 
+    /// Get full API URL
     pub fn api_url(&self) -> String {
         "https://router.huggingface.co/v1/chat/completions".to_string()
     }
 }
+
+/// Classification result for a contact
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum ContactClassification {
+    /// 0 - Not a human (automated/spam)
+    NotHuman = 0,
+    /// 1 - Human
+    Human = 1,
+    /// 2 - Unclear/Unknown
+    Unknown = 2,
+}
+
+impl ContactClassification {
+    pub fn from_str(s: &str) -> Self {
+        for ch in s.chars() {
+            match ch {
+                '0' => return Self::NotHuman,
+                '1' => return Self::Human,
+                '2' => return Self::Unknown,
+                _ => continue,
+            }
+        }
+        Self::Unknown
+    }
+
+    pub fn as_u8(&self) -> u8 {
+        *self as u8
+    }
+}
+
+/// Contact data for verification (minimal fields needed for classification)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContactForVerification {
+    pub name: String,
+    pub email: String,
+}
+
+/// Verification result for a single contact
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerificationResult {
+    pub email: String,
+    pub name: String,
+    pub classification: u8,
+    pub raw_response: String,
+}
+
+// ============================================================================
+// Internal Types (API request/response)
+// ============================================================================
 
 /// OpenAI-compatible chat request
 #[derive(Debug, Serialize)]
@@ -112,6 +148,10 @@ struct ApiError {
     message: String,
 }
 
+// ============================================================================
+// Constants
+// ============================================================================
+
 /// Number of times to run each batch for voting
 const VOTES_PER_BATCH: usize = 4;
 
@@ -124,6 +164,10 @@ const REQUEST_DELAY_MS: u64 = 200;
 /// Default max concurrent requests
 const DEFAULT_MAX_CONCURRENT: usize = 4;
 
+// ============================================================================
+// HFClient
+// ============================================================================
+
 /// HuggingFace API client (async)
 pub struct HFClient {
     client: Client,
@@ -132,8 +176,16 @@ pub struct HFClient {
 }
 
 impl HFClient {
-    /// Create a new HF client with concurrency limit
+    /// Create a new HF client with default concurrency limit
     pub fn new(config: HFConfig) -> Result<Self, reqwest::Error> {
+        Self::with_concurrency(config, DEFAULT_MAX_CONCURRENT)
+    }
+
+    /// Create a new HF client with custom concurrency limit
+    pub fn with_concurrency(
+        config: HFConfig,
+        max_concurrent: usize,
+    ) -> Result<Self, reqwest::Error> {
         let client = Client::builder()
             .timeout(Duration::from_secs(config.timeout_secs))
             .build()?;
@@ -141,7 +193,7 @@ impl HFClient {
         Ok(Self {
             client,
             config,
-            semaphore: Arc::new(Semaphore::new(DEFAULT_MAX_CONCURRENT)),
+            semaphore: Arc::new(Semaphore::new(max_concurrent)),
         })
     }
 
@@ -182,6 +234,7 @@ Contacts:
     }
 
     /// Parse batch response into individual classifications
+    /// Returns None if response is incomplete (not enough 0/1 digits)
     fn parse_batch_response(response: &str, count: usize) -> Option<Vec<ContactClassification>> {
         let mut results = Vec::with_capacity(count);
 
@@ -203,7 +256,7 @@ Contacts:
         Some(results)
     }
 
-    /// Single API request
+    /// Single API request (no retry logic)
     async fn make_api_request(
         &self,
         contacts: &[ContactForVerification],
@@ -263,7 +316,7 @@ Contacts:
         Ok(result)
     }
 
-    /// Single API call with retry on incomplete response
+    /// Single API call for a batch with retry on incomplete response
     async fn classify_batch_once(
         &self,
         contacts: &[ContactForVerification],
@@ -278,7 +331,11 @@ Contacts:
             }
 
             if attempt < MAX_RETRIES {
-                eprintln!("  [WARN] Incomplete response, retrying ({}/{})", attempt + 1, MAX_RETRIES);
+                eprintln!(
+                    "  [WARN] Incomplete response, retrying ({}/{})",
+                    attempt + 1,
+                    MAX_RETRIES
+                );
                 continue;
             }
         }
@@ -289,7 +346,9 @@ Contacts:
         ))
     }
 
-    /// Vote on classification (unanimous required)
+    /// Vote on the most common classification for a contact
+    /// Requires unanimous vote (all votes same) for 0 or 1
+    /// Any disagreement → Unknown
     fn vote_classification(votes: &[ContactClassification]) -> ContactClassification {
         let mut count_0: usize = 0;
         let mut count_1: usize = 0;
@@ -311,8 +370,8 @@ Contacts:
         }
     }
 
-    /// Classify a batch with voting
-    async fn classify_batch_with_voting(
+    /// Classify a batch of contacts with voting
+    pub async fn classify_batch_with_voting(
         &self,
         contacts: &[ContactForVerification],
     ) -> Vec<Result<VerificationResult, String>> {
@@ -348,10 +407,15 @@ Contacts:
         if vote_results.len() < VOTES_PER_BATCH {
             return contacts
                 .iter()
-                .map(|c| Err(format!(
-                    "Could not collect {} votes for {} after {} attempts",
-                    VOTES_PER_BATCH, c.email, total_attempts
-                )))
+                .map(|c| {
+                    Err(format!(
+                        "Could not collect {} votes for {} after {} attempts (got {})",
+                        VOTES_PER_BATCH,
+                        c.email,
+                        total_attempts,
+                        vote_results.len()
+                    ))
+                })
                 .collect();
         }
 
@@ -368,31 +432,50 @@ Contacts:
 
                 Ok(VerificationResult {
                     email: contact.email.clone(),
+                    name: contact.name.clone(),
                     classification: classification.as_u8(),
+                    raw_response: format!(
+                        "votes: {:?}",
+                        votes.iter().map(|v| v.as_u8()).collect::<Vec<_>>()
+                    ),
                 })
             })
             .collect()
     }
 
-    /// Classify all contacts in batches
+    /// Classify all contacts in batches (simple API without progress callback)
     pub async fn classify_all(
         &self,
         contacts: &[ContactForVerification],
     ) -> Vec<Result<VerificationResult, String>> {
-        let batch_size = self.config.batch_size;
+        self.classify_all_with_progress(contacts, self.config.batch_size, |_, _, _| {})
+            .await
+    }
+
+    /// Classify all contacts in batches with progress callback
+    pub async fn classify_all_with_progress<F>(
+        &self,
+        contacts: &[ContactForVerification],
+        batch_size: usize,
+        progress_callback: F,
+    ) -> Vec<Result<VerificationResult, String>>
+    where
+        F: Fn(usize, usize, usize) + Send + Sync,
+    {
         let total_batches = (contacts.len() + batch_size - 1) / batch_size;
-        let batches: Vec<Vec<ContactForVerification>> = contacts
-            .chunks(batch_size)
-            .map(|c| c.to_vec())
-            .collect();
+        let batches: Vec<Vec<ContactForVerification>> =
+            contacts.chunks(batch_size).map(|c| c.to_vec()).collect();
+
+        let progress_callback = Arc::new(progress_callback);
 
         let futures: Vec<_> = batches
             .into_iter()
             .enumerate()
             .map(|(batch_idx, chunk)| {
                 let chunk_len = chunk.len();
+                let progress = Arc::clone(&progress_callback);
                 async move {
-                    eprintln!("  [Batch {}/{}] Processing {} contacts...", batch_idx + 1, total_batches, chunk_len);
+                    progress(batch_idx + 1, total_batches, chunk_len);
                     self.classify_batch_with_voting(&chunk).await
                 }
             })

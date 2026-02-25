@@ -13,6 +13,7 @@ mod contact;
 pub mod email;
 #[cfg(feature = "python")]
 mod groups;
+pub mod hf;
 pub mod mime;
 #[cfg(feature = "python")]
 mod parser;
