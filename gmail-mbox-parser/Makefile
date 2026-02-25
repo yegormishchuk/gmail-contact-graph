@@ -1,40 +1,31 @@
-# Gmail Contact Graph - Makefile
-# ==============================
+# Gmail MBOX Parser - Makefile
+# =============================
 
 # Paths
-RUST_PARSER_DIR = rust_parser
-TOOLS_DIR = rust_parser/tools
-DATA_DIR = data
-MBOX_FILE ?= $(DATA_DIR)/gmail_data.mbox
+TOOLS_DIR = tools
+DATA_DIR ?= data
+MBOX_FILE ?= $(DATA_DIR)/mail.mbox
 CONTACTS_DB = $(DATA_DIR)/contacts.db
 
-# User email (set via environment or override)
+# User email (required for fill-db)
 USER_EMAIL ?= your_email@example.com
 
-# Python
-PYTHON ?= python
-VENV_DIR = venv
-
-# Detect OS for executable extension and venv activation
+# Detect OS for executable extension
 ifeq ($(OS),Windows_NT)
     EXE = .exe
-    VENV_ACTIVATE = $(VENV_DIR)\Scripts\activate
-    VENV_PYTHON = $(VENV_DIR)\Scripts\python
 else
     EXE =
-    VENV_ACTIVATE = $(VENV_DIR)/bin/activate
-    VENV_PYTHON = $(VENV_DIR)/bin/python
 endif
 
 # Binaries
-FILL_DB = $(RUST_PARSER_DIR)/target/release/fill_db$(EXE)
+FILL_DB = target/release/fill_db$(EXE)
 GENERATE_RANKINGS = $(TOOLS_DIR)/target/release/generate_rankings$(EXE)
 
 # ============================================
 # Main targets
 # ============================================
 
-.PHONY: all build build-parser build-tools clean help setup run
+.PHONY: all build build-parser build-tools clean help
 
 all: build
 
@@ -42,36 +33,12 @@ build: build-parser build-tools
 	@echo "All builds complete."
 
 # ============================================
-# Setup targets
-# ============================================
-
-setup: venv build
-	@echo "Setup complete. Activate venv and run 'make run' to start."
-
-venv:
-	@echo "Creating Python virtual environment..."
-	$(PYTHON) -m venv $(VENV_DIR)
-	$(VENV_PYTHON) -m pip install --upgrade pip
-	$(VENV_PYTHON) -m pip install -r requirements.txt
-	@echo "Virtual environment ready. Activate with:"
-	@echo "  Windows: $(VENV_DIR)\\Scripts\\activate"
-	@echo "  Linux/macOS: source $(VENV_DIR)/bin/activate"
-
-# ============================================
-# Run targets
-# ============================================
-
-run:
-	@echo "Starting web application..."
-	$(VENV_PYTHON) webapp/app.py
-
-# ============================================
 # Build targets
 # ============================================
 
 build-parser:
-	@echo "Building rust_parser..."
-	cd $(RUST_PARSER_DIR) && cargo build --release --bin fill_db
+	@echo "Building parser..."
+	cargo build --release --bin fill_db
 
 build-tools:
 	@echo "Building ranking tools..."
@@ -81,23 +48,19 @@ build-tools:
 # Database operations
 # ============================================
 
-.PHONY: fill-db rankings
+.PHONY: fill-db rankings process-all
 
 fill-db: build-parser
 	@echo "Filling database from mbox..."
 	@echo "Using email: $(USER_EMAIL)"
+	@echo "Output dir: $(DATA_DIR)"
+	@mkdir -p $(DATA_DIR)
 	$(FILL_DB) "$(MBOX_FILE)" "$(USER_EMAIL)" "$(CONTACTS_DB)"
 
 rankings: build-tools
 	@echo "Generating rankings..."
 	$(GENERATE_RANKINGS) "$(CONTACTS_DB)" "$(DATA_DIR)"
 	@echo "Rankings generated in $(DATA_DIR)/"
-
-# ============================================
-# Combined operations
-# ============================================
-
-.PHONY: process-all
 
 process-all: fill-db rankings
 	@echo "All processing complete."
@@ -108,7 +71,7 @@ process-all: fill-db rankings
 
 clean:
 	@echo "Cleaning build artifacts..."
-	cd $(RUST_PARSER_DIR) && cargo clean
+	cargo clean
 	cd $(TOOLS_DIR) && cargo clean
 
 clean-data:
@@ -121,8 +84,9 @@ clean-data:
 	rm -f $(DATA_DIR)/email_length_ranking.txt
 
 clean-db:
-	@echo "Removing database..."
-	rm -f $(CONTACTS_DB)
+	@echo "Removing databases..."
+	rm -f $(DATA_DIR)/contacts.db
+	rm -f $(DATA_DIR)/mails.db
 
 clean-all: clean clean-data clean-db
 
@@ -131,19 +95,12 @@ clean-all: clean clean-data clean-db
 # ============================================
 
 help:
-	@echo "Gmail Contact Graph - Available targets:"
-	@echo ""
-	@echo "  Setup:"
-	@echo "    make setup          - Full setup (venv + build)"
-	@echo "    make venv           - Create Python virtual environment"
+	@echo "Gmail MBOX Parser - Available targets:"
 	@echo ""
 	@echo "  Build:"
 	@echo "    make build          - Build all (parser + tools)"
-	@echo "    make build-parser   - Build rust_parser (fill_db)"
+	@echo "    make build-parser   - Build fill_db binary"
 	@echo "    make build-tools    - Build ranking tools"
-	@echo ""
-	@echo "  Run:"
-	@echo "    make run            - Start the web application"
 	@echo ""
 	@echo "  Data processing:"
 	@echo "    make fill-db        - Parse mbox and fill databases"
@@ -157,10 +114,9 @@ help:
 	@echo "    make clean-all      - Clean everything"
 	@echo ""
 	@echo "  Variables:"
-	@echo "    USER_EMAIL          - Your Gmail address (required for fill-db)"
+	@echo "    USER_EMAIL          - Your Gmail address (required)"
 	@echo "    MBOX_FILE           - Path to mbox file (default: data/mail.mbox)"
+	@echo "    DATA_DIR            - Output directory (default: data)"
 	@echo ""
 	@echo "  Example:"
-	@echo "    make setup"
-	@echo "    make fill-db USER_EMAIL=john@gmail.com MBOX_FILE=path/to/mail.mbox"
-	@echo "    make run"
+	@echo "    make fill-db USER_EMAIL=john@gmail.com MBOX_FILE=~/takeout/mail.mbox DATA_DIR=~/gmail-data"

@@ -1,10 +1,11 @@
 [package]
-name = "fast_mbox_parser"
+name = "gmail-mbox-parser"
 version = "0.1.0"
 edition = "2021"
+description = "High-performance Gmail MBOX parser with contact extraction and AI verification"
 
 [lib]
-name = "fast_mbox_parser"
+name = "gmail_mbox_parser"
 crate-type = ["rlib"]
 
 [dependencies]

@@ -1,0 +1,15 @@
+# Build artifacts
+/target/
+/tools/target/
+
+# Data files
+/data/
+*.db
+*.mbox
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
