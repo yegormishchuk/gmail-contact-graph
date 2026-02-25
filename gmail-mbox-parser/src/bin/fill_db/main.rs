@@ -12,7 +12,7 @@ use std::io::{BufRead, BufReader};
 
 use rusqlite::{params, Connection};
 
-use fast_mbox_parser::hf::{ContactForVerification, HFClient, HFConfig};
+use gmail_mbox_parser::hf::{ContactForVerification, HFClient, HFConfig};
 use models::{ContactStats, EmailMessage, ParseState};
 use spam::is_spam_contact;
 

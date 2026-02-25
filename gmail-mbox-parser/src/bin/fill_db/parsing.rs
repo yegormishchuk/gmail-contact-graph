@@ -1,7 +1,7 @@
 use chrono::DateTime;
 
-use fast_mbox_parser::email::{parse_all_recipients, parse_sender};
-use fast_mbox_parser::mime::decode_mime_header;
+use gmail_mbox_parser::email::{parse_all_recipients, parse_sender};
+use gmail_mbox_parser::mime::decode_mime_header;
 
 use crate::models::EmailMessage;
 

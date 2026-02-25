@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use fast_mbox_parser::mime::{base64_decode, body_quoted_printable_decode, decode_charset};
+use gmail_mbox_parser::mime::{base64_decode, body_quoted_printable_decode, decode_charset};
 
 use crate::parsing::parse_content_type;
 
