@@ -1,0 +1,26 @@
+project_name: gmail-contact-graph
+
+# Language servers to enable
+# Serena uses these for semantic code understanding
+language_servers:
+  python:
+    enabled: true
+  rust:
+    enabled: true
+
+# Use .gitignore to exclude files from analysis
+use_gitignore: true
+
+# Additional paths to ignore (gitignore syntax)
+ignore:
+  - "data/"
+  - "venv/"
+  - "*.db"
+  - "__pycache__/"
+  - "target/"
+
+# Project status: read-write allows full editing
+project_status: read-write
+
+# Default encoding
+encoding: utf-8
