@@ -1,0 +1,42 @@
+import React, { useRef, useCallback } from 'react';
+import { useAppContext } from '../../context/AppContext';
+import { useD3Simulation } from '../../hooks/useD3Simulation';
+import { filterData } from '../../utils/filterData';
+import type { GraphNode } from '@gmail-graph/shared';
+
+export function Graph() {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const { state, dispatch } = useAppContext();
+
+  const handleNodeClick = useCallback((node: GraphNode) => {
+    dispatch({ type: 'SELECT_NODE', payload: node });
+  }, [dispatch]);
+
+  const filteredData = state.rawData
+    ? filterData(state.rawData, state.filters)
+    : null;
+
+  const { resetZoom } = useD3Simulation({
+    svgRef,
+    data: filteredData,
+    domains: state.domains,
+    messageGroups: state.messageGroups,
+    onNodeClick: handleNodeClick,
+  });
+
+  // Expose resetZoom to parent via a button in Controls
+  // For now, attach to window for testing
+  React.useEffect(() => {
+    (window as any).resetGraphZoom = resetZoom;
+  }, [resetZoom]);
+
+  return (
+    <svg
+      ref={svgRef}
+      id="graph"
+      style={{ width: '100%', height: '100%' }}
+    />
+  );
+}
+
+export default Graph;

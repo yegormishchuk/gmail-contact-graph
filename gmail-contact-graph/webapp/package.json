@@ -1,0 +1,18 @@
+{
+  "name": "gmail-contact-graph-webapp",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm -w @gmail-graph/server run dev",
+    "dev:client": "npm -w @gmail-graph/client run dev",
+    "build": "npm -w @gmail-graph/shared run build && npm -w @gmail-graph/server run build && npm -w @gmail-graph/client run build",
+    "start": "npm -w @gmail-graph/server run start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.9.3"
+  }
+}
