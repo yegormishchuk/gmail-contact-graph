@@ -2,26 +2,13 @@
 # =====================================
 
 # Data directory (should match parser output)
-DATA_DIR ?= data
-
-# Python
-PYTHON ?= python
-VENV_DIR = venv
-
-# Detect OS for venv activation
-ifeq ($(OS),Windows_NT)
-    VENV_ACTIVATE = $(VENV_DIR)\Scripts\activate
-    VENV_PYTHON = $(VENV_DIR)\Scripts\python
-else
-    VENV_ACTIVATE = $(VENV_DIR)/bin/activate
-    VENV_PYTHON = $(VENV_DIR)/bin/python
-endif
+DATA_DIR ?= ../data
 
 # ============================================
 # Main targets
 # ============================================
 
-.PHONY: all setup venv run clean help
+.PHONY: all setup install build run dev clean help
 
 all: setup
 
@@ -29,39 +16,49 @@ all: setup
 # Setup targets
 # ============================================
 
-setup: venv
-	@echo "Setup complete. Activate venv and run 'make run' to start."
+setup: install build
+	@echo "Setup complete. Run 'make dev' for development or 'make run' for production."
 
-venv:
-	@echo "Creating Python virtual environment..."
-	$(PYTHON) -m venv $(VENV_DIR)
-	$(VENV_PYTHON) -m pip install --upgrade pip
-	$(VENV_PYTHON) -m pip install -r requirements.txt
-	@echo "Virtual environment ready. Activate with:"
-	@echo "  Windows: $(VENV_DIR)\\Scripts\\activate"
-	@echo "  Linux/macOS: source $(VENV_DIR)/bin/activate"
+install:
+	@echo "Installing dependencies..."
+	cd webapp && npm install
+
+build:
+	@echo "Building application..."
+	cd webapp && npm run build
 
 # ============================================
 # Run targets
 # ============================================
 
 run:
-	@echo "Starting web application..."
+	@echo "Starting production server..."
 	@echo "Using data from: $(DATA_DIR)"
-	DATA_DIR=$(DATA_DIR) $(VENV_PYTHON) webapp/app.py
+	cd webapp && CONTACTS_DB_FILE=$(DATA_DIR)/contacts.db MAILS_DB_FILE=$(DATA_DIR)/mails.db npm run start
 
-run-dev:
-	@echo "Starting in development mode..."
-	DATA_DIR=$(DATA_DIR) FLASK_DEBUG=1 $(VENV_PYTHON) webapp/app.py
+dev:
+	@echo "Starting development servers..."
+	@echo "Using data from: $(DATA_DIR)"
+	cd webapp && CONTACTS_DB_FILE=$(DATA_DIR)/contacts.db MAILS_DB_FILE=$(DATA_DIR)/mails.db npm run dev
+
+dev-server:
+	@echo "Starting API server only..."
+	cd webapp && CONTACTS_DB_FILE=$(DATA_DIR)/contacts.db MAILS_DB_FILE=$(DATA_DIR)/mails.db npm run dev:server
+
+dev-client:
+	@echo "Starting React client only..."
+	cd webapp && npm run dev:client
 
 # ============================================
 # Clean targets
 # ============================================
 
 clean:
-	@echo "Removing virtual environment..."
-	rm -rf $(VENV_DIR)
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@echo "Removing node_modules and build artifacts..."
+	rm -rf webapp/node_modules
+	rm -rf webapp/packages/*/node_modules
+	rm -rf webapp/packages/*/dist
+	rm -f webapp/package-lock.json
 
 # ============================================
 # Help
@@ -71,24 +68,26 @@ help:
 	@echo "Gmail Contact Graph Webapp - Available targets:"
 	@echo ""
 	@echo "  Setup:"
-	@echo "    make setup          - Create virtual environment"
-	@echo "    make venv           - Create Python virtual environment"
+	@echo "    make setup          - Install dependencies and build"
+	@echo "    make install        - Install npm dependencies"
+	@echo "    make build          - Build all packages"
 	@echo ""
 	@echo "  Run:"
-	@echo "    make run            - Start the web application"
-	@echo "    make run-dev        - Start in development mode"
+	@echo "    make run            - Start production server (port 5000)"
+	@echo "    make dev            - Start dev servers (API:5000, Client:3000)"
+	@echo "    make dev-server     - Start API server only"
+	@echo "    make dev-client     - Start React client only"
 	@echo ""
 	@echo "  Clean:"
-	@echo "    make clean          - Remove venv and cache files"
+	@echo "    make clean          - Remove node_modules and build files"
 	@echo ""
 	@echo "  Variables:"
-	@echo "    DATA_DIR            - Data directory with databases (default: data)"
-	@echo "    MY_EMAIL            - Your email (env var, for display)"
-	@echo "    MY_NAME             - Your name (env var, for display)"
+	@echo "    DATA_DIR            - Data directory with databases (default: ../data)"
 	@echo ""
 	@echo "  Prerequisites:"
-	@echo "    Run gmail-mbox-parser first to generate contacts.db and mails.db"
+	@echo "    - Node.js 18+ required"
+	@echo "    - Run gmail-mbox-parser first to generate contacts.db and mails.db"
 	@echo ""
 	@echo "  Example:"
 	@echo "    make setup"
-	@echo "    DATA_DIR=~/gmail-data MY_EMAIL=john@gmail.com make run"
+	@echo "    DATA_DIR=~/gmail-data make dev"
