@@ -2,16 +2,13 @@
 name = "gmail-mbox-parser"
 version = "0.1.0"
 edition = "2021"
-description = "High-performance Gmail MBOX parser with contact extraction and AI verification"
+description = "Gmail MBOX parser with contact extraction and AI verification"
 
 [lib]
 name = "gmail_mbox_parser"
 crate-type = ["rlib"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"], optional = true }
-rayon = "1.10"
-memmap2 = "0.9"
 charset = "0.1"
 base64 = "0.22"
 encoding_rs = "0.8"
@@ -24,9 +21,6 @@ serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 dotenvy = "0.15"
 
-[features]
-default = []
-python = ["pyo3"]
 
 [[bin]]
 name = "fill_db"
