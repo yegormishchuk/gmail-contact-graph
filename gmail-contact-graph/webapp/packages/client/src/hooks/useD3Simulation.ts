@@ -9,7 +9,7 @@ interface UseD3SimulationOptions {
   data: GraphData | null;
   domains: DomainGroups | null;
   messageGroups: MessageGroups | null;
-  onNodeClick: (node: GraphNode) => void;
+  onNodeClick: (node: GraphNode, position: { x: number; y: number }) => void;
 }
 
 export function useD3Simulation(options: UseD3SimulationOptions) {
@@ -207,7 +207,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     nodeGroups.on('click', function(event, d) {
       if (d.isCenter) return;
       event.stopPropagation();
-      options.onNodeClick(d);
+      options.onNodeClick(d, { x: event.clientX, y: event.clientY });
     });
 
     // Update positions on simulation tick

@@ -35,8 +35,8 @@ export function RankingPanel() {
     dispatch({ type: 'SET_RANKING_TAB', payload: tab });
   };
 
-  const handleContactClick = (contact: GraphNode) => {
-    dispatch({ type: 'SELECT_NODE', payload: contact });
+  const handleContactClick = (contact: GraphNode, e: React.MouseEvent) => {
+    dispatch({ type: 'SELECT_NODE', payload: contact, position: { x: e.clientX, y: e.clientY } });
   };
 
   const handleDelete = async (email: string, e: React.MouseEvent) => {
@@ -120,7 +120,7 @@ export function RankingPanel() {
             <div
               key={contact.email}
               className="ranking-item"
-              onClick={() => handleContactClick(contact)}
+              onClick={(e) => handleContactClick(contact, e)}
             >
               <span className={`ranking-place ${getPlaceClass(contact.place)}`}>
                 {contact.place}

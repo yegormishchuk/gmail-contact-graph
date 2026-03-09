@@ -21,6 +21,7 @@ interface AppState {
   };
 
   selectedNode: GraphNode | null;
+  selectedNodePosition: { x: number; y: number } | null;
   rankingTab: 'ranking' | 'filtered' | 'spam';
   panelVisible: boolean;
 
@@ -39,6 +40,7 @@ const initialState: AppState = {
     searchQuery: '',
   },
   selectedNode: null,
+  selectedNodePosition: null,
   rankingTab: 'ranking',
   panelVisible: true,
   loading: true,
@@ -53,7 +55,7 @@ type Action =
   | { type: 'SET_FILTER_LIMIT'; payload: number }
   | { type: 'SET_FILTER_TYPE'; payload: 'moreReceived' | 'moreSent' | null }
   | { type: 'SET_SEARCH_QUERY'; payload: string }
-  | { type: 'SELECT_NODE'; payload: GraphNode | null }
+  | { type: 'SELECT_NODE'; payload: GraphNode | null; position?: { x: number; y: number } | null }
   | { type: 'SET_RANKING_TAB'; payload: 'ranking' | 'filtered' | 'spam' }
   | { type: 'TOGGLE_PANEL' }
   | { type: 'REMOVE_CONTACT'; payload: string }
@@ -82,7 +84,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'SET_SEARCH_QUERY':
       return { ...state, filters: { ...state.filters, searchQuery: action.payload } };
     case 'SELECT_NODE':
-      return { ...state, selectedNode: action.payload };
+      return { ...state, selectedNode: action.payload, selectedNodePosition: action.position ?? null };
     case 'SET_RANKING_TAB':
       return { ...state, rankingTab: action.payload };
     case 'TOGGLE_PANEL':
@@ -106,6 +108,7 @@ function reducer(state: AppState, action: Action): AppState {
           ? [{ name: removedNode.name, email: removedNode.email, received: removedNode.received, sent: removedNode.sent, total: removedNode.received + removedNode.sent }, ...state.excludedContacts]
           : state.excludedContacts,
         selectedNode: state.selectedNode?.email === email ? null : state.selectedNode,
+        selectedNodePosition: state.selectedNode?.email === email ? null : state.selectedNodePosition,
       };
     }
     case 'RESTORE_CONTACT': {

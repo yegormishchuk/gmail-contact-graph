@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { useD3Simulation } from '../../hooks/useD3Simulation';
 import { filterData } from '../../utils/filterData';
@@ -8,13 +8,14 @@ export function Graph() {
   const svgRef = useRef<SVGSVGElement>(null);
   const { state, dispatch } = useAppContext();
 
-  const handleNodeClick = useCallback((node: GraphNode) => {
-    dispatch({ type: 'SELECT_NODE', payload: node });
+  const handleNodeClick = useCallback((node: GraphNode, position: { x: number; y: number }) => {
+    dispatch({ type: 'SELECT_NODE', payload: node, position });
   }, [dispatch]);
 
-  const filteredData = state.rawData
-    ? filterData(state.rawData, state.filters)
-    : null;
+  const filteredData = useMemo(
+    () => state.rawData ? filterData(state.rawData, state.filters) : null,
+    [state.rawData, state.filters]
+  );
 
   const { resetZoom } = useD3Simulation({
     svgRef,

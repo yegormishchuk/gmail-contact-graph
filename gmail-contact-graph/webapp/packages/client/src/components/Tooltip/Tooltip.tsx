@@ -1,10 +1,65 @@
-import React from 'react';
+import React, { useRef, useLayoutEffect, useState, useCallback } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { api } from '../../api/client';
 
+const OFFSET = 14;
+
 export function Tooltip() {
   const { state, dispatch } = useAppContext();
-  const { selectedNode, domains, messageGroups } = state;
+  const { selectedNode, selectedNodePosition, domains, messageGroups } = state;
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: -9999, top: -9999 });
+  const dragState = useRef<{ startX: number; startY: number; startLeft: number; startTop: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!tooltipRef.current || !selectedNodePosition) return;
+    const { x, y } = selectedNodePosition;
+    const { offsetWidth: w, offsetHeight: h } = tooltipRef.current;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let left = x + OFFSET;
+    let top = y + OFFSET;
+
+    if (left + w > vw) left = x - w - OFFSET;
+    if (top + h > vh) top = y - h - OFFSET;
+    if (left < 0) left = 0;
+    if (top < 0) top = 0;
+
+    setPos({ left, top });
+  }, [selectedNodePosition, selectedNode]);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    // Don't drag when clicking buttons
+    if ((e.target as HTMLElement).closest('button')) return;
+    e.preventDefault();
+    dragState.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: pos.left,
+      startTop: pos.top,
+    };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragState.current) return;
+      const dx = ev.clientX - dragState.current.startX;
+      const dy = ev.clientY - dragState.current.startY;
+      const w = tooltipRef.current?.offsetWidth ?? 0;
+      const h = tooltipRef.current?.offsetHeight ?? 0;
+      const left = Math.max(0, Math.min(window.innerWidth - w, dragState.current.startLeft + dx));
+      const top = Math.max(0, Math.min(window.innerHeight - h, dragState.current.startTop + dy));
+      setPos({ left, top });
+    };
+
+    const onUp = () => {
+      dragState.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [pos]);
 
   if (!selectedNode) return null;
 
@@ -48,7 +103,12 @@ export function Tooltip() {
   };
 
   return (
-    <div className="tooltip visible" style={{ left: 100, top: 100 }}>
+    <div
+      ref={tooltipRef}
+      className="tooltip visible"
+      style={{ left: pos.left, top: pos.top, cursor: 'grab' }}
+      onMouseDown={handleDragStart}
+    >
       <button className="tooltip-close" onClick={handleClose}>&times;</button>
       <div className="tooltip-name">{selectedNode.name}</div>
       <div className="tooltip-email">{selectedNode.email}</div>
