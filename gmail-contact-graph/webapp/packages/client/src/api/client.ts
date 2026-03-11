@@ -25,7 +25,13 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   getGraph: () => fetchJson<GraphData>('/graph'),
   getDomains: () => fetchJson<DomainGroups>('/domains'),
-  getMessageGroups: () => fetchJson<MessageGroups>('/message-groups'),
+  getMessageGroups: () => fetchJson<MessageGroups>('/message-groups').then(data => {
+    console.debug(`[message-groups] found ${data.total_groups} groups`);
+    for (const [subject, members] of Object.entries(data.groups)) {
+      console.debug(`  subject: ${JSON.stringify(subject)}  members (${members.length}): ${JSON.stringify(members)}`);
+    }
+    return data;
+  }),
   getExcludedContacts: () => fetchJson<ExcludedContact[]>('/excluded-contacts'),
 
   markClear: (email: string) =>

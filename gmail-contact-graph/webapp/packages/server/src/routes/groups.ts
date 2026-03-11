@@ -7,61 +7,56 @@ const router = Router();
 
 interface MessageRow {
   subject: string;
-  recipients: string;
+  from: string;
+  to: string;
 }
 
 router.get('/message-groups', async (req, res) => {
-  // Check if mails database exists
-  if (!existsSync(config.DEFAULT_DB_FILE)) {
+  if (!existsSync(config.CONTACTS_DB_FILE)) {
     return res.json({ total_groups: 0, groups: {} });
   }
 
   try {
     const SQL = await initSqlJs();
-    const buffer = readFileSync(config.DEFAULT_DB_FILE);
+    const buffer = readFileSync(config.CONTACTS_DB_FILE);
     const db = new SQL.Database(buffer);
 
-    // Get messages with multiple recipients sent by user
+    // Fetch all rows where user is sender or recipient
     const stmt = db.prepare(`
-      SELECT subject, recipients
-      FROM emails
-      WHERE sender LIKE ?
-      AND recipients LIKE '%,%'
+      SELECT subject, "from", "to"
+      FROM mails
+      WHERE ("from" = ? OR "to" = ?) AND subject != ''
     `);
-    stmt.bind([`%${config.MY_EMAIL}%`]);
+    const myEmail = config.MY_EMAIL.toLowerCase();
+    stmt.bind([myEmail, myEmail]);
 
-    const groups: Record<string, string[]> = {};
+    const groups: Record<string, Set<string>> = {};
 
     while (stmt.step()) {
       const row = stmt.getAsObject() as unknown as MessageRow;
-      if (!row.subject || !row.recipients) continue;
-
-      const recipients = (row.recipients as string)
-        .split(',')
-        .map(r => r.trim().toLowerCase())
-        .filter(r => r && r !== config.MY_EMAIL.toLowerCase());
-
-      if (recipients.length < 2) continue;
+      if (!row.subject) continue;
 
       const subject = (row.subject as string).replace(/^(Re:|Fwd:)\s*/gi, '').trim();
       if (!subject) continue;
 
       if (!groups[subject]) {
-        groups[subject] = [];
+        groups[subject] = new Set();
       }
 
-      for (const r of recipients) {
-        if (!groups[subject].includes(r)) {
-          groups[subject].push(r);
-        }
-      }
+      // Add both participants, excluding the user
+      const sender = (row.from as string).trim().toLowerCase();
+      const recipient = (row.to as string).trim().toLowerCase();
+      if (sender && sender !== myEmail) groups[subject].add(sender);
+      if (recipient && recipient !== myEmail) groups[subject].add(recipient);
     }
     stmt.free();
     db.close();
 
-    // Filter to groups with 2+ members
+    // Filter to groups with 2+ unique recipients
     const filteredGroups = Object.fromEntries(
-      Object.entries(groups).filter(([_, members]) => members.length >= 2)
+      Object.entries(groups)
+        .filter(([_, members]) => members.size >= 2)
+        .map(([subject, members]) => [subject, Array.from(members)])
     );
 
     res.json({
