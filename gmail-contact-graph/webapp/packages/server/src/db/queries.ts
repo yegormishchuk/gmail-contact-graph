@@ -12,9 +12,10 @@ export interface DbContact {
 export function loadContactsFromFiltered(): ContactFiltered[] {
   const db = getDatabase();
   const stmt = db.prepare(`
-    SELECT name, email, received, sent, not_clear
-    FROM contacts_filtered
-    ORDER BY (received + sent) DESC
+    SELECT c.name, c.email, c.received, c.sent, cf.not_clear
+    FROM contacts_filtered cf
+    JOIN contacts c ON c.id = cf.contact_id
+    ORDER BY (c.received + c.sent) DESC
   `);
 
   const results: ContactFiltered[] = [];
@@ -38,9 +39,9 @@ export function loadExcludedContacts(): ExcludedContact[] {
   const db = getDatabase();
   const stmt = db.prepare(`
     SELECT c.name, c.email, c.received, c.sent
-    FROM contacts_candidates c
-    LEFT JOIN contacts_filtered f ON c.email = f.email
-    WHERE f.email IS NULL
+    FROM contacts c
+    LEFT JOIN contacts_filtered cf ON cf.contact_id = c.id
+    WHERE c.not_spam = 1 AND cf.contact_id IS NULL
     ORDER BY (c.received + c.sent) DESC
   `);
 
@@ -62,13 +63,13 @@ export function loadExcludedContacts(): ExcludedContact[] {
 
 export function markContactClear(email: string): void {
   const db = getDatabase();
-  db.run('UPDATE contacts_filtered SET not_clear = 0 WHERE email = ?', [email]);
+  db.run('UPDATE contacts_filtered SET not_clear = 0 WHERE contact_id = (SELECT id FROM contacts WHERE email = ?)', [email]);
   saveDatabase();
 }
 
 export function markContactNotHuman(email: string): void {
   const db = getDatabase();
-  db.run('DELETE FROM contacts_filtered WHERE email = ?', [email]);
+  db.run('DELETE FROM contacts_filtered WHERE contact_id = (SELECT id FROM contacts WHERE email = ?)', [email]);
   saveDatabase();
 }
 
@@ -76,9 +77,7 @@ export function restoreContact(email: string): boolean {
   const db = getDatabase();
 
   const stmt = db.prepare(`
-    SELECT name, email, received, sent
-    FROM contacts_candidates
-    WHERE email = ?
+    SELECT id FROM contacts WHERE email = ? AND not_spam = 1
   `);
   stmt.bind([email]);
 
@@ -87,13 +86,12 @@ export function restoreContact(email: string): boolean {
     return false;
   }
 
-  const row = stmt.getAsObject() as unknown as DbContact;
+  const row = stmt.getAsObject() as unknown as { id: number };
   stmt.free();
 
   db.run(`
-    INSERT OR REPLACE INTO contacts_filtered (name, email, received, sent, not_clear)
-    VALUES (?, ?, ?, ?, 0)
-  `, [row.name, row.email, row.received, row.sent]);
+    INSERT OR REPLACE INTO contacts_filtered (contact_id, not_clear) VALUES (?, 0)
+  `, [row.id]);
 
   saveDatabase();
   return true;

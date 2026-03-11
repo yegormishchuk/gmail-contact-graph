@@ -41,6 +41,7 @@ pub fn setup_mails_db(conn: &Connection) {
 pub fn setup_contacts_table(conn: &Connection) {
     conn.execute_batch(
         "DROP TABLE IF EXISTS contacts;
+         DROP TABLE IF EXISTS contacts_candidates;
          CREATE TABLE contacts (
              id              INTEGER PRIMARY KEY AUTOINCREMENT,
              name            TEXT NOT NULL,
@@ -51,7 +52,8 @@ pub fn setup_contacts_table(conn: &Connection) {
              received_per_month REAL,
              average_chars   REAL,
              duration        REAL,
-             meetings        INTEGER NOT NULL DEFAULT 0
+             meetings        INTEGER NOT NULL DEFAULT 0,
+             not_spam        INTEGER NOT NULL DEFAULT 0
          );
          CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);",
     )
@@ -62,40 +64,11 @@ pub fn setup_filtered_contacts_table(conn: &Connection) {
     conn.execute_batch(
         "DROP TABLE IF EXISTS contacts_filtered;
          CREATE TABLE contacts_filtered (
-             id              INTEGER PRIMARY KEY AUTOINCREMENT,
-             name            TEXT NOT NULL,
-             email           TEXT NOT NULL UNIQUE,
-             received        INTEGER NOT NULL DEFAULT 0,
-             sent            INTEGER NOT NULL DEFAULT 0,
-             sent_per_month  REAL,
-             received_per_month REAL,
-             average_chars   REAL,
-             duration        REAL,
-             meetings        INTEGER NOT NULL DEFAULT 0,
-             not_clear       INTEGER NOT NULL DEFAULT 0
+             id         INTEGER PRIMARY KEY AUTOINCREMENT,
+             contact_id INTEGER NOT NULL UNIQUE REFERENCES contacts(id),
+             not_clear  INTEGER NOT NULL DEFAULT 0
          );
-         CREATE INDEX IF NOT EXISTS idx_contacts_filtered_email ON contacts_filtered(email);",
-    )
-    .unwrap();
-}
-
-/// Setup candidates table (contacts that passed basic spam filter, awaiting AI verification)
-pub fn setup_candidates_table(conn: &Connection) {
-    conn.execute_batch(
-        "DROP TABLE IF EXISTS contacts_candidates;
-         CREATE TABLE contacts_candidates (
-             id              INTEGER PRIMARY KEY AUTOINCREMENT,
-             name            TEXT NOT NULL,
-             email           TEXT NOT NULL UNIQUE,
-             received        INTEGER NOT NULL DEFAULT 0,
-             sent            INTEGER NOT NULL DEFAULT 0,
-             sent_per_month  REAL,
-             received_per_month REAL,
-             average_chars   REAL,
-             duration        REAL,
-             meetings        INTEGER NOT NULL DEFAULT 0
-         );
-         CREATE INDEX IF NOT EXISTS idx_contacts_candidates_email ON contacts_candidates(email);",
+         CREATE INDEX IF NOT EXISTS idx_contacts_filtered_contact_id ON contacts_filtered(contact_id);",
     )
     .unwrap();
 }

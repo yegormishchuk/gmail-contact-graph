@@ -246,9 +246,10 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
 // Phase 3: Fill candidates table (basic spam filter)
 // ---------------------------------------------------------------------------
 
-/// Contact candidate with all fields for later insertion
+/// Contact candidate — references a row in the `contacts` table
 #[derive(Clone)]
 struct ContactCandidate {
+    id: i64,
     name: String,
     email: String,
     received: u32,
@@ -262,22 +263,16 @@ struct ContactCandidate {
 
 fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
     let conn = Connection::open(db_path).expect("failed to open database");
-    db::setup_candidates_table(&conn);
-
-    conn.execute_batch("BEGIN TRANSACTION").unwrap();
 
     let mut select_stmt = conn
         .prepare(
-            "SELECT name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings \
+            "SELECT id, name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings \
              FROM contacts",
         )
         .unwrap();
 
-    let mut insert_stmt = conn
-        .prepare(
-            "INSERT INTO contacts_candidates (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        )
+    let mut update_stmt = conn
+        .prepare("UPDATE contacts SET not_spam = 1 WHERE id = ?1")
         .unwrap();
 
     let mut total = 0u64;
@@ -287,15 +282,16 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
     let contacts_iter = select_stmt
         .query_map([], |row| {
             Ok(ContactCandidate {
-                name: row.get(0)?,
-                email: row.get(1)?,
-                received: row.get(2)?,
-                sent: row.get(3)?,
-                sent_per_month: row.get(4)?,
-                received_per_month: row.get(5)?,
-                average_chars: row.get(6)?,
-                duration: row.get(7)?,
-                meetings: row.get(8)?,
+                id: row.get(0)?,
+                name: row.get(1)?,
+                email: row.get(2)?,
+                received: row.get(3)?,
+                sent: row.get(4)?,
+                sent_per_month: row.get(5)?,
+                received_per_month: row.get(6)?,
+                average_chars: row.get(7)?,
+                duration: row.get(8)?,
+                meetings: row.get(9)?,
             })
         })
         .unwrap();
@@ -312,28 +308,14 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
             continue;
         }
 
-        if insert_stmt
-            .execute(params![
-                candidate.name,
-                candidate.email,
-                candidate.received,
-                candidate.sent,
-                candidate.sent_per_month,
-                candidate.received_per_month,
-                candidate.average_chars,
-                candidate.duration,
-                candidate.meetings
-            ])
-            .is_ok()
-        {
+        if update_stmt.execute(params![candidate.id]).is_ok() {
             candidates.push(candidate);
             kept += 1;
         }
     }
 
     drop(select_stmt);
-    drop(insert_stmt);
-    conn.execute_batch("COMMIT").unwrap();
+    drop(update_stmt);
 
     eprintln!(
         "Candidates: {} total, {} passed basic filter, {} removed as spam.",
@@ -415,8 +397,7 @@ async fn fill_filtered_with_ai(db_path: &str, candidates: Vec<ContactCandidate>)
 
     let mut insert_stmt = conn
         .prepare(
-            "INSERT INTO contacts_filtered (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings, not_clear) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO contacts_filtered (contact_id, not_clear) VALUES (?1, ?2)",
         )
         .unwrap();
 
@@ -434,41 +415,13 @@ async fn fill_filtered_with_ai(db_path: &str, candidates: Vec<ContactCandidate>)
             }
             1 => {
                 // Human - add with not_clear = false
-                if insert_stmt
-                    .execute(params![
-                        candidate.name,
-                        candidate.email,
-                        candidate.received,
-                        candidate.sent,
-                        candidate.sent_per_month,
-                        candidate.received_per_month,
-                        candidate.average_chars,
-                        candidate.duration,
-                        candidate.meetings,
-                        0 // not_clear = false
-                    ])
-                    .is_ok()
-                {
+                if insert_stmt.execute(params![candidate.id, 0]).is_ok() {
                     human_count += 1;
                 }
             }
             _ => {
                 // Unknown/unclear - add with not_clear = true
-                if insert_stmt
-                    .execute(params![
-                        candidate.name,
-                        candidate.email,
-                        candidate.received,
-                        candidate.sent,
-                        candidate.sent_per_month,
-                        candidate.received_per_month,
-                        candidate.average_chars,
-                        candidate.duration,
-                        candidate.meetings,
-                        1 // not_clear = true
-                    ])
-                    .is_ok()
-                {
+                if insert_stmt.execute(params![candidate.id, 1]).is_ok() {
                     unclear_count += 1;
                 }
             }
@@ -497,30 +450,13 @@ fn fallback_fill_filtered(db_path: &str, candidates: &[ContactCandidate]) {
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
 
     let mut insert_stmt = conn
-        .prepare(
-            "INSERT INTO contacts_filtered (name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings, not_clear) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        )
+        .prepare("INSERT INTO contacts_filtered (contact_id, not_clear) VALUES (?1, ?2)")
         .unwrap();
 
     let mut count = 0u64;
 
     for candidate in candidates {
-        if insert_stmt
-            .execute(params![
-                candidate.name,
-                candidate.email,
-                candidate.received,
-                candidate.sent,
-                candidate.sent_per_month,
-                candidate.received_per_month,
-                candidate.average_chars,
-                candidate.duration,
-                candidate.meetings,
-                1 // not_clear = true (no AI verification)
-            ])
-            .is_ok()
-        {
+        if insert_stmt.execute(params![candidate.id, 1]).is_ok() {
             count += 1;
         }
     }
