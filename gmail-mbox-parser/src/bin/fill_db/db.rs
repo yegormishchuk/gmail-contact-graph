@@ -111,14 +111,8 @@ pub fn insert_message(
     user_email: &str,
     contact_stats: &mut HashMap<String, ContactStats>,
 ) -> (u64, bool) {
-    // Check if user is involved in this email
     let user_is_sender = msg.from_email == user_email;
     let user_is_recipient = msg.to.iter().any(|(email, _)| email == user_email);
-
-    // Skip emails where user is not involved
-    if !user_is_sender && !user_is_recipient {
-        return (0, true);
-    }
 
     let content = extract_text_content(
         &msg.body,
@@ -174,38 +168,19 @@ pub fn insert_message(
         }
     }
 
-    // Insert rows into mails database - only rows involving the user
+    // Insert one row per (from, to) pair
     let mut rows = 0u64;
 
-    if user_is_sender {
-        // User sent this email - insert row for each recipient (except self)
-        for (recipient_email, recipient_name) in &msg.to {
-            if recipient_email == user_email {
-                continue;
-            }
-            if stmt
-                .execute(params![
-                    msg.from_email,
-                    msg.from_name,
-                    recipient_email,
-                    recipient_name,
-                    msg.subject,
-                    content,
-                    msg.date
-                ])
-                .is_ok()
-            {
-                rows += 1;
-            }
+    for (recipient_email, recipient_name) in &msg.to {
+        if recipient_email == &msg.from_email {
+            continue; // skip self-send
         }
-    } else {
-        // User received this email - insert one row: sender -> user
         if stmt
             .execute(params![
                 msg.from_email,
                 msg.from_name,
-                user_email,
-                "", // user's name not stored in msg
+                recipient_email,
+                recipient_name,
                 msg.subject,
                 content,
                 msg.date
