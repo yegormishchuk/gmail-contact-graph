@@ -41,7 +41,6 @@ pub fn setup_mails_db(conn: &Connection) {
 pub fn setup_contacts_table(conn: &Connection) {
     conn.execute_batch(
         "DROP TABLE IF EXISTS contacts;
-         DROP TABLE IF EXISTS contacts_candidates;
          CREATE TABLE contacts (
              id              INTEGER PRIMARY KEY AUTOINCREMENT,
              name            TEXT NOT NULL,
@@ -85,7 +84,6 @@ pub fn insert_message(
     contact_stats: &mut HashMap<String, ContactStats>,
 ) -> (u64, bool) {
     let user_is_sender = msg.from_email == user_email;
-    let user_is_recipient = msg.to.iter().any(|(email, _)| email == user_email);
 
     let content = extract_text_content(
         &msg.body,

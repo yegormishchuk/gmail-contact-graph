@@ -46,7 +46,7 @@ async fn main() {
     // Phase 2: Fill contacts table from accumulated statistics
     fill_contacts_db(&contact_stats, db_path);
 
-    // Phase 3: Fill candidates table (basic spam filter)
+    // Phase 3: Mark non-spam contacts (basic spam filter)
     let candidates = fill_candidates_db(db_path);
 
     // Phase 4: AI verification and fill filtered contacts table
@@ -243,32 +243,24 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3: Fill candidates table (basic spam filter)
+// Phase 3: Mark non-spam contacts (basic spam filter)
 // ---------------------------------------------------------------------------
 
 /// Contact candidate — references a row in the `contacts` table
 #[derive(Clone)]
 struct ContactCandidate {
     id: i64,
-    name: String,
     email: String,
+    name: String,
     received: u32,
     sent: u32,
-    sent_per_month: Option<f64>,
-    received_per_month: Option<f64>,
-    average_chars: Option<f64>,
-    duration: Option<f64>,
-    meetings: u32,
 }
 
 fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
     let conn = Connection::open(db_path).expect("failed to open database");
 
     let mut select_stmt = conn
-        .prepare(
-            "SELECT id, name, email, received, sent, sent_per_month, received_per_month, average_chars, duration, meetings \
-             FROM contacts",
-        )
+        .prepare("SELECT id, email, name, received, sent FROM contacts")
         .unwrap();
 
     let mut update_stmt = conn
@@ -283,15 +275,10 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
         .query_map([], |row| {
             Ok(ContactCandidate {
                 id: row.get(0)?,
-                name: row.get(1)?,
-                email: row.get(2)?,
+                email: row.get(1)?,
+                name: row.get(2)?,
                 received: row.get(3)?,
                 sent: row.get(4)?,
-                sent_per_month: row.get(5)?,
-                received_per_month: row.get(6)?,
-                average_chars: row.get(7)?,
-                duration: row.get(8)?,
-                meetings: row.get(9)?,
             })
         })
         .unwrap();
