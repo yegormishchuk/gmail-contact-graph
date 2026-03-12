@@ -1,3 +1,18 @@
+/// Matches local_part against patterns using two strategies:
+/// - Patterns containing `-`, `_`, or `.`: substring match (they're specific compound words)
+/// - Simple word patterns: exact token match after splitting on `.`, `_`, `-`, `+`
+///   This prevents false positives where a pattern like "sale" would match "rosales".
+fn matches_patterns(local_part: &str, patterns: &[&str]) -> bool {
+    let tokens: Vec<&str> = local_part.split(['.', '_', '-', '+']).collect();
+    patterns.iter().any(|p| {
+        if p.contains(['-', '_', '.']) {
+            local_part.contains(p)
+        } else {
+            tokens.iter().any(|t| *t == *p)
+        }
+    })
+}
+
 /// Check if a contact should be considered spam/automated
 pub fn is_spam_contact(email: &str, name: &str, received: u32, sent: u32) -> bool {
     let email_lower = email.to_lowercase();
@@ -49,7 +64,7 @@ fn is_noreply_address(local_part: &str) -> bool {
         "donot-reply",
     ];
 
-    noreply_patterns.iter().any(|p| local_part.contains(p))
+    matches_patterns(local_part, &noreply_patterns)
 }
 
 /// Automated/system senders
@@ -64,7 +79,7 @@ fn is_automated_sender(local_part: &str) -> bool {
         "automatic",
         "daemon",
         "system",
-        "admin@",
+        "admin",
         "root",
         "bounce",
         "notification",
@@ -73,7 +88,7 @@ fn is_automated_sender(local_part: &str) -> bool {
         "alerts",
     ];
 
-    automated_patterns.iter().any(|p| local_part.contains(p))
+    matches_patterns(local_part, &automated_patterns)
 }
 
 /// Marketing/newsletter addresses
@@ -95,7 +110,7 @@ fn is_marketing_address(local_part: &str) -> bool {
         "subscribe",
         "subscription",
         "unsubscribe",
-        "info@",
+        "info",
         "support",
         "contact",
         "hello",
@@ -110,7 +125,7 @@ fn is_marketing_address(local_part: &str) -> bool {
         "broadcast",
     ];
 
-    marketing_patterns.iter().any(|p| local_part.contains(p))
+    matches_patterns(local_part, &marketing_patterns)
 }
 
 /// One-way high volume senders (received many, sent zero)
