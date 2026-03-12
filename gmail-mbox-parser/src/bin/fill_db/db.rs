@@ -40,7 +40,8 @@ pub fn setup_mails_db(conn: &Connection) {
 
 pub fn setup_contacts_table(conn: &Connection) {
     conn.execute_batch(
-        "DROP TABLE IF EXISTS contacts;
+        "DROP TABLE IF EXISTS contacts_filtered;
+         DROP TABLE IF EXISTS contacts;
          CREATE TABLE contacts (
              id              INTEGER PRIMARY KEY AUTOINCREMENT,
              name            TEXT NOT NULL,
