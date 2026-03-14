@@ -12,9 +12,7 @@ export const config = {
   CONTACTS_DB_FILE: process.env.CONTACTS_DB_FILE || path.join(DATA_DIR, 'contacts.db'),
   DEFAULT_DB_FILE: process.env.MAILS_DB_FILE || path.join(DATA_DIR, 'mails.db'),
 
-  // User info (update these for your setup)
-  MY_EMAIL: 'your-email@gmail.com',
-  MY_NAME: 'You',
+  MY_EMAIL: (process.env.USER_EMAIL || '').toLowerCase(),
 
   // Server
   PORT: parseInt(process.env.PORT || '5000', 10),

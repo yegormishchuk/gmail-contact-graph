@@ -1,6 +1,10 @@
 # Gmail Contact Graph Webapp - Makefile
 # =====================================
 
+# User email (required for the webapp to work correctly)
+USER_EMAIL ?= you@example.com
+export USER_EMAIL
+
 # ============================================
 # Main targets
 # ============================================
@@ -76,10 +80,14 @@ help:
 	@echo "  Clean:"
 	@echo "    make clean          - Remove node_modules and build files"
 	@echo ""
-	@echo "  Environment variables (optional):"
+	@echo "  Variables (set in Makefile or override on command line):"
+	@echo "    USER_EMAIL          - Your email address (default: $(USER_EMAIL))"
 	@echo "    CONTACTS_DB_FILE    - Path to contacts.db"
 	@echo "    MAILS_DB_FILE       - Path to mails.db"
 	@echo "    PORT                - Server port (default: 5000)"
+	@echo ""
+	@echo "  Example (override email):"
+	@echo "    make dev USER_EMAIL=other@example.com"
 	@echo ""
 	@echo "  Prerequisites:"
 	@echo "    - Node.js 18+ required"

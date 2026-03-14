@@ -21,13 +21,20 @@ router.get('/message-groups', async (req, res) => {
     const buffer = readFileSync(config.CONTACTS_DB_FILE);
     const db = new SQL.Database(buffer);
 
-    // Fetch all rows where user is sender or recipient
-    const stmt = db.prepare(`
-      SELECT subject, "from", "to"
-      FROM mails
-      WHERE ("from" = ? OR "to" = ?) AND subject != ''
-    `);
+    // Fetch all rows that share a (from, subject) pair where the user is involved.
+    // The mails table stores one row per (from, to) pair, so a message sent to
+    // N recipients produces N rows — only one of which has "to" = myEmail.
+    // Joining on (from, subject) recovers all the other recipients.
     const myEmail = config.MY_EMAIL.toLowerCase();
+    const stmt = db.prepare(`
+      SELECT m."from", m."to", m.subject
+      FROM mails m
+      INNER JOIN (
+        SELECT DISTINCT "from", subject
+        FROM mails
+        WHERE ("from" = ? OR "to" = ?) AND subject != ''
+      ) relevant ON m."from" = relevant."from" AND m.subject = relevant.subject
+    `);
     stmt.bind([myEmail, myEmail]);
 
     const groups: Record<string, Set<string>> = {};
