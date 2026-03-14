@@ -4,8 +4,8 @@
 # Paths
 TOOLS_DIR = tools
 DATA_DIR ?= ../data
-MBOX_NAME ?= mail.mbox
-MBOX_FILE = $(DATA_DIR)/$(MBOX_NAME)
+MBOX_FILE ?= data.mbox
+MBOX_PATH = $(DATA_DIR)/$(MBOX_FILE)
 CONTACTS_DB = $(DATA_DIR)/contacts.db
 
 # User email (required for fill-db)
@@ -58,7 +58,7 @@ fill-db: build-parser
 	@echo "Using email: $(USER_EMAIL)"
 	@echo "Output dir: $(DATA_DIR)"
 	@$(MKDIR)
-	$(FILL_DB) "$(MBOX_FILE)" "$(USER_EMAIL)" "$(CONTACTS_DB)"
+	$(FILL_DB) "$(MBOX_PATH)" "$(USER_EMAIL)" "$(CONTACTS_DB)"
 
 rankings: build-tools
 	@echo "Generating rankings..."
@@ -118,8 +118,8 @@ help:
 	@echo ""
 	@echo "  Variables:"
 	@echo "    USER_EMAIL          - Your Gmail address (required)"
-	@echo "    MBOX_NAME           - Mbox filename (default: mail.mbox)"
-	@echo "    DATA_DIR            - Data directory (default: ./../data)"
+	@echo "    MBOX_FILE           - Mbox filename (default: data.mbox, resolved to ../data/)"
+	@echo "    DATA_DIR            - Data directory (default: ../data)"
 	@echo ""
 	@echo "  Example:"
-	@echo "    make fill-db USER_EMAIL=john@gmail.com MBOX_NAME=gmail_data.mbox"
+	@echo "    make fill-db USER_EMAIL=john@gmail.com MBOX_FILE=gmail_data.mbox"
