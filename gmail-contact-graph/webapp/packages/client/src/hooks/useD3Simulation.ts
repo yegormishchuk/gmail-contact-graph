@@ -335,15 +335,16 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       const memberEmails = emails.map(e => e.toLowerCase());
       memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
 
+      const groupColor = groupIdx === 0
+        ? graphConfig.groupColor
+        : shadeColor(graphConfig.groupColor, -28 * groupIdx);
+
       if (memberEmails.length <= ROPE_MAX_SIZE) {
-        drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, graphConfig.groupColor, subject);
+        drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, groupColor, subject);
       } else {
-        const color = groupIdx === 0
-          ? graphConfig.groupColor
-          : shadeColor(graphConfig.groupColor, -25 * groupIdx);
         memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
           const prev = largeBorderColors.get(email) ?? [];
-          largeBorderColors.set(email, [...prev, color]);
+          largeBorderColors.set(email, [...prev, groupColor]);
         });
       }
     });
