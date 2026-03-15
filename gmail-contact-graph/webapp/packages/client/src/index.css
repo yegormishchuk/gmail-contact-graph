@@ -90,6 +90,30 @@ svg {
     transition: stroke-width 0.2s;
 }
 
+/* ── Group visualization animations ──────────────────────────────────────── */
+
+/* Rope line: continuous soft glow pulse after draw-in */
+@keyframes rope-glow-pulse {
+    0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.15)); }
+    50%       { filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.35)); }
+}
+
+.rope-line {
+    animation: rope-glow-pulse 2.8s ease-in-out infinite;
+    /* let the draw-in transition finish before pulsing starts */
+    animation-delay: 0.7s;
+}
+
+/* Large-group member border: subtle rhythmic glow */
+@keyframes member-border-pulse {
+    0%, 100% { stroke-opacity: 0.75; }
+    50%       { stroke-opacity: 1; }
+}
+
+.node-group-member .node-border {
+    animation: member-border-pulse 2s ease-in-out infinite;
+}
+
 /* Unclear contacts - may not be real people */
 .node-unclear {
     opacity: 0.5;
@@ -148,6 +172,11 @@ svg {
 }
 
 /* Tooltip */
+@keyframes tooltip-enter {
+    from { opacity: 0; transform: scale(0.96) translateY(4px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 .tooltip {
     position: absolute;
     background: rgba(15, 15, 26, 0.95);
@@ -167,6 +196,7 @@ svg {
 .tooltip.visible {
     opacity: 1;
     pointer-events: auto;
+    animation: tooltip-enter 0.22s cubic-bezier(0.34, 1.3, 0.64, 1) both;
 }
 
 .tooltip-close {
@@ -227,6 +257,37 @@ svg {
 
 .tooltip-groups.visible {
     display: block;
+}
+
+/* Group rows: fade-in when revealed by "Show more" */
+@keyframes group-row-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.tooltip-groups.visible > div {
+    animation: group-row-in 0.22s ease-out both;
+}
+
+.tooltip-groups.visible > div:nth-child(1) { animation-delay: 0ms; }
+.tooltip-groups.visible > div:nth-child(2) { animation-delay: 40ms; }
+.tooltip-groups.visible > div:nth-child(n+3) { animation-delay: 80ms; }
+
+.show-more-btn {
+    display: block;
+    margin-top: 5px;
+    background: none;
+    border: none;
+    color: #a855f7;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 0;
+    text-decoration: underline;
+    pointer-events: auto;
+}
+
+.show-more-btn:hover {
+    color: #c084fc;
 }
 
 .tooltip-stats {

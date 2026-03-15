@@ -22,6 +22,7 @@ export function Graph() {
     data: filteredData,
     domains: state.domains,
     messageGroups: state.messageGroups,
+    selectedNode: state.selectedNode,
     onNodeClick: handleNodeClick,
   });
 

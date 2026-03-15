@@ -4,11 +4,20 @@ import type { GraphData, GraphNode, DomainGroups, MessageGroups } from '@gmail-g
 import { graphConfig } from '../utils/graphConfig';
 import { getNodeRadius } from '../utils/filterData';
 
+const MIN_MSG_GROUP_SIZE = 3;
+const ROPE_MAX_SIZE = 8;
+
+interface RopeLink {
+  source: GraphNode;
+  target: GraphNode;
+}
+
 interface UseD3SimulationOptions {
   svgRef: React.RefObject<SVGSVGElement>;
   data: GraphData | null;
   domains: DomainGroups | null;
   messageGroups: MessageGroups | null;
+  selectedNode: GraphNode | null;
   onNodeClick: (node: GraphNode, position: { x: number; y: number }) => void;
 }
 
@@ -16,6 +25,12 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
   const simulationRef = useRef<d3.Simulation<GraphNode, undefined> | null>(null);
   const transformRef = useRef(d3.zoomIdentity);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+
+  // Refs for group visualization (stable across re-renders)
+  const domainLinksGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const groupLinksGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const nodesGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const nodesDataRef = useRef<GraphNode[]>([]);
 
   const resetZoom = useCallback(() => {
     if (!options.svgRef.current || !zoomRef.current) return;
@@ -85,6 +100,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
     // Create deep copy of nodes for D3 mutation
     const nodes: GraphNode[] = options.data.nodes.map(n => ({ ...n }));
+    nodesDataRef.current = nodes;
 
     // Create force simulation
     const simulation = d3.forceSimulation(nodes)
@@ -108,9 +124,12 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     // Create link groups (for domain/group connections when node clicked)
     const domainLinksGroup = g.append('g').attr('class', 'domain-links');
     const groupLinksGroup = g.append('g').attr('class', 'group-links');
+    domainLinksGroupRef.current = domainLinksGroup;
+    groupLinksGroupRef.current = groupLinksGroup;
 
     // Create nodes group
     const nodesGroup = g.append('g').attr('class', 'nodes');
+    nodesGroupRef.current = nodesGroup;
 
     // Create node groups
     const nodeGroups = nodesGroup.selectAll<SVGGElement, GraphNode>('g.node')
@@ -217,6 +236,25 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       labels
         .attr('x', d => d.x || 0)
         .attr('y', d => (d.y || 0) + getNodeRadius(d, maxScore) + 15);
+
+      // Update rope link positions (data is bound to elements, source/target are live node refs)
+      domainLinksGroupRef.current?.selectAll<SVGLineElement, RopeLink>('line')
+        .attr('x1', d => d.source.x || 0)
+        .attr('y1', d => d.source.y || 0)
+        .attr('x2', d => d.target.x || 0)
+        .attr('y2', d => d.target.y || 0);
+      domainLinksGroupRef.current?.selectAll<SVGTextElement, RopeLink>('text')
+        .attr('x', d => ((d.source.x || 0) + (d.target.x || 0)) / 2)
+        .attr('y', d => ((d.source.y || 0) + (d.target.y || 0)) / 2 - 4);
+
+      groupLinksGroupRef.current?.selectAll<SVGLineElement, RopeLink>('line')
+        .attr('x1', d => d.source.x || 0)
+        .attr('y1', d => d.source.y || 0)
+        .attr('x2', d => d.target.x || 0)
+        .attr('y2', d => d.target.y || 0);
+      groupLinksGroupRef.current?.selectAll<SVGTextElement, RopeLink>('text')
+        .attr('x', d => ((d.source.x || 0) + (d.target.x || 0)) / 2)
+        .attr('y', d => ((d.source.y || 0) + (d.target.y || 0)) / 2 - 4);
     });
 
     // Cleanup
@@ -225,7 +263,216 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     };
   }, [options.data, options.svgRef, options.onNodeClick, options.domains, options.messageGroups]);
 
+  // Group visualization effect — runs when selected node or data/groups change
+  useEffect(() => {
+    if (!domainLinksGroupRef.current || !groupLinksGroupRef.current || !nodesGroupRef.current) return;
+
+    const nodes = nodesDataRef.current;
+    const nodeMap = new Map(nodes.map(n => [n.email.toLowerCase(), n]));
+
+    // ── Fade-out and remove previous ropes ───────────────────────────────────
+    domainLinksGroupRef.current.selectAll<SVGElement, unknown>('*')
+      .transition('rope-out').duration(200).style('opacity', 0).remove();
+    groupLinksGroupRef.current.selectAll<SVGElement, unknown>('*')
+      .transition('rope-out').duration(200).style('opacity', 0).remove();
+
+    // ── Animate all contact nodes back to their natural state ─────────────────
+    nodesGroupRef.current.selectAll<SVGGElement, GraphNode>('g.node-contact')
+      .each(function(d) {
+        const el = d3.select(this);
+        const hasSent = d.sent > 0;
+        const naturalOpacity = d.notClear ? 0.5 : 1;
+
+        el.classed('node-group-member', false);
+
+        el.transition('opacity').duration(320).ease(d3.easeCubicOut)
+          .style('opacity', naturalOpacity)
+          .on('end', function() {
+            d3.select(this as SVGGElement).style('opacity', null);
+          });
+
+        el.select<SVGCircleElement>('.node-border')
+          .transition('border').duration(320).ease(d3.easeCubicOut)
+          .attr('stroke', hasSent ? graphConfig.sentColor : 'rgba(255,255,255,0.3)')
+          .attr('stroke-width', hasSent ? graphConfig.borderWidth : 1.5);
+      });
+
+    if (!options.selectedNode) return;
+
+    const selectedEmail = options.selectedNode.email.toLowerCase();
+    const emailDomain = selectedEmail.split('@')[1];
+    const domainUsers = options.domains?.domain_groups?.[emailDomain] ?? [];
+
+    // Message groups: only those containing selected node with >= MIN_MSG_GROUP_SIZE members
+    const selectedMsgGroups = Object.entries(options.messageGroups?.groups ?? {})
+      .filter(([_, emails]) =>
+        emails.map(e => e.toLowerCase()).includes(selectedEmail) &&
+        emails.length >= MIN_MSG_GROUP_SIZE
+      );
+
+    // Track visible group members for dimming logic
+    const allVisibleMemberEmails = new Set<string>();
+    // Large group border colors: email → array of colors to apply
+    const largeBorderColors = new Map<string, string[]>();
+
+    // --- Domain group ---
+    if (domainUsers.length >= 2) {
+      const memberEmails = domainUsers.map(u => u.email.toLowerCase());
+      memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
+
+      if (domainUsers.length <= ROPE_MAX_SIZE) {
+        drawRope(domainLinksGroupRef.current, memberEmails, nodeMap, graphConfig.domainColor, `@${emailDomain}`);
+      } else {
+        memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
+          const prev = largeBorderColors.get(email) ?? [];
+          largeBorderColors.set(email, [...prev, graphConfig.domainColor]);
+        });
+      }
+    }
+
+    // --- Message groups ---
+    selectedMsgGroups.forEach(([subject, emails], groupIdx) => {
+      const memberEmails = emails.map(e => e.toLowerCase());
+      memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
+
+      if (memberEmails.length <= ROPE_MAX_SIZE) {
+        drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, graphConfig.groupColor, subject);
+      } else {
+        const color = groupIdx === 0
+          ? graphConfig.groupColor
+          : shadeColor(graphConfig.groupColor, -25 * groupIdx);
+        memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
+          const prev = largeBorderColors.get(email) ?? [];
+          largeBorderColors.set(email, [...prev, color]);
+        });
+      }
+    });
+
+    // ── Animate colored borders for large-group members ───────────────────────
+    if (largeBorderColors.size > 0) {
+      nodesGroupRef.current.selectAll<SVGGElement, GraphNode>('g.node-contact')
+        .each(function(d) {
+          const colors = largeBorderColors.get(d.email.toLowerCase());
+          if (colors && colors.length > 0) {
+            const color = colors.length === 1 ? colors[0] : blendColors(colors);
+            const el = d3.select(this);
+            el.select<SVGCircleElement>('.node-border')
+              .transition('border').duration(420).ease(d3.easeCubicOut)
+              .attr('stroke', color)
+              .attr('stroke-width', 4)
+              .on('end', () => el.classed('node-group-member', true));
+          }
+        });
+    }
+
+    // ── Animate non-members fading out ────────────────────────────────────────
+    if (allVisibleMemberEmails.size > 1) {
+      nodesGroupRef.current.selectAll<SVGGElement, GraphNode>('g.node-contact')
+        .each(function(d) {
+          const email = d.email.toLowerCase();
+          if (!allVisibleMemberEmails.has(email) && email !== selectedEmail) {
+            d3.select(this)
+              .transition('opacity').duration(380).ease(d3.easeCubicOut)
+              .style('opacity', 0.15);
+          }
+        });
+    }
+
+    // ── Selected node stays fully visible ─────────────────────────────────────
+    nodesGroupRef.current.selectAll<SVGGElement, GraphNode>('g.node-contact')
+      .filter(d => d.email.toLowerCase() === selectedEmail)
+      .transition('opacity').duration(150)
+      .style('opacity', 1);
+
+  }, [options.selectedNode, options.data, options.domains, options.messageGroups]);
+
   return {
     resetZoom,
   };
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function drawRope(
+  group: d3.Selection<SVGGElement, unknown, null, undefined>,
+  memberEmails: string[],
+  nodeMap: Map<string, GraphNode>,
+  color: string,
+  label: string
+) {
+  const members = memberEmails
+    .map(e => nodeMap.get(e))
+    .filter((n): n is GraphNode => n !== undefined);
+
+  if (members.length < 2) return;
+
+  // Build cyclic chain; for exactly 2 nodes just one edge avoids overlap
+  const linkData: RopeLink[] = members.length === 2
+    ? [{ source: members[0], target: members[1] }]
+    : members.map((node, i) => ({
+        source: node,
+        target: members[(i + 1) % members.length],
+      }));
+
+  // Staggered draw-in: each line slides in via stroke-dashoffset + fades in
+  linkData.forEach((link, i) => {
+    group.append('line')
+      .datum(link)
+      .attr('class', 'rope-line')
+      .attr('stroke', color)
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '6 4')
+      .attr('stroke-dashoffset', 80)
+      .attr('stroke-opacity', 0)
+      .attr('x1', link.source.x || 0)
+      .attr('y1', link.source.y || 0)
+      .attr('x2', link.target.x || 0)
+      .attr('y2', link.target.y || 0)
+      .transition()
+      .duration(520)
+      .delay(i * 55)
+      .ease(d3.easeCubicOut)
+      .attr('stroke-dashoffset', 0)
+      .attr('stroke-opacity', 0.78);
+  });
+
+  // Label fades in after all lines have appeared
+  const first = linkData[0];
+  const truncated = label.length > 22 ? label.substring(0, 20) + '…' : label;
+  group.append('text')
+    .datum(first)
+    .attr('fill', color)
+    .attr('font-size', '11px')
+    .attr('font-weight', '600')
+    .attr('text-anchor', 'middle')
+    .attr('pointer-events', 'none')
+    .style('text-shadow', '0 1px 4px rgba(0,0,0,0.9)')
+    .style('opacity', '0')
+    .attr('x', ((first.source.x || 0) + (first.target.x || 0)) / 2)
+    .attr('y', ((first.source.y || 0) + (first.target.y || 0)) / 2 - 4)
+    .text(truncated)
+    .transition()
+    .duration(350)
+    .delay(linkData.length * 55 + 120)
+    .ease(d3.easeCubicOut)
+    .style('opacity', '1');
+}
+
+function shadeColor(hex: string, amount: number): string {
+  const num = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount));
+  const b = Math.min(255, Math.max(0, (num & 0xff) + amount));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+function blendColors(colors: string[]): string {
+  const parsed = colors.map(hex => {
+    const num = parseInt(hex.replace('#', ''), 16);
+    return [(num >> 16) & 0xff, (num >> 8) & 0xff, num & 0xff];
+  });
+  const avg = [0, 1, 2].map(i =>
+    Math.round(parsed.reduce((sum, c) => sum + c[i], 0) / parsed.length)
+  );
+  return `#${avg.map(v => v.toString(16).padStart(2, '0')).join('')}`;
 }

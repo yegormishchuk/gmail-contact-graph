@@ -1,4 +1,4 @@
-import React, { useRef, useLayoutEffect, useState, useCallback } from 'react';
+import React, { useRef, useLayoutEffect, useState, useCallback, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { api } from '../../api/client';
 
@@ -9,6 +9,11 @@ export function Tooltip() {
   const { selectedNode, selectedNodePosition, domains, messageGroups } = state;
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: -9999, top: -9999 });
+  const [showAllGroups, setShowAllGroups] = useState(false);
+
+  useEffect(() => {
+    setShowAllGroups(false);
+  }, [selectedNode?.email]);
   const dragState = useRef<{ startX: number; startY: number; startLeft: number; startTop: number } | null>(null);
 
   useLayoutEffect(() => {
@@ -72,12 +77,18 @@ export function Tooltip() {
   const domainUsers = domains?.domain_groups?.[emailDomain];
   const hasDomain = domainUsers && domainUsers.length >= 2;
 
-  // Find message groups
+  // Find message groups (min 3 members), sorted by member count desc
   const contactGroups = messageGroups?.groups
     ? Object.entries(messageGroups.groups)
-        .filter(([_, emails]) => emails.includes(selectedNode.email.toLowerCase()))
+        .filter(([_, emails]) =>
+          emails.map(e => e.toLowerCase()).includes(selectedNode.email.toLowerCase()) &&
+          emails.length >= 3
+        )
         .map(([subject, emails]) => ({ subject, count: emails.length }))
+        .sort((a, b) => b.count - a.count)
     : [];
+
+  const visibleGroups = showAllGroups ? contactGroups : contactGroups.slice(0, 2);
 
   const handleClose = () => {
     dispatch({ type: 'SELECT_NODE', payload: null });
@@ -121,9 +132,14 @@ export function Tooltip() {
 
       {contactGroups.length > 0 && (
         <div className="tooltip-groups visible">
-          {contactGroups.map(({ subject, count }) => (
+          {visibleGroups.map(({ subject, count }) => (
             <div key={subject}>"{subject}" ({count} recipients)</div>
           ))}
+          {contactGroups.length > 2 && (
+            <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
+              {showAllGroups ? 'Show less' : `+${contactGroups.length - 2} more groups`}
+            </button>
+          )}
         </div>
       )}
 
