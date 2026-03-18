@@ -51,7 +51,258 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     groupSimulationsRef.current = [];
 
     if (isGroupMode) {
-      // Group rendering — implemented in Task 5
+      // SVG setup
+      const svg = d3.select(options.svgRef.current!);
+      const container = svg.node()?.parentElement;
+      if (!container) return () => {};
+      const width = container.clientWidth;
+      svg.selectAll('*').remove();
+      svg.attr('width', width);
+
+      // Main group (no zoom in group mode — CSS scroll is used instead)
+      const g = svg.append('g');
+
+      // Prepare groups
+      type GroupEntry = { label: string; members: GraphNode[] };
+      const groups: GroupEntry[] = [];
+
+      const nodesByEmail = new Map(
+        options.data.nodes.filter(n => !n.isCenter).map(n => [n.email.toLowerCase(), n])
+      );
+      const centerNode = options.data.nodes.find(n => n.isCenter);
+
+      if (options.filterType === 'organizations' && options.domains) {
+        Object.entries(options.domains.domain_groups).forEach(([domain, users]) => {
+          const members = users
+            .map(u => nodesByEmail.get(u.email.toLowerCase()))
+            .filter((n): n is GraphNode => n !== undefined);
+          if (members.length >= 3) {
+            groups.push({ label: `@${domain}`, members });
+          }
+        });
+      } else if (options.filterType === 'messageGroups' && options.messageGroups) {
+        Object.entries(options.messageGroups.groups).forEach(([subject, emails]) => {
+          const members = emails
+            .map(e => nodesByEmail.get(e.toLowerCase()))
+            .filter((n): n is GraphNode => n !== undefined);
+          if (members.length >= 3) {
+            groups.push({ label: subject, members });
+          }
+        });
+      }
+
+      // Sort groups by size descending
+      groups.sort((a, b) => b.members.length - a.members.length);
+
+      // Guard: centerNode must exist
+      if (!centerNode) return () => {};
+
+      // If no qualifying groups, show empty state
+      if (groups.length === 0) {
+        svg.attr('height', 200);
+        g.append('text')
+          .attr('x', width / 2).attr('y', 100)
+          .attr('text-anchor', 'middle')
+          .attr('fill', '#555')
+          .attr('font-size', '14px')
+          .text('No groups with 3+ contacts found');
+        return () => {};
+      }
+
+      // Grid layout
+      const BASE_RADIUS = 100;
+      const K = 18;
+      const PADDING = 40;
+      const cellRadius = (n: number) => BASE_RADIUS + K * Math.sqrt(n);
+
+      const groupColors = graphConfig.groupColors;
+
+      type Cell = { group: GroupEntry; cx: number; cy: number; r: number; color: string };
+      const cells: Cell[] = [];
+
+      let curX = PADDING;
+      let curY = PADDING;
+      let rowMaxY = 0;
+
+      groups.forEach((group, i) => {
+        const r = cellRadius(group.members.length);
+        if (curX + 2 * r > width - PADDING && curX > PADDING) {
+          curX = PADDING;
+          curY = rowMaxY + PADDING;
+        }
+        const cx = curX + r;
+        const cy = curY + r;
+        curX = cx + r + PADDING;
+        rowMaxY = Math.max(rowMaxY, cy + r);
+        cells.push({ group, cx, cy, r, color: groupColors[i % groupColors.length] });
+      });
+
+      const totalHeight = rowMaxY + PADDING;
+      svg.attr('height', totalHeight);
+
+      // Create defs for hatch pattern
+      const defs = svg.append('defs');
+      const hatchPattern = defs.append('pattern')
+        .attr('id', 'hatch-pattern')
+        .attr('patternUnits', 'userSpaceOnUse')
+        .attr('width', 6).attr('height', 6)
+        .attr('patternTransform', 'rotate(45)');
+      hatchPattern.append('line')
+        .attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 6)
+        .attr('stroke', 'rgba(255, 255, 255, 0.4)').attr('stroke-width', 1.5);
+
+      // Render each group
+      cells.forEach(({ group, cx, cy, r, color }, groupIdx) => {
+        const groupG = g.append('g').attr('class', 'group-cell');
+
+        // Boundary circle
+        groupG.append('circle')
+          .attr('cx', cx).attr('cy', cy).attr('r', r)
+          .attr('fill', color + '08')
+          .attr('stroke', color)
+          .attr('stroke-width', 1.5)
+          .attr('stroke-dasharray', '6 3')
+          .attr('opacity', 0.7);
+
+        // Group label above circle
+        const truncated = group.label.length > 25 ? group.label.substring(0, 23) + '…' : group.label;
+        groupG.append('text')
+          .attr('x', cx).attr('y', cy - r - 4)
+          .attr('text-anchor', 'middle')
+          .attr('fill', color)
+          .attr('font-size', '12px')
+          .attr('font-weight', '600')
+          .attr('pointer-events', 'none')
+          .style('text-shadow', '0 1px 4px rgba(0,0,0,0.9)')
+          .text(truncated);
+
+        // Center "me" node
+        groupG.append('circle')
+          .attr('cx', cx).attr('cy', cy)
+          .attr('r', graphConfig.centerNodeRadius)
+          .attr('fill', graphConfig.centerColor)
+          .attr('stroke', '#fff')
+          .attr('stroke-width', 4);
+        groupG.append('text')
+          .attr('x', cx).attr('y', cy + 4)
+          .attr('text-anchor', 'middle')
+          .attr('fill', '#0d1117')
+          .attr('font-size', '10px')
+          .attr('font-weight', '700')
+          .attr('pointer-events', 'none')
+          .text('me');
+
+        // Contact nodes
+        const maxGroupScore = d3.max(group.members, d => d.compositeScore) || 1;
+        const nodesGroup = groupG.append('g').attr('class', 'nodes');
+
+        const simNodes: GraphNode[] = group.members.map(n => ({ ...n, x: cx, y: cy }));
+
+        const nodeGroups = nodesGroup.selectAll<SVGGElement, GraphNode>('g.node')
+          .data(simNodes)
+          .enter()
+          .append('g')
+          .attr('class', d => {
+            let cls = 'node node-contact';
+            if (d.notClear) cls += ' node-unclear';
+            return cls;
+          });
+
+        nodeGroups.each(function(d, nodeIdx) {
+          const nodeG = d3.select(this);
+          const radius = getNodeRadius(d, maxGroupScore);
+          const total = (d.sent || 0) + (d.received || 0);
+          const receivedRatio = total > 0 ? d.received / total : 0.5;
+
+          const clipId = `clip-g${groupIdx}-node-${nodeIdx}`;
+          const nodeDefs = nodeG.append('defs');
+          nodeDefs.append('clipPath')
+            .attr('id', clipId)
+            .append('circle').attr('r', radius);
+
+          const clipped = nodeG.append('g').attr('clip-path', `url(#${clipId})`);
+          clipped.append('rect')
+            .attr('x', -radius).attr('y', -radius)
+            .attr('width', radius * 2).attr('height', radius * 2)
+            .attr('fill', graphConfig.sentColor);
+
+          const fillHeight = radius * 2 * receivedRatio;
+          clipped.append('rect')
+            .attr('x', -radius).attr('y', radius - fillHeight)
+            .attr('width', radius * 2).attr('height', fillHeight)
+            .attr('fill', graphConfig.receivedColor);
+
+          const hasSent = d.sent > 0;
+          nodeG.append('circle')
+            .attr('r', radius).attr('fill', 'none')
+            .attr('stroke', hasSent ? graphConfig.sentColor : 'rgba(255,255,255,0.3)')
+            .attr('stroke-width', hasSent ? graphConfig.borderWidth : 1.5)
+            .attr('class', 'node-border');
+
+          if (d.notClear) {
+            nodeG.append('circle')
+              .attr('r', radius)
+              .attr('fill', 'url(#hatch-pattern)')
+              .attr('class', 'node-hatch');
+          }
+        });
+
+        // Labels
+        const labelsG = groupG.append('g').attr('class', 'labels');
+        const labels = labelsG.selectAll<SVGTextElement, GraphNode>('text')
+          .data(simNodes)
+          .enter()
+          .append('text')
+          .attr('class', 'label')
+          .attr('text-anchor', 'middle')
+          .text(d => {
+            const name = d.name;
+            return name.length > 12 ? name.substring(0, 10) + '...' : name;
+          });
+
+        // Click handler
+        nodeGroups.on('click', function(event, d) {
+          if (d.isCenter) return;
+          event.stopPropagation();
+          options.onNodeClick(d, { x: event.clientX, y: event.clientY });
+        });
+
+        // Force simulation with center phantom node for collision
+        const MIN_STRENGTH = 0.05;
+        const MAX_STRENGTH = 0.4;
+
+        const centerPhantom: GraphNode = {
+          ...centerNode,
+          isCenter: true,
+          fx: cx,
+          fy: cy,
+          x: cx,
+          y: cy,
+        };
+        const allSimNodes = [centerPhantom, ...simNodes];
+
+        const sim = d3.forceSimulation(allSimNodes)
+          .force('x', d3.forceX<GraphNode>(cx).strength(d =>
+            d.isCenter ? 1 : MIN_STRENGTH + (d.compositeScore / maxGroupScore) * (MAX_STRENGTH - MIN_STRENGTH)
+          ))
+          .force('y', d3.forceY<GraphNode>(cy).strength(d =>
+            d.isCenter ? 1 : MIN_STRENGTH + (d.compositeScore / maxGroupScore) * (MAX_STRENGTH - MIN_STRENGTH)
+          ))
+          .force('collide', d3.forceCollide<GraphNode>()
+            .radius(d => getNodeRadius(d, maxGroupScore) + graphConfig.collisionPadding)
+          )
+          .force('charge', d3.forceManyBody().strength(-30));
+
+        groupSimulationsRef.current.push(sim);
+
+        sim.on('tick', () => {
+          nodeGroups.attr('transform', d => `translate(${d.x || cx},${d.y || cy})`);
+          labels
+            .attr('x', d => d.x || cx)
+            .attr('y', d => (d.y || cy) + getNodeRadius(d, maxGroupScore) + 15);
+        });
+      }); // end cells.forEach
+
       return () => {
         groupSimulationsRef.current.forEach(s => s.stop());
         groupSimulationsRef.current = [];
