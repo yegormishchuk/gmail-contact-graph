@@ -76,7 +76,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           const members = users
             .map(u => nodesByEmail.get(u.email.toLowerCase()))
             .filter((n): n is GraphNode => n !== undefined);
-          if (members.length >= 3) {
+          if (members.length >= MIN_MSG_GROUP_SIZE) {
             groups.push({ label: `@${domain}`, members });
           }
         });
@@ -85,7 +85,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           const members = emails
             .map(e => nodesByEmail.get(e.toLowerCase()))
             .filter((n): n is GraphNode => n !== undefined);
-          if (members.length >= 3) {
+          if (members.length >= MIN_MSG_GROUP_SIZE) {
             groups.push({ label: subject, members });
           }
         });
@@ -112,7 +112,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       // Grid layout
       const BASE_RADIUS = 100;
       const K = 18;
-      const PADDING = 40;
+      const PADDING = 60;
       const cellRadius = (n: number) => BASE_RADIUS + K * Math.sqrt(n);
 
       const groupColors = graphConfig.groupColors;
