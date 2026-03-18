@@ -1,6 +1,7 @@
 import React, { useRef, useLayoutEffect, useState, useCallback, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { api } from '../../api/client';
+import { graphConfig } from '../../utils/graphConfig';
 
 const OFFSET = 14;
 
@@ -132,8 +133,10 @@ export function Tooltip() {
 
       {contactGroups.length > 0 && (
         <div className="tooltip-groups visible">
-          {visibleGroups.map(({ subject, count }) => (
-            <div key={subject}>"{subject}" ({count} recipients)</div>
+          {visibleGroups.map(({ subject, count }, i) => (
+            <div key={subject} style={{ color: graphConfig.groupColors[i % graphConfig.groupColors.length] }}>
+              "{subject}" ({count} recipients)
+            </div>
           ))}
           {contactGroups.length > 2 && (
             <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
@@ -145,14 +148,14 @@ export function Tooltip() {
 
       <div className="tooltip-stats">
         <div className="tooltip-stat">
-          <span className="tooltip-stat-label">Received</span>
-          <span className="tooltip-stat-value received">
+          <span className="tooltip-stat-label" style={{ color: '#00a86b' }}>Received</span>
+          <span className="tooltip-stat-value" style={{ color: '#00a86b' }}>
             {selectedNode.received.toLocaleString()} ({receivedPercent}%)
           </span>
         </div>
         <div className="tooltip-stat">
-          <span className="tooltip-stat-label">Sent</span>
-          <span className="tooltip-stat-value sent">
+          <span className="tooltip-stat-label" style={{ color: graphConfig.sentColor }}>Sent</span>
+          <span className="tooltip-stat-value" style={{ color: graphConfig.sentColor }}>
             {selectedNode.sent.toLocaleString()} ({sentPercent}%)
           </span>
         </div>

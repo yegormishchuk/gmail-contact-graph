@@ -312,13 +312,6 @@ svg {
     font-weight: 600;
 }
 
-.tooltip-stat-value.received {
-    color: #00d68f;
-}
-
-.tooltip-stat-value.sent {
-    color: #86efac;
-}
 
 .tooltip-buttons {
     display: flex;

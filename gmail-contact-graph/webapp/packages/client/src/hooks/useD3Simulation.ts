@@ -308,7 +308,8 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       .filter(([_, emails]) =>
         emails.map(e => e.toLowerCase()).includes(selectedEmail) &&
         emails.length >= MIN_MSG_GROUP_SIZE
-      );
+      )
+      .sort(([, a], [, b]) => b.length - a.length);
 
     // Track visible group members for dimming logic
     const allVisibleMemberEmails = new Set<string>();
@@ -335,9 +336,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       const memberEmails = emails.map(e => e.toLowerCase());
       memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
 
-      const groupColor = groupIdx === 0
-        ? graphConfig.groupColor
-        : shadeColor(graphConfig.groupColor, -28 * groupIdx);
+      const groupColor = graphConfig.groupColors[groupIdx % graphConfig.groupColors.length];
 
       if (memberEmails.length <= ROPE_MAX_SIZE) {
         drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, groupColor, subject);

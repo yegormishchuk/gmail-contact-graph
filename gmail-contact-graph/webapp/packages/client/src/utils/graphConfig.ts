@@ -10,5 +10,15 @@ export const graphConfig = {
   centerColor: '#ffffff',
   domainColor: '#fbbf24',
   groupColor: '#00e5ff',
+  groupColors: [
+    '#00e5ff', // cyan
+    '#ff6b9d', // pink
+    '#ffd60a', // yellow
+    '#a78bfa', // lavender
+    '#10b981', // emerald
+    '#f97316', // orange
+    '#e879f9', // fuchsia
+    '#34d399', // mint
+  ],
   borderWidth: 3,
 };
