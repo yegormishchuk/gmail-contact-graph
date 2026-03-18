@@ -5,7 +5,7 @@ export function Controls() {
   const { state, dispatch } = useAppContext();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const handleFilterChange = (filterType: 'moreReceived' | 'moreSent' | null) => {
+  const handleFilterChange = (filterType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null) => {
     dispatch({ type: 'SET_FILTER_TYPE', payload: filterType });
   };
 
@@ -64,6 +64,26 @@ export function Controls() {
             onChange={() => handleFilterChange('moreSent')}
           />
           <span className="filter-label sent">More sent</span>
+        </label>
+        <label className="filter-radio">
+          <input
+            type="radio"
+            name="filter-type"
+            value="messageGroups"
+            checked={state.filters.filterType === 'messageGroups'}
+            onChange={() => handleFilterChange('messageGroups')}
+          />
+          <span className="filter-label">Message Groups</span>
+        </label>
+        <label className="filter-radio">
+          <input
+            type="radio"
+            name="filter-type"
+            value="organizations"
+            checked={state.filters.filterType === 'organizations'}
+            onChange={() => handleFilterChange('organizations')}
+          />
+          <span className="filter-label">Organizations</span>
         </label>
       </div>
 
