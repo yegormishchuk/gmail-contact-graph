@@ -71,6 +71,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         });
       zoomRef.current = zoom;
       svg.call(zoom);
+      svg.on('dblclick.zoom', null);
 
       // Prepare groups
       type GroupEntry = { label: string; members: GraphNode[] };
@@ -420,6 +421,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
     zoomRef.current = zoom;
     svg.call(zoom);
+    svg.on('dblclick.zoom', null);
 
     // Restore previous transform
     if (transformRef.current !== d3.zoomIdentity) {

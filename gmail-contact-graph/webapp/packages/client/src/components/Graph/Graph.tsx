@@ -8,8 +8,12 @@ export function Graph() {
   const svgRef = useRef<SVGSVGElement>(null);
   const { state, dispatch } = useAppContext();
 
+  const selectedNodeRef = useRef(state.selectedNode);
+  selectedNodeRef.current = state.selectedNode;
+
   const handleNodeClick = useCallback((node: GraphNode, position: { x: number; y: number }) => {
-    dispatch({ type: 'SELECT_NODE', payload: node, position });
+    const isAlreadySelected = selectedNodeRef.current?.email === node.email;
+    dispatch({ type: 'SELECT_NODE', payload: isAlreadySelected ? null : node, position: isAlreadySelected ? null : position });
   }, [dispatch]);
 
   const filteredData = useMemo(
