@@ -2,7 +2,7 @@ import type { GraphData, GraphNode } from '@gmail-graph/shared';
 
 interface Filters {
   limit: number;
-  filterType: 'moreReceived' | 'moreSent' | null;
+  filterType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null;
   searchQuery: string;
 }
 

@@ -16,7 +16,7 @@ interface AppState {
 
   filters: {
     limit: number;
-    filterType: 'moreReceived' | 'moreSent' | null;
+    filterType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null;
     searchQuery: string;
   };
 
@@ -53,7 +53,7 @@ type Action =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_FILTER_LIMIT'; payload: number }
-  | { type: 'SET_FILTER_TYPE'; payload: 'moreReceived' | 'moreSent' | null }
+  | { type: 'SET_FILTER_TYPE'; payload: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null }
   | { type: 'SET_SEARCH_QUERY'; payload: string }
   | { type: 'SELECT_NODE'; payload: GraphNode | null; position?: { x: number; y: number } | null }
   | { type: 'SET_RANKING_TAB'; payload: 'ranking' | 'filtered' | 'spam' }
