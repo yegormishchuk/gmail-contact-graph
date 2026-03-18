@@ -17,7 +17,7 @@ export function Graph() {
     [state.rawData, state.filters]
   );
 
-  const { resetZoom } = useD3Simulation({
+  const { resetZoom, focusNode } = useD3Simulation({
     svgRef,
     data: filteredData,
     domains: state.domains,
@@ -27,11 +27,10 @@ export function Graph() {
     filterType: state.filters.filterType,
   });
 
-  // Expose resetZoom to parent via a button in Controls
-  // For now, attach to window for testing
   React.useEffect(() => {
     (window as any).resetGraphZoom = resetZoom;
-  }, [resetZoom]);
+    (window as any).focusGraphNode = focusNode;
+  }, [resetZoom, focusNode]);
 
   return (
     <svg

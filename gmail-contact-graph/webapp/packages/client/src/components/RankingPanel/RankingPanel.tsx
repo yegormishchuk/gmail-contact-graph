@@ -36,7 +36,24 @@ export function RankingPanel() {
   };
 
   const handleContactClick = (contact: GraphNode, e: React.MouseEvent) => {
-    dispatch({ type: 'SELECT_NODE', payload: contact, position: { x: e.clientX, y: e.clientY } });
+    const focusGraphNode = (window as any).focusGraphNode as
+      | ((email: string, onFound: (pos: { x: number; y: number }) => void, onNotFound?: () => void) => void)
+      | undefined;
+
+    if (focusGraphNode) {
+      focusGraphNode(
+        contact.email,
+        (screenPos) => {
+          dispatch({ type: 'SELECT_NODE', payload: contact, position: screenPos });
+        },
+        () => {
+          // Node not in current filtered view — still select but use panel click position
+          dispatch({ type: 'SELECT_NODE', payload: contact, position: { x: e.clientX, y: e.clientY } });
+        },
+      );
+    } else {
+      dispatch({ type: 'SELECT_NODE', payload: contact, position: { x: e.clientX, y: e.clientY } });
+    }
   };
 
   const handleDelete = async (email: string, e: React.MouseEvent) => {

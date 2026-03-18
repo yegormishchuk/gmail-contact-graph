@@ -722,8 +722,47 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
   }, [options.selectedNode, options.data, options.domains, options.messageGroups, options.filterType]);
 
+  const focusNode = useCallback((
+    email: string,
+    onFound: (screenPos: { x: number; y: number }) => void,
+    onNotFound?: () => void,
+  ) => {
+    if (!options.svgRef.current || !zoomRef.current) {
+      onNotFound?.();
+      return;
+    }
+
+    const node = nodesDataRef.current.find(n => n.email.toLowerCase() === email.toLowerCase());
+    if (!node || node.x === undefined || node.y === undefined) {
+      onNotFound?.();
+      return;
+    }
+
+    const svgEl = options.svgRef.current;
+    const svgRect = svgEl.getBoundingClientRect();
+    const scale = 1.5;
+    const newTx = svgRect.width / 2 - scale * node.x;
+    const newTy = svgRect.height / 2 - scale * node.y;
+    const newTransform = d3.zoomIdentity.translate(newTx, newTy).scale(scale);
+
+    transformRef.current = newTransform;
+
+    d3.select(svgEl)
+      .transition()
+      .duration(500)
+      .call(zoomRef.current.transform, newTransform)
+      .on('end', () => {
+        const rect = svgEl.getBoundingClientRect();
+        onFound({
+          x: rect.left + newTransform.applyX(node.x!),
+          y: rect.top + newTransform.applyY(node.y!),
+        });
+      });
+  }, [options.svgRef]);
+
   return {
     resetZoom,
+    focusNode,
   };
 }
 
