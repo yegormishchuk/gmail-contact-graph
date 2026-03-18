@@ -18,11 +18,13 @@ interface UseD3SimulationOptions {
   domains: DomainGroups | null;
   messageGroups: MessageGroups | null;
   selectedNode: GraphNode | null;
+  filterType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null;
   onNodeClick: (node: GraphNode, position: { x: number; y: number }) => void;
 }
 
 export function useD3Simulation(options: UseD3SimulationOptions) {
   const simulationRef = useRef<d3.Simulation<GraphNode, undefined> | null>(null);
+  const groupSimulationsRef = useRef<d3.Simulation<GraphNode, undefined>[]>([]);
   const transformRef = useRef(d3.zoomIdentity);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
@@ -41,6 +43,21 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
   useEffect(() => {
     if (!options.svgRef.current || !options.data) return;
+
+    const isGroupMode = options.filterType === 'messageGroups' || options.filterType === 'organizations';
+
+    // Stop and clear any previous group simulations
+    groupSimulationsRef.current.forEach(s => s.stop());
+    groupSimulationsRef.current = [];
+
+    if (isGroupMode) {
+      // Group rendering — implemented in Task 5
+      return () => {
+        groupSimulationsRef.current.forEach(s => s.stop());
+        groupSimulationsRef.current = [];
+      };
+    }
+    // else: existing common graph logic continues below unchanged
 
     const svg = d3.select(options.svgRef.current);
     const container = svg.node()?.parentElement;
@@ -261,10 +278,13 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     return () => {
       simulation.stop();
     };
-  }, [options.data, options.svgRef, options.onNodeClick, options.domains, options.messageGroups]);
+  }, [options.data, options.svgRef, options.onNodeClick, options.domains, options.messageGroups, options.filterType]);
 
   // Group visualization effect — runs when selected node or data/groups change
   useEffect(() => {
+    const isGroupMode = options.filterType === 'messageGroups' || options.filterType === 'organizations';
+    if (isGroupMode) return;
+
     if (!domainLinksGroupRef.current || !groupLinksGroupRef.current || !nodesGroupRef.current) return;
 
     const nodes = nodesDataRef.current;
@@ -384,7 +404,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       .transition('opacity').duration(150)
       .style('opacity', 1);
 
-  }, [options.selectedNode, options.data, options.domains, options.messageGroups]);
+  }, [options.selectedNode, options.data, options.domains, options.messageGroups, options.filterType]);
 
   return {
     resetZoom,

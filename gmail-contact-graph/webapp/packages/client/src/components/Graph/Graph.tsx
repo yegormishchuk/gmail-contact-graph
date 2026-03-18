@@ -24,6 +24,7 @@ export function Graph() {
     messageGroups: state.messageGroups,
     selectedNode: state.selectedNode,
     onNodeClick: handleNodeClick,
+    filterType: state.filters.filterType,
   });
 
   // Expose resetZoom to parent via a button in Controls
