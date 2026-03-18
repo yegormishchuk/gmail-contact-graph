@@ -12,6 +12,10 @@ body {
     overflow: hidden;
 }
 
+body.group-mode {
+    overflow: auto;
+}
+
 .container {
     display: flex;
     flex-direction: column;
@@ -59,7 +63,14 @@ h1 {
     position: relative;
 }
 
-svg {
+#graph-container.group-mode {
+    height: auto;
+    min-height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#graph {
     width: 100%;
     height: 100%;
 }
