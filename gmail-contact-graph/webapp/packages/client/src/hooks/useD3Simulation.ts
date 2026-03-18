@@ -56,11 +56,21 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       const container = svg.node()?.parentElement;
       if (!container) return () => {};
       const width = container.clientWidth;
+      const height = container.clientHeight;
       svg.selectAll('*').remove();
-      svg.attr('width', width);
+      svg.attr('width', width).attr('height', height);
 
-      // Main group (no zoom in group mode — CSS scroll is used instead)
+      // Main group with zoom/pan (same as common graph)
       const g = svg.append('g');
+
+      const zoom = d3.zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.1, 3])
+        .on('zoom', (event) => {
+          transformRef.current = event.transform;
+          g.attr('transform', event.transform.toString());
+        });
+      zoomRef.current = zoom;
+      svg.call(zoom);
 
       // Prepare groups
       type GroupEntry = { label: string; members: GraphNode[] };
@@ -109,11 +119,30 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         return () => {};
       }
 
-      // Grid layout
-      const BASE_RADIUS = 100;
-      const K = 18;
+      // Ring layout constants — shared between radius computation and actual rendering
+      const INNER_GAP = 20;
+      const RING_GAP = 12;
+      const OUTER_MARGIN = 20;
       const PADDING = 60;
-      const cellRadius = (n: number) => BASE_RADIUS + K * Math.sqrt(n);
+
+      // Compute the boundary circle radius by dry-running the ring layout,
+      // so it always contains all contacts regardless of group size.
+      const computeGroupR = (members: GraphNode[]): number => {
+        const sorted = [...members].sort((a, b) => b.compositeScore - a.compositeScore);
+        const maxScore = sorted[0]?.compositeScore || 1;
+        let ringR = graphConfig.centerNodeRadius + INNER_GAP;
+        let rem = sorted.slice();
+        let lastNodeR = graphConfig.minNodeRadius;
+        while (rem.length > 0) {
+          const nodeR = getNodeRadius(rem[0], maxScore);
+          lastNodeR = nodeR;
+          const capacity = Math.max(1, Math.floor(2 * Math.PI * ringR / (nodeR * 2 + 8)));
+          rem.splice(0, Math.min(capacity, rem.length));
+          if (rem.length > 0) ringR += nodeR * 2 + RING_GAP;
+        }
+        // boundary = outermost ring center + node radius + margin + collision headroom
+        return ringR + lastNodeR + OUTER_MARGIN + graphConfig.collisionPadding;
+      };
 
       const groupColors = graphConfig.groupColors;
 
@@ -125,7 +154,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       let rowMaxY = 0;
 
       groups.forEach((group, i) => {
-        const r = cellRadius(group.members.length);
+        const r = computeGroupR(group.members);
         if (curX + 2 * r > width - PADDING && curX > PADDING) {
           curX = PADDING;
           curY = rowMaxY + PADDING;
@@ -137,8 +166,14 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         cells.push({ group, cx, cy, r, color: groupColors[i % groupColors.length] });
       });
 
+      // Center the layout in the viewport initially
+      const totalWidth = cells.length > 0 ? Math.max(...cells.map(c => c.cx + c.r)) + PADDING : width;
       const totalHeight = rowMaxY + PADDING;
-      svg.attr('height', totalHeight);
+      const initialTranslateX = (width - totalWidth) / 2;
+      const initialTranslateY = (height - totalHeight) / 2;
+      const initialTransform = d3.zoomIdentity.translate(initialTranslateX, initialTranslateY);
+      svg.call(zoom.transform, initialTransform);
+      transformRef.current = initialTransform;
 
       // Create defs for hatch pattern
       const defs = svg.append('defs');
@@ -176,7 +211,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           .style('text-shadow', '0 1px 4px rgba(0,0,0,0.9)')
           .text(truncated);
 
-        // Center "me" node
+        // Center "me" node — same style as common graph
         groupG.append('circle')
           .attr('cx', cx).attr('cy', cy)
           .attr('r', graphConfig.centerNodeRadius)
@@ -184,19 +219,49 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           .attr('stroke', '#fff')
           .attr('stroke-width', 4);
         groupG.append('text')
-          .attr('x', cx).attr('y', cy + 4)
+          .attr('x', cx).attr('y', cy + graphConfig.centerNodeRadius + 15)
           .attr('text-anchor', 'middle')
-          .attr('fill', '#0d1117')
-          .attr('font-size', '10px')
-          .attr('font-weight', '700')
+          .attr('class', 'label label-center')
           .attr('pointer-events', 'none')
           .text('me');
 
-        // Contact nodes
-        const maxGroupScore = d3.max(group.members, d => d.compositeScore) || 1;
+        // Contact nodes — sorted by score descending (highest = closest to center)
+        const sorted = [...group.members].sort((a, b) => b.compositeScore - a.compositeScore);
+        const maxGroupScore = sorted[0]?.compositeScore || 1;
         const nodesGroup = groupG.append('g').attr('class', 'nodes');
 
-        const simNodes: GraphNode[] = group.members.map(n => ({ ...n, x: cx, y: cy }));
+        // Pre-position contacts in concentric rings: inner ring = highest-score contacts
+        const nodePositions = new Map<string, { x: number; y: number }>();
+        let ringR = graphConfig.centerNodeRadius + INNER_GAP;
+        let ringRemaining = sorted.slice();
+
+        while (ringRemaining.length > 0) {
+          const nodeR = getNodeRadius(ringRemaining[0], maxGroupScore);
+          const maxRingR = r - OUTER_MARGIN - nodeR;
+          const clampedRingR = Math.min(ringR, maxRingR);
+          const isLastRing = clampedRingR >= maxRingR;
+          const circumference = 2 * Math.PI * clampedRingR;
+          const capacity = isLastRing
+            ? ringRemaining.length
+            : Math.max(1, Math.floor(circumference / (nodeR * 2 + 8)));
+          const batch = ringRemaining.splice(0, capacity);
+
+          batch.forEach((node, i) => {
+            const angle = -Math.PI / 2 + (i / batch.length) * 2 * Math.PI;
+            nodePositions.set(node.email, {
+              x: cx + clampedRingR * Math.cos(angle),
+              y: cy + clampedRingR * Math.sin(angle),
+            });
+          });
+
+          if (isLastRing) break;
+          ringR = clampedRingR + nodeR * 2 + RING_GAP;
+        }
+
+        const simNodes: GraphNode[] = group.members.map(n => {
+          const pos = nodePositions.get(n.email) || { x: cx, y: cy };
+          return { ...n, x: pos.x, y: pos.y };
+        });
 
         const nodeGroups = nodesGroup.selectAll<SVGGElement, GraphNode>('g.node')
           .data(simNodes)
@@ -267,10 +332,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           options.onNodeClick(d, { x: event.clientX, y: event.clientY });
         });
 
-        // Force simulation with center phantom node for collision
-        const MIN_STRENGTH = 0.05;
-        const MAX_STRENGTH = 0.4;
-
+        // Simulation — contacts are already pre-positioned; only collision polish needed
         const centerPhantom: GraphNode = {
           ...centerNode,
           isCenter: true,
@@ -282,16 +344,19 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         const allSimNodes = [centerPhantom, ...simNodes];
 
         const sim = d3.forceSimulation(allSimNodes)
-          .force('x', d3.forceX<GraphNode>(cx).strength(d =>
-            d.isCenter ? 1 : MIN_STRENGTH + (d.compositeScore / maxGroupScore) * (MAX_STRENGTH - MIN_STRENGTH)
-          ))
-          .force('y', d3.forceY<GraphNode>(cy).strength(d =>
-            d.isCenter ? 1 : MIN_STRENGTH + (d.compositeScore / maxGroupScore) * (MAX_STRENGTH - MIN_STRENGTH)
-          ))
+          .force('x', d3.forceX<GraphNode>(d => {
+            if (d.isCenter) return cx;
+            const pos = nodePositions.get(d.email);
+            return pos ? pos.x : cx;
+          }).strength(d => d.isCenter ? 1 : 0.6))
+          .force('y', d3.forceY<GraphNode>(d => {
+            if (d.isCenter) return cy;
+            const pos = nodePositions.get(d.email);
+            return pos ? pos.y : cy;
+          }).strength(d => d.isCenter ? 1 : 0.6))
           .force('collide', d3.forceCollide<GraphNode>()
             .radius(d => getNodeRadius(d, maxGroupScore) + graphConfig.collisionPadding)
-          )
-          .force('charge', d3.forceManyBody().strength(-30));
+          );
 
         groupSimulationsRef.current.push(sim);
 

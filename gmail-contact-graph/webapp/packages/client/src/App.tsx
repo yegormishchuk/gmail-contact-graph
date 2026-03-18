@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { useGraphData } from './hooks/useGraphData';
 import { Graph } from './components/Graph';
@@ -11,14 +11,6 @@ import { Tooltip } from './components/Tooltip';
 function AppContent() {
   const { state } = useAppContext();
   const { loading, error } = useGraphData();
-  const isGroupMode = state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations';
-
-  // Must be before any conditional returns (Rules of Hooks)
-  useEffect(() => {
-    document.body.classList.toggle('group-mode', isGroupMode);
-    return () => document.body.classList.remove('group-mode');
-  }, [isGroupMode]);
-
   if (loading) {
     return (
       <div className="container">
@@ -38,7 +30,7 @@ function AppContent() {
   return (
     <div className="container">
       <Header />
-      <div id="graph-container" className={isGroupMode ? 'group-mode' : undefined}>
+      <div id="graph-container">
         <Graph />
         <RankingPanel />
         <Controls />

@@ -33,13 +33,11 @@ export function Graph() {
     (window as any).resetGraphZoom = resetZoom;
   }, [resetZoom]);
 
-  const isGroupMode = state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations';
-
   return (
     <svg
       ref={svgRef}
       id="graph"
-      style={{ width: '100%', height: isGroupMode ? 'auto' : '100%', display: 'block' }}
+      style={{ width: '100%', height: '100%', display: 'block' }}
     />
   );
 }

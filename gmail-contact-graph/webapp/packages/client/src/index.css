@@ -12,10 +12,6 @@ body {
     overflow: hidden;
 }
 
-body.group-mode {
-    overflow: auto;
-}
-
 .container {
     display: flex;
     flex-direction: column;
@@ -61,13 +57,6 @@ h1 {
 #graph-container {
     flex: 1;
     position: relative;
-}
-
-#graph-container.group-mode {
-    height: auto;
-    min-height: 400px;
-    overflow-y: auto;
-    overflow-x: hidden;
 }
 
 #graph {
