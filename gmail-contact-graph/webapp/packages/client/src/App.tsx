@@ -7,9 +7,10 @@ import { Controls } from './components/Controls';
 import { RankingPanel } from './components/RankingPanel';
 import { Legend } from './components/Legend';
 import { Tooltip } from './components/Tooltip';
+import { GroupTooltip } from './components/GroupTooltip';
 
 function AppContent() {
-  const { state } = useAppContext();
+  const { state, dispatch } = useAppContext();
   const { loading, error } = useGraphData();
   if (loading) {
     return (
@@ -36,6 +37,14 @@ function AppContent() {
         <Controls />
         <Legend />
         {state.selectedNode && <Tooltip />}
+        {state.selectedGroup && (
+          <GroupTooltip
+            data={state.selectedGroup}
+            position={state.selectedGroupPosition}
+            pinned
+            onClose={() => dispatch({ type: 'SELECT_GROUP', payload: null })}
+          />
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { useAppContext } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
 import type { GraphNode } from '@gmail-graph/shared';
+import type { GroupHoverData } from '../../utils/groupTypes';
 
 const MIN_GROUP_SIZE = 3;
 
@@ -140,6 +141,57 @@ export function RankingPanel() {
       );
     } else {
       dispatch({ type: 'SELECT_NODE', payload: contact, position: { x: e.clientX, y: e.clientY } });
+    }
+  };
+
+  const handleGroupClick = (group: GroupRankItem, e: React.MouseEvent) => {
+    const focusGroupFn = (window as any).focusGroup as
+      | ((label: string, onFound: (pos: { x: number; y: number }) => void, onNotFound?: () => void) => void)
+      | undefined;
+
+    const data: GroupHoverData = {
+      label: group.label,
+      memberCount: group.memberCount,
+      totalSent: 0,
+      totalReceived: 0,
+      orgCount: 0,
+      color: group.color,
+    };
+
+    // Compute full stats from rawData
+    if (rawData) {
+      const nodesByEmail = new Map(
+        rawData.nodes.filter(n => !n.isCenter).map(n => [n.email.toLowerCase(), n])
+      );
+      if (filterType === 'messageGroups' && state.messageGroups) {
+        const emails = state.messageGroups.groups[group.label] ?? [];
+        const members = emails.map(e2 => nodesByEmail.get(e2.toLowerCase())).filter((n): n is GraphNode => n !== undefined);
+        data.totalSent = members.reduce((s, m) => s + (m.sent || 0), 0);
+        data.totalReceived = members.reduce((s, m) => s + (m.received || 0), 0);
+        const orgs = new Set(members.map(m => m.email.split('@')[1]?.toLowerCase()).filter(Boolean));
+        data.orgCount = orgs.size;
+      } else if (filterType === 'organizations' && state.domains) {
+        const domainKey = group.label.replace(/^@/, '');
+        const users = state.domains.domain_groups[domainKey] ?? [];
+        const members = users.map(u => nodesByEmail.get(u.email.toLowerCase())).filter((n): n is GraphNode => n !== undefined);
+        data.totalSent = members.reduce((s, m) => s + (m.sent || 0), 0);
+        data.totalReceived = members.reduce((s, m) => s + (m.received || 0), 0);
+        data.orgCount = 1;
+      }
+    }
+
+    if (focusGroupFn) {
+      focusGroupFn(
+        group.label,
+        (screenPos) => {
+          dispatch({ type: 'SELECT_GROUP', payload: data, position: screenPos });
+        },
+        () => {
+          dispatch({ type: 'SELECT_GROUP', payload: data, position: { x: e.clientX, y: e.clientY } });
+        },
+      );
+    } else {
+      dispatch({ type: 'SELECT_GROUP', payload: data, position: { x: e.clientX, y: e.clientY } });
     }
   };
 
@@ -295,7 +347,12 @@ export function RankingPanel() {
           ))}
 
           {isGroupFilter && groupRanking.map((group, index) => (
-            <div key={group.label} className="ranking-item filter-group-item">
+            <div
+              key={group.label}
+              className="ranking-item filter-group-item"
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => handleGroupClick(group, e)}
+            >
               <span className={`ranking-place ${getPlaceClass(index + 1)}`}>
                 {index + 1}
               </span>

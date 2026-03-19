@@ -3,6 +3,8 @@ import * as d3 from 'd3';
 import type { GraphData, GraphNode, DomainGroups, MessageGroups } from '@gmail-graph/shared';
 import { graphConfig } from '../utils/graphConfig';
 import { getNodeRadius } from '../utils/filterData';
+import type { GroupHoverData } from '../utils/groupTypes';
+export type { GroupHoverData };
 
 const MIN_MSG_GROUP_SIZE = 3;
 const ROPE_MAX_SIZE = 8;
@@ -12,15 +14,6 @@ interface RopeLink {
   target: GraphNode;
 }
 
-export interface GroupHoverData {
-  label: string;
-  memberCount: number;
-  totalSent: number;
-  totalReceived: number;
-  orgCount: number;
-  color: string;
-}
-
 interface UseD3SimulationOptions {
   svgRef: React.RefObject<SVGSVGElement>;
   data: GraphData | null;
@@ -28,8 +21,10 @@ interface UseD3SimulationOptions {
   messageGroups: MessageGroups | null;
   selectedNode: GraphNode | null;
   filterType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null;
+  limit: number;
   onNodeClick: (node: GraphNode, position: { x: number; y: number }) => void;
   onGroupHover?: (data: GroupHoverData | null, position?: { x: number; y: number }) => void;
+  onGroupClick?: (data: GroupHoverData | null, position?: { x: number; y: number }) => void;
 }
 
 export function useD3Simulation(options: UseD3SimulationOptions) {
@@ -43,6 +38,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
   const groupLinksGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
   const nodesGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
   const nodesDataRef = useRef<GraphNode[]>([]);
+  const groupCellsRef = useRef<{ label: string; cx: number; cy: number; r: number }[]>([]);
 
   const resetZoom = useCallback(() => {
     if (!options.svgRef.current || !zoomRef.current) return;
@@ -112,8 +108,13 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         });
       }
 
-      // Sort groups by size descending
-      groups.sort((a, b) => b.members.length - a.members.length);
+      // Sort groups by total composite score descending, then limit to top N
+      groups.sort((a, b) => {
+        const scoreA = a.members.reduce((s, m) => s + m.compositeScore, 0);
+        const scoreB = b.members.reduce((s, m) => s + m.compositeScore, 0);
+        return scoreB - scoreA;
+      });
+      groups.splice(options.limit);
 
       // Guard: centerNode must exist
       if (!centerNode) return () => {};
@@ -175,6 +176,14 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         curX = cx + r + PADDING;
         rowMaxY = Math.max(rowMaxY, cy + r);
         cells.push({ group, cx, cy, r, color: groupColors[i % groupColors.length] });
+      });
+
+      // Store cell positions for focusGroup
+      groupCellsRef.current = cells.map(c => ({ label: c.group.label, cx: c.cx, cy: c.cy, r: c.r }));
+
+      // SVG background click → deselect group
+      svg.on('click.groupDeselect', () => {
+        options.onGroupClick?.(null);
       });
 
       // Center the layout in the viewport initially
@@ -383,6 +392,22 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
             if (options.onGroupHover) {
               options.onGroupHover(null);
             }
+          })
+          .on('click', function(event: MouseEvent) {
+            // Don't trigger from contact node clicks (they stop propagation)
+            event.stopPropagation();
+            if (options.onGroupClick) {
+              options.onGroupClick(groupHoverData, { x: event.clientX, y: event.clientY });
+            }
+            // Pan camera to center on this group
+            const vw = container.clientWidth;
+            const vh = container.clientHeight;
+            const scale = Math.min(2.5, Math.min(vw, vh) / (r * 2.8));
+            const tx = vw / 2 - scale * cx;
+            const ty = vh / 2 - scale * cy;
+            const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+            transformRef.current = transform;
+            svg.transition().duration(600).call(zoom.transform, transform);
           });
 
         // Simulation — contacts are already pre-positioned; only collision polish needed
@@ -776,6 +801,36 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
   }, [options.selectedNode, options.data, options.domains, options.messageGroups, options.filterType]);
 
+  const focusGroup = useCallback((
+    label: string,
+    onFound: (screenPos: { x: number; y: number }) => void,
+    onNotFound?: () => void,
+  ) => {
+    const cell = groupCellsRef.current.find(c => c.label === label);
+    if (!cell || !options.svgRef.current || !zoomRef.current) {
+      onNotFound?.();
+      return;
+    }
+    const svgEl = options.svgRef.current;
+    const container = svgEl.parentElement;
+    if (!container) { onNotFound?.(); return; }
+    const vw = container.clientWidth;
+    const vh = container.clientHeight;
+    const scale = Math.min(2.5, Math.min(vw, vh) / (cell.r * 2.8));
+    const tx = vw / 2 - scale * cell.cx;
+    const ty = vh / 2 - scale * cell.cy;
+    const newTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+    transformRef.current = newTransform;
+    d3.select(svgEl)
+      .transition()
+      .duration(600)
+      .call(zoomRef.current.transform, newTransform)
+      .on('end', () => {
+        const rect = svgEl.getBoundingClientRect();
+        onFound({ x: rect.left + vw / 2, y: rect.top + vh / 2 });
+      });
+  }, [options.svgRef]);
+
   const focusNode = useCallback((
     email: string,
     onFound: (screenPos: { x: number; y: number }) => void,
@@ -817,6 +872,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
   return {
     resetZoom,
     focusNode,
+    focusGroup,
   };
 }
 

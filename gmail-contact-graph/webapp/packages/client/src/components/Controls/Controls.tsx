@@ -4,6 +4,7 @@ import { useAppContext } from '../../context/AppContext';
 export function Controls() {
   const { state, dispatch } = useAppContext();
   const [searchQuery, setSearchQuery] = useState('');
+  const { messageGroups, domains } = state;
 
   const handleFilterChange = (filterType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null) => {
     dispatch({ type: 'SET_FILTER_TYPE', payload: filterType });
@@ -24,7 +25,14 @@ export function Controls() {
     (window as any).resetGraphZoom?.();
   };
 
+  const isGroupFilter = state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations';
   const maxContacts = state.rawData?.stats.totalContacts || 500;
+  const maxGroups = isGroupFilter
+    ? (state.filters.filterType === 'messageGroups'
+        ? Object.keys(messageGroups?.groups ?? {}).length
+        : Object.keys(domains?.domain_groups ?? {}).length)
+    : maxContacts;
+  const sliderMax = isGroupFilter ? Math.max(maxGroups, 1) : maxContacts;
 
   return (
     <div className="controls">
@@ -93,16 +101,16 @@ export function Controls() {
 
       <div className="slider-group">
         <div className="slider-label">
-          <span>Contact limit:</span>
+          <span>{isGroupFilter ? 'Group limit:' : 'Contact limit:'}</span>
           <span className="slider-value">{state.filters.limit}</span>
         </div>
         <input
           type="range"
           id="contact-limit"
-          min="10"
-          max={maxContacts}
+          min={isGroupFilter ? 1 : 10}
+          max={sliderMax}
           value={state.filters.limit}
-          step="10"
+          step={isGroupFilter ? 1 : 10}
           onChange={handleLimitChange}
         />
       </div>

@@ -26,26 +26,36 @@ export function Graph() {
     setHoveredGroupPos(position ?? null);
   }, []);
 
+  const handleGroupClick = useCallback((data: GroupHoverData | null, position?: { x: number; y: number }) => {
+    dispatch({ type: 'SELECT_GROUP', payload: data, position });
+  }, [dispatch]);
+
   const filteredData = useMemo(
     () => state.rawData ? filterData(state.rawData, state.filters) : null,
     [state.rawData, state.filters]
   );
 
-  const { resetZoom, focusNode } = useD3Simulation({
+  const { resetZoom, focusNode, focusGroup } = useD3Simulation({
     svgRef,
     data: filteredData,
     domains: state.domains,
     messageGroups: state.messageGroups,
     selectedNode: state.selectedNode,
+    limit: state.filters.limit,
     onNodeClick: handleNodeClick,
     onGroupHover: handleGroupHover,
+    onGroupClick: handleGroupClick,
     filterType: state.filters.filterType,
   });
 
   React.useEffect(() => {
     (window as any).resetGraphZoom = resetZoom;
     (window as any).focusGraphNode = focusNode;
-  }, [resetZoom, focusNode]);
+    (window as any).focusGroup = focusGroup;
+  }, [resetZoom, focusNode, focusGroup]);
+
+  // Show hover tooltip only when no group is persistently selected
+  const showHoverTooltip = !state.selectedGroup;
 
   return (
     <>
@@ -54,7 +64,7 @@ export function Graph() {
         id="graph"
         style={{ width: '100%', height: '100%', display: 'block' }}
       />
-      <GroupTooltip data={hoveredGroupData} position={hoveredGroupPos} />
+      {showHoverTooltip && <GroupTooltip data={hoveredGroupData} position={hoveredGroupPos} />}
     </>
   );
 }

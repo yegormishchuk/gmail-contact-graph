@@ -6,6 +6,7 @@ import type {
   MessageGroups,
   ExcludedContact,
 } from '@gmail-graph/shared';
+import type { GroupHoverData } from '../utils/groupTypes';
 
 // State
 interface AppState {
@@ -22,6 +23,8 @@ interface AppState {
 
   selectedNode: GraphNode | null;
   selectedNodePosition: { x: number; y: number } | null;
+  selectedGroup: GroupHoverData | null;
+  selectedGroupPosition: { x: number; y: number } | null;
   rankingTab: 'ranking' | 'filtered' | 'spam';
   panelVisible: boolean;
 
@@ -41,6 +44,8 @@ const initialState: AppState = {
   },
   selectedNode: null,
   selectedNodePosition: null,
+  selectedGroup: null,
+  selectedGroupPosition: null,
   rankingTab: 'ranking',
   panelVisible: true,
   loading: true,
@@ -56,6 +61,7 @@ type Action =
   | { type: 'SET_FILTER_TYPE'; payload: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null }
   | { type: 'SET_SEARCH_QUERY'; payload: string }
   | { type: 'SELECT_NODE'; payload: GraphNode | null; position?: { x: number; y: number } | null }
+  | { type: 'SELECT_GROUP'; payload: GroupHoverData | null; position?: { x: number; y: number } | null }
   | { type: 'SET_RANKING_TAB'; payload: 'ranking' | 'filtered' | 'spam' }
   | { type: 'TOGGLE_PANEL' }
   | { type: 'REMOVE_CONTACT'; payload: string }
@@ -85,6 +91,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, filters: { ...state.filters, searchQuery: action.payload } };
     case 'SELECT_NODE':
       return { ...state, selectedNode: action.payload, selectedNodePosition: action.position ?? null };
+    case 'SELECT_GROUP':
+      return { ...state, selectedGroup: action.payload, selectedGroupPosition: action.position ?? null };
     case 'SET_RANKING_TAB':
       return { ...state, rankingTab: action.payload };
     case 'TOGGLE_PANEL':
