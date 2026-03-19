@@ -931,6 +931,57 @@ input[type="range"]::-moz-range-thumb {
     display: block;
 }
 
+/* Filter tab highlight */
+.ranking-tab.filter-tab {
+    border-bottom: 2px solid rgba(0, 214, 143, 0.5);
+}
+
+.ranking-tab.filter-tab.active {
+    border-bottom-color: #00d68f;
+}
+
+/* Group ranking items */
+.filter-group-item {
+    cursor: default;
+}
+
+.filter-group-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.filter-group-name {
+    font-size: 11px;
+    font-style: italic;
+}
+
+.filter-group-score {
+    font-size: 10px;
+    color: #aaa;
+    font-weight: 500;
+    margin-left: auto;
+}
+
+.filter-group-count {
+    font-size: 10px;
+    color: #555;
+    white-space: nowrap;
+}
+
+.filter-group-item:hover .filter-group-score {
+    display: block;
+}
+
+.filter-group-item:hover .ranking-delete {
+    display: none;
+}
+
+.ranking-empty {
+    padding: 20px 14px;
+    color: #555;
+    font-size: 12px;
+    text-align: center;
+}
+
 /* Spam list specific styles */
 .spam-item {
     display: flex;
