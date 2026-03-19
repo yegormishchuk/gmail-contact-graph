@@ -12,6 +12,15 @@ interface RopeLink {
   target: GraphNode;
 }
 
+export interface GroupHoverData {
+  label: string;
+  memberCount: number;
+  totalSent: number;
+  totalReceived: number;
+  orgCount: number;
+  color: string;
+}
+
 interface UseD3SimulationOptions {
   svgRef: React.RefObject<SVGSVGElement>;
   data: GraphData | null;
@@ -20,6 +29,7 @@ interface UseD3SimulationOptions {
   selectedNode: GraphNode | null;
   filterType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null;
   onNodeClick: (node: GraphNode, position: { x: number; y: number }) => void;
+  onGroupHover?: (data: GroupHoverData | null, position?: { x: number; y: number }) => void;
 }
 
 export function useD3Simulation(options: UseD3SimulationOptions) {
@@ -123,7 +133,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       // Ring layout constants — shared between radius computation and actual rendering
       const INNER_GAP = 20;
       const RING_GAP = 12;
-      const OUTER_MARGIN = 20;
+      const OUTER_MARGIN = 32;
       const PADDING = 60;
 
       // Compute the boundary circle radius by dry-running the ring layout,
@@ -189,7 +199,11 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
       // Render each group
       cells.forEach(({ group, cx, cy, r, color }, groupIdx) => {
-        const groupG = g.append('g').attr('class', 'group-cell');
+        const groupG = g.append('g')
+          .attr('class', 'group-cell')
+          .attr('data-cx', cx)
+          .attr('data-cy', cy)
+          .style('transition', 'transform 0.25s ease, opacity 0.25s ease');
 
         // Boundary circle
         groupG.append('circle')
@@ -332,6 +346,44 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           event.stopPropagation();
           options.onNodeClick(d, { x: event.clientX, y: event.clientY });
         });
+
+        // Group hover stats
+        const totalSent = group.members.reduce((sum, m) => sum + (m.sent || 0), 0);
+        const totalReceived = group.members.reduce((sum, m) => sum + (m.received || 0), 0);
+        const orgSet = new Set(group.members.map(m => m.email.split('@')[1]?.toLowerCase()).filter(Boolean));
+        const groupHoverData: GroupHoverData = {
+          label: group.label,
+          memberCount: group.members.length,
+          totalSent,
+          totalReceived,
+          orgCount: orgSet.size,
+          color,
+        };
+
+        groupG
+          .on('mouseenter', function(event: MouseEvent) {
+            // Scale up hovered group around its center
+            d3.select(this).raise()
+              .style('transform', `translate(${cx}px,${cy}px) scale(1.06) translate(${-cx}px,${-cy}px)`);
+            // Dim other groups
+            g.selectAll<SVGGElement, unknown>('.group-cell').filter(function() { return this !== event.currentTarget; })
+              .style('opacity', '0.38');
+            if (options.onGroupHover) {
+              options.onGroupHover(groupHoverData, { x: event.clientX, y: event.clientY });
+            }
+          })
+          .on('mousemove', function(event: MouseEvent) {
+            if (options.onGroupHover) {
+              options.onGroupHover(groupHoverData, { x: event.clientX, y: event.clientY });
+            }
+          })
+          .on('mouseleave', function() {
+            d3.select(this).style('transform', null);
+            g.selectAll<SVGGElement, unknown>('.group-cell').style('opacity', null);
+            if (options.onGroupHover) {
+              options.onGroupHover(null);
+            }
+          });
 
         // Simulation — contacts are already pre-positioned; only collision polish needed
         const centerPhantom: GraphNode = {
