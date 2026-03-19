@@ -1,13 +1,59 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import type { GraphData, DomainGroups, MessageGroups } from '@gmail-graph/shared';
+
+const MIN_GROUP_SIZE = 3;
+const DEFAULT_CONTACT_LIMIT = 50;
+
+function countQualifyingGroups(
+  filterType: 'messageGroups' | 'organizations',
+  rawData: GraphData | null,
+  messageGroups: MessageGroups | null,
+  domains: DomainGroups | null,
+): number {
+  if (!rawData) return 0;
+  const nodeEmails = new Set(rawData.nodes.filter(n => !n.isCenter).map(n => n.email.toLowerCase()));
+  if (filterType === 'messageGroups' && messageGroups) {
+    return Object.values(messageGroups.groups).filter(emails =>
+      emails.filter(e => nodeEmails.has(e.toLowerCase())).length >= MIN_GROUP_SIZE
+    ).length;
+  }
+  if (filterType === 'organizations' && domains) {
+    return Object.values(domains.domain_groups).filter(users =>
+      users.filter(u => nodeEmails.has(u.email.toLowerCase())).length >= MIN_GROUP_SIZE
+    ).length;
+  }
+  return 0;
+}
 
 export function Controls() {
   const { state, dispatch } = useAppContext();
   const [searchQuery, setSearchQuery] = useState('');
-  const { messageGroups, domains } = state;
+  const { messageGroups, domains, rawData } = state;
 
-  const handleFilterChange = (filterType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null) => {
-    dispatch({ type: 'SET_FILTER_TYPE', payload: filterType });
+  const isGroupFilter = state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations';
+  const maxContacts = rawData?.stats.totalContacts || 500;
+
+  const qualifyingGroups = (state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations')
+    ? countQualifyingGroups(state.filters.filterType, rawData, messageGroups, domains)
+    : 0;
+
+  const sliderMax = isGroupFilter ? Math.max(qualifyingGroups, 1) : maxContacts;
+  const sliderMin = isGroupFilter ? 1 : 10;
+  const sliderStep = isGroupFilter ? 1 : 10;
+  // Clamp displayed value so the thumb stays in-range
+  const sliderValue = Math.min(state.filters.limit, sliderMax);
+
+  const handleFilterChange = (newType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null) => {
+    dispatch({ type: 'SET_FILTER_TYPE', payload: newType });
+
+    if (newType === 'messageGroups' || newType === 'organizations') {
+      const count = countQualifyingGroups(newType, rawData, messageGroups, domains);
+      dispatch({ type: 'SET_FILTER_LIMIT', payload: Math.max(count, 1) });
+    } else {
+      // Restore a sensible contact limit when leaving group mode
+      dispatch({ type: 'SET_FILTER_LIMIT', payload: DEFAULT_CONTACT_LIMIT });
+    }
   };
 
   const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -16,23 +62,14 @@ export function Controls() {
 
   const handleClearFilters = () => {
     dispatch({ type: 'SET_FILTER_TYPE', payload: null });
+    dispatch({ type: 'SET_FILTER_LIMIT', payload: DEFAULT_CONTACT_LIMIT });
     setSearchQuery('');
     dispatch({ type: 'SET_SEARCH_QUERY', payload: '' });
   };
 
   const handleResetZoom = () => {
-    // Call the resetZoom function exposed by Graph component
     (window as any).resetGraphZoom?.();
   };
-
-  const isGroupFilter = state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations';
-  const maxContacts = state.rawData?.stats.totalContacts || 500;
-  const maxGroups = isGroupFilter
-    ? (state.filters.filterType === 'messageGroups'
-        ? Object.keys(messageGroups?.groups ?? {}).length
-        : Object.keys(domains?.domain_groups ?? {}).length)
-    : maxContacts;
-  const sliderMax = isGroupFilter ? Math.max(maxGroups, 1) : maxContacts;
 
   return (
     <div className="controls">
@@ -102,15 +139,15 @@ export function Controls() {
       <div className="slider-group">
         <div className="slider-label">
           <span>{isGroupFilter ? 'Group limit:' : 'Contact limit:'}</span>
-          <span className="slider-value">{state.filters.limit}</span>
+          <span className="slider-value">{sliderValue}</span>
         </div>
         <input
           type="range"
           id="contact-limit"
-          min={isGroupFilter ? 1 : 10}
+          min={sliderMin}
           max={sliderMax}
-          value={state.filters.limit}
-          step={isGroupFilter ? 1 : 10}
+          value={sliderValue}
+          step={sliderStep}
           onChange={handleLimitChange}
         />
       </div>

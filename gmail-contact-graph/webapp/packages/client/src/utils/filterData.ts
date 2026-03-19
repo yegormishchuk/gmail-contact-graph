@@ -19,8 +19,12 @@ export function filterData(rawData: GraphData, filters: Filters): GraphData {
   // Sort by composite score
   nodes.sort((a, b) => b.compositeScore - a.compositeScore);
 
-  // Apply limit
-  nodes = nodes.slice(0, filters.limit);
+  // Apply contact limit only for non-group filters.
+  // Group filters apply their own limit (number of groups) inside useD3Simulation.
+  const isGroupFilter = filters.filterType === 'messageGroups' || filters.filterType === 'organizations';
+  if (!isGroupFilter) {
+    nodes = nodes.slice(0, filters.limit);
+  }
 
   // Add center node back
   const centerNode = rawData.nodes.find(n => n.isCenter);
