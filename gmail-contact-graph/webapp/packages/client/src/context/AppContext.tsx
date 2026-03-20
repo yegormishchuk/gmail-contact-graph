@@ -27,6 +27,7 @@ interface AppState {
   selectedGroupPosition: { x: number; y: number } | null;
   rankingTab: 'ranking' | 'filtered' | 'spam';
   panelVisible: boolean;
+  activeTab: 'graph' | 'stats';
 
   loading: boolean;
   error: string | null;
@@ -48,6 +49,7 @@ const initialState: AppState = {
   selectedGroupPosition: null,
   rankingTab: 'ranking',
   panelVisible: true,
+  activeTab: 'graph',
   loading: true,
   error: null,
 };
@@ -64,6 +66,7 @@ type Action =
   | { type: 'SELECT_GROUP'; payload: GroupHoverData | null; position?: { x: number; y: number } | null }
   | { type: 'SET_RANKING_TAB'; payload: 'ranking' | 'filtered' | 'spam' }
   | { type: 'TOGGLE_PANEL' }
+  | { type: 'SET_TAB'; payload: 'graph' | 'stats' }
   | { type: 'REMOVE_CONTACT'; payload: string }
   | { type: 'RESTORE_CONTACT'; payload: ExcludedContact }
   | { type: 'MARK_CONTACT_CLEAR'; payload: string };
@@ -97,6 +100,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, rankingTab: action.payload };
     case 'TOGGLE_PANEL':
       return { ...state, panelVisible: !state.panelVisible };
+    case 'SET_TAB':
+      return { ...state, activeTab: action.payload };
     case 'REMOVE_CONTACT': {
       if (!state.rawData) return state;
       const email = action.payload;
