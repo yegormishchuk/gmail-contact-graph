@@ -160,7 +160,7 @@ export function StatsPage() {
               <span className="stat-cell-value">{messageGroups.total_groups.toLocaleString()}</span>
             </div>
             <div className="stat-cell">
-              <span className="stat-cell-label">Avg group size</span>
+              <span className="stat-cell-label">Avg size (3+ members)</span>
               <span className="stat-cell-value">{avgGroupSize}</span>
             </div>
             {largestGroup && (
