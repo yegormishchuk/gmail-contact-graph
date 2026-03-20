@@ -24,7 +24,6 @@ interface UseD3SimulationOptions {
   limit: number;
   onNodeClick: (node: GraphNode, position: { x: number; y: number }) => void;
   onGroupHover?: (data: GroupHoverData | null, position?: { x: number; y: number }) => void;
-  onGroupClick?: (data: GroupHoverData | null, position?: { x: number; y: number }) => void;
 }
 
 export function useD3Simulation(options: UseD3SimulationOptions) {
@@ -180,11 +179,6 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
       // Store cell positions for focusGroup
       groupCellsRef.current = cells.map(c => ({ label: c.group.label, cx: c.cx, cy: c.cy, r: c.r }));
-
-      // SVG background click → deselect group
-      svg.on('click.groupDeselect', () => {
-        options.onGroupClick?.(null);
-      });
 
       // Center the layout in the viewport initially
       const totalWidth = cells.length > 0 ? Math.max(...cells.map(c => c.cx + c.r)) + PADDING : width;
@@ -396,9 +390,6 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           .on('click', function(event: MouseEvent) {
             // Don't trigger from contact node clicks (they stop propagation)
             event.stopPropagation();
-            if (options.onGroupClick) {
-              options.onGroupClick(groupHoverData, { x: event.clientX, y: event.clientY });
-            }
             // Pan camera to center on this group
             const vw = container.clientWidth;
             const vh = container.clientHeight;

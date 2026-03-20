@@ -26,10 +26,6 @@ export function Graph() {
     setHoveredGroupPos(position ?? null);
   }, []);
 
-  const handleGroupClick = useCallback((data: GroupHoverData | null, position?: { x: number; y: number }) => {
-    dispatch({ type: 'SELECT_GROUP', payload: data, position });
-  }, [dispatch]);
-
   const filteredData = useMemo(
     () => state.rawData ? filterData(state.rawData, state.filters) : null,
     [state.rawData, state.filters]
@@ -44,7 +40,6 @@ export function Graph() {
     limit: state.filters.limit,
     onNodeClick: handleNodeClick,
     onGroupHover: handleGroupHover,
-    onGroupClick: handleGroupClick,
     filterType: state.filters.filterType,
   });
 
@@ -54,9 +49,6 @@ export function Graph() {
     (window as any).focusGroup = focusGroup;
   }, [resetZoom, focusNode, focusGroup]);
 
-  // Show hover tooltip only when no group is persistently selected
-  const showHoverTooltip = !state.selectedGroup;
-
   return (
     <>
       <svg
@@ -64,7 +56,7 @@ export function Graph() {
         id="graph"
         style={{ width: '100%', height: '100%', display: 'block' }}
       />
-      {showHoverTooltip && <GroupTooltip data={hoveredGroupData} position={hoveredGroupPos} />}
+      <GroupTooltip data={hoveredGroupData} position={hoveredGroupPos} />
     </>
   );
 }
