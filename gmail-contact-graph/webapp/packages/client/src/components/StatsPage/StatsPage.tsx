@@ -29,6 +29,26 @@ export function StatsPage() {
   const topByReceived = contacts.reduce((best, n) => n.received > (best?.received ?? -1) ? n : best, contacts[0]);
   const topBySent = contacts.reduce((best, n) => n.sent > (best?.sent ?? -1) ? n : best, contacts[0]);
 
+  // Panel 3 — Organizations
+  const domainEntries = Object.entries(domains.domain_groups);
+  const top5Domains = [...domainEntries]
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 5);
+  const topByVolume = domainEntries.reduce<{ domain: string; total: number } | null>((best, [domain, users]) => {
+    const vol = users.reduce((s, u) => s + u.total, 0);
+    return best === null || vol > best.total ? { domain, total: vol } : best;
+  }, null);
+
+  // Panel 4 — Message Groups
+  const groupEntries = Object.entries(messageGroups.groups);
+  const largestGroup = groupEntries.reduce<{ subject: string; count: number } | null>((best, [subject, members]) => {
+    return best === null || members.length > best.count ? { subject, count: members.length } : best;
+  }, null);
+  const qualifyingGroups = groupEntries.filter(([, members]) => members.length >= MIN_GROUP_SIZE);
+  const avgGroupSize = qualifyingGroups.length === 0
+    ? '—'
+    : (qualifyingGroups.reduce((s, [, m]) => s + m.length, 0) / qualifyingGroups.length).toFixed(1);
+
   return (
     <div className="stats-page">
       <div className="stats-grid">
@@ -97,6 +117,57 @@ export function StatsPage() {
                 <span className="stat-cell-label">Top by sent</span>
                 <span className="stat-cell-value">{topBySent.sent.toLocaleString()}</span>
                 <span className="stat-cell-sub">{topBySent.name}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Panel 3 — Organizations */}
+        <div className="stat-panel">
+          <div className="stat-panel-title">Organizations</div>
+          <div className="stat-cells">
+            <div className="stat-cell">
+              <span className="stat-cell-label">Unique domains</span>
+              <span className="stat-cell-value">{domains.total_domains.toLocaleString()}</span>
+            </div>
+            {topByVolume && (
+              <div className="stat-cell">
+                <span className="stat-cell-label">Top by volume</span>
+                <span className="stat-cell-value">{topByVolume.total.toLocaleString()}</span>
+                <span className="stat-cell-sub">@{topByVolume.domain}</span>
+              </div>
+            )}
+          </div>
+          {top5Domains.length > 0 && (
+            <div className="stat-domain-list" style={{ marginTop: '20px' }}>
+              <div className="stat-cell-label" style={{ marginBottom: '8px' }}>Top domains by contacts</div>
+              {top5Domains.map(([domain, users]) => (
+                <div key={domain} className="stat-domain-item">
+                  <span className="stat-domain-name">@{domain}</span>
+                  <span className="stat-domain-count">{users.length} contacts</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Panel 4 — Message Groups */}
+        <div className="stat-panel">
+          <div className="stat-panel-title">Message Groups</div>
+          <div className="stat-cells">
+            <div className="stat-cell">
+              <span className="stat-cell-label">Total groups</span>
+              <span className="stat-cell-value">{messageGroups.total_groups.toLocaleString()}</span>
+            </div>
+            <div className="stat-cell">
+              <span className="stat-cell-label">Avg group size</span>
+              <span className="stat-cell-value">{avgGroupSize}</span>
+            </div>
+            {largestGroup && (
+              <div className="stat-cell" style={{ gridColumn: '1 / -1' }}>
+                <span className="stat-cell-label">Largest group</span>
+                <span className="stat-cell-value">{largestGroup.count} members</span>
+                <span className="stat-cell-sub" style={{ wordBreak: 'break-word' }}>{largestGroup.subject}</span>
               </div>
             )}
           </div>
