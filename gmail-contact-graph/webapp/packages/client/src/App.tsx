@@ -7,10 +7,12 @@ import { Controls } from './components/Controls';
 import { RankingPanel } from './components/RankingPanel';
 import { Legend } from './components/Legend';
 import { Tooltip } from './components/Tooltip';
+import { StatsPage } from './components/StatsPage';
 
 function AppContent() {
-  const { state, dispatch } = useAppContext();
+  const { state } = useAppContext();
   const { loading, error } = useGraphData();
+
   if (loading) {
     return (
       <div className="container">
@@ -30,13 +32,17 @@ function AppContent() {
   return (
     <div className="container">
       <Header />
-      <div id="graph-container">
+      <div
+        id="graph-container"
+        className={state.activeTab === 'stats' ? 'graph-tab-hidden' : ''}
+      >
         <Graph />
         <RankingPanel />
         <Controls />
         <Legend />
         {state.selectedNode && <Tooltip />}
       </div>
+      {state.activeTab === 'stats' && <StatsPage />}
     </div>
   );
 }
