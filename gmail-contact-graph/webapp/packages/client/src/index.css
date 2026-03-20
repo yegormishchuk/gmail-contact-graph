@@ -1159,7 +1159,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* Tab visibility */
-.graph-tab-hidden {
+#graph-container.graph-tab-hidden {
   visibility: hidden;
   pointer-events: none;
   position: absolute;
