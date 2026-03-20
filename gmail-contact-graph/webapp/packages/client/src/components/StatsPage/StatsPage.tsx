@@ -49,6 +49,12 @@ export function StatsPage() {
     ? '—'
     : (qualifyingGroups.reduce((s, [, m]) => s + m.length, 0) / qualifyingGroups.length).toFixed(1);
 
+  // Panel 5 — Spam
+  const excludedTotal = excludedContacts.reduce((s, c) => s + c.total, 0);
+  const spamPercent = totalExchanged === 0
+    ? '—'
+    : ((excludedTotal / totalExchanged) * 100).toFixed(1);
+
   return (
     <div className="stats-page">
       <div className="stats-grid">
@@ -171,6 +177,26 @@ export function StatsPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Panel 5 — Spam (hero) */}
+        <div className="stat-panel spam-panel">
+          <div className="stat-panel-title">Spam & Excluded</div>
+          <div className="stat-cells">
+            <div className="stat-cell">
+              <span className="stat-cell-label">Excluded contacts</span>
+              <span className="stat-cell-value spam-value">{excludedContacts.length.toLocaleString()}</span>
+            </div>
+            <div className="stat-cell">
+              <span className="stat-cell-label">Emails from excluded</span>
+              <span className="stat-cell-value spam-value">{excludedTotal.toLocaleString()}</span>
+            </div>
+            <div className="stat-cell">
+              <span className="stat-cell-label">% of all traffic</span>
+              <span className="stat-cell-value spam-value">{spamPercent}{spamPercent !== '—' ? '%' : ''}</span>
+            </div>
+          </div>
+          <div className="spam-tagline">contacts filtered from your graph</div>
         </div>
 
       </div>
