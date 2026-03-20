@@ -2,32 +2,25 @@ import React from 'react';
 import { useAppContext } from '../../context/AppContext';
 
 export function Header() {
-  const { state } = useAppContext();
-  const stats = state.rawData?.stats;
+  const { state, dispatch } = useAppContext();
 
   return (
     <header>
       <h1>Gmail Contact Graph</h1>
-      {stats && (
-        <div className="stats">
-          <div className="stat-item">
-            <span>Total contacts:</span>
-            <span className="stat-value">{stats.totalContacts.toLocaleString()}</span>
-          </div>
-          <div className="stat-item">
-            <span>Displayed:</span>
-            <span className="stat-value">{stats.displayedContacts.toLocaleString()}</span>
-          </div>
-          <div className="stat-item">
-            <span>Emails received:</span>
-            <span className="stat-value">{stats.totalReceived.toLocaleString()}</span>
-          </div>
-          <div className="stat-item">
-            <span>Emails sent:</span>
-            <span className="stat-value">{stats.totalSent.toLocaleString()}</span>
-          </div>
-        </div>
-      )}
+      <div className="header-tabs">
+        <button
+          className={`header-tab ${state.activeTab === 'graph' ? 'active' : ''}`}
+          onClick={() => dispatch({ type: 'SET_TAB', payload: 'graph' })}
+        >
+          Graph
+        </button>
+        <button
+          className={`header-tab ${state.activeTab === 'stats' ? 'active' : ''}`}
+          onClick={() => dispatch({ type: 'SET_TAB', payload: 'stats' })}
+        >
+          Statistics
+        </button>
+      </div>
     </header>
   );
 }
