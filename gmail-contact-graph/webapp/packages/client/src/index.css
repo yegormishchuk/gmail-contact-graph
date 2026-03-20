@@ -36,24 +36,6 @@ h1 {
     background-clip: text;
 }
 
-.stats {
-    display: flex;
-    gap: 30px;
-    margin-top: 10px;
-    font-size: 0.9rem;
-    color: #888;
-}
-
-.stat-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.stat-value {
-    color: #00d68f;
-    font-weight: 600;
-}
 
 #graph-container {
     flex: 1;

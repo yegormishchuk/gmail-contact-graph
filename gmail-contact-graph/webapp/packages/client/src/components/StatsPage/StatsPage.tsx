@@ -25,9 +25,9 @@ export function StatsPage() {
   const noReply = contacts.filter(n => n.sent > 0 && n.received === 0).length;
   const avgEmails = contacts.length === 0
     ? '—'
-    : (totalExchanged / contacts.length).toFixed(1);
-  const topByReceived = contacts.reduce((best, n) => n.received > (best?.received ?? -1) ? n : best, contacts[0]);
-  const topBySent = contacts.reduce((best, n) => n.sent > (best?.sent ?? -1) ? n : best, contacts[0]);
+    : (contacts.reduce((s, n) => s + n.received + n.sent, 0) / contacts.length).toFixed(1);
+  const topByReceived = contacts.reduce<typeof contacts[0] | null>((best, n) => best === null || n.received > best.received ? n : best, null);
+  const topBySent = contacts.reduce<typeof contacts[0] | null>((best, n) => best === null || n.sent > best.sent ? n : best, null);
 
   // Panel 3 — Organizations
   const domainEntries = Object.entries(domains.domain_groups);
