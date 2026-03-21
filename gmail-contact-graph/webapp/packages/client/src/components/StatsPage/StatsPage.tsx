@@ -57,9 +57,10 @@ export function StatsPage() {
   // Panel 5 — Spam
   const excludedCount = spamStats?.excludedCount ?? 0;
   const excludedTotal = spamStats?.excludedTotal ?? 0;
-  const spamPercent = totalExchanged === 0 || spamStats === null
+  const allTraffic = totalExchanged + excludedTotal;
+  const spamPercent = allTraffic === 0 || spamStats === null
     ? '—'
-    : ((excludedTotal / totalExchanged) * 100).toFixed(1);
+    : ((excludedTotal / allTraffic) * 100).toFixed(1);
 
   return (
     <div className="stats-page">

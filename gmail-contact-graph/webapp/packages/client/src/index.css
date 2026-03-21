@@ -1226,8 +1226,6 @@ header {
 
 .stat-panel.spam-panel {
   grid-column: 1 / -1;
-  background: rgba(251, 191, 36, 0.08);
-  border-color: rgba(251, 191, 36, 0.35);
 }
 
 .stat-panel-title {
@@ -1238,9 +1236,6 @@ header {
   letter-spacing: 0.5px;
 }
 
-.stat-panel.spam-panel .stat-panel-title {
-  color: rgba(251, 191, 36, 0.9);
-}
 
 /* Metric cells grid inside a panel */
 .stat-cells {
@@ -1272,7 +1267,6 @@ header {
 
 .stat-cell-value.spam-value {
   font-size: 2rem;
-  color: #fbbf24;
 }
 
 .stat-cell-sub {
@@ -1285,7 +1279,7 @@ header {
 .spam-tagline {
   margin-top: 16px;
   font-size: 12px;
-  color: rgba(251, 191, 36, 0.6);
+  color: #888;
   letter-spacing: 0.3px;
 }
 
