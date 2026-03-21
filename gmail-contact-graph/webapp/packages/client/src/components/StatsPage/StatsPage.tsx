@@ -1,11 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { api } from '../../api/client';
+import type { SpamStats } from '@gmail-graph/shared';
 
 const MIN_GROUP_SIZE = 3;
 
 export function StatsPage() {
   const { state } = useAppContext();
-  const { rawData, domains, messageGroups, excludedContacts } = state;
+  const { rawData, domains, messageGroups } = state;
+
+  const [spamStats, setSpamStats] = useState<SpamStats | null>(null);
+
+  useEffect(() => {
+    api.getSpamStats().then(setSpamStats).catch(() => {});
+  }, []);
 
   if (!rawData || !rawData.stats || !domains || !messageGroups) return null;
 
@@ -19,10 +27,7 @@ export function StatsPage() {
     : (stats.totalSent / stats.totalReceived).toFixed(2);
   const displayedCount = contacts.length;
 
-  // Panel 2
-  const twoWay = contacts.filter(n => n.received > 0 && n.sent > 0).length;
-  const onlyReceived = contacts.filter(n => n.received > 0 && n.sent === 0).length;
-  const noReply = contacts.filter(n => n.sent > 0 && n.received === 0).length;
+  // Panel 2 — Top Contacts
   const avgEmails = contacts.length === 0
     ? '—'
     : (contacts.reduce((s, n) => s + n.received + n.sent, 0) / contacts.length).toFixed(1);
@@ -50,8 +55,9 @@ export function StatsPage() {
     : (qualifyingGroups.reduce((s, [, m]) => s + m.length, 0) / qualifyingGroups.length).toFixed(1);
 
   // Panel 5 — Spam
-  const excludedTotal = excludedContacts.reduce((s, c) => s + c.total, 0);
-  const spamPercent = totalExchanged === 0
+  const excludedCount = spamStats?.excludedCount ?? 0;
+  const excludedTotal = spamStats?.excludedTotal ?? 0;
+  const spamPercent = totalExchanged === 0 || spamStats === null
     ? '—'
     : ((excludedTotal / totalExchanged) * 100).toFixed(1);
 
@@ -62,6 +68,7 @@ export function StatsPage() {
         {/* Panel 1 — Overview */}
         <div className="stat-panel">
           <div className="stat-panel-title">Overview</div>
+          <div className="stat-panel-subtitle">non-spam contacts only</div>
           <div className="stat-cells">
             <div className="stat-cell">
               <span className="stat-cell-label">Total contacts</span>
@@ -90,23 +97,11 @@ export function StatsPage() {
           </div>
         </div>
 
-        {/* Panel 2 — Contact Patterns */}
+        {/* Panel 2 — Top Contacts */}
         <div className="stat-panel">
-          <div className="stat-panel-title">Contact Patterns</div>
+          <div className="stat-panel-title">Top Contacts</div>
+          <div className="stat-panel-subtitle">non-spam contacts only</div>
           <div className="stat-cells">
-            <div className="stat-cell">
-              <span className="stat-cell-label">Two-way</span>
-              <span className="stat-cell-value">{twoWay.toLocaleString()}</span>
-            </div>
-            <div className="stat-cell">
-              <span className="stat-cell-label">Only received</span>
-              <span className="stat-cell-value">{onlyReceived.toLocaleString()}</span>
-            </div>
-            <div className="stat-cell">
-              <span className="stat-cell-label">No reply</span>
-              <span className="stat-cell-value">{noReply.toLocaleString()}</span>
-              <span className="stat-cell-sub">you emailed, no reply</span>
-            </div>
             <div className="stat-cell">
               <span className="stat-cell-label">Avg emails / contact</span>
               <span className="stat-cell-value">{avgEmails}</span>
@@ -185,7 +180,7 @@ export function StatsPage() {
           <div className="stat-cells">
             <div className="stat-cell">
               <span className="stat-cell-label">Excluded contacts</span>
-              <span className="stat-cell-value spam-value">{excludedContacts.length.toLocaleString()}</span>
+              <span className="stat-cell-value spam-value">{excludedCount.toLocaleString()}</span>
             </div>
             <div className="stat-cell">
               <span className="stat-cell-label">Emails from excluded</span>

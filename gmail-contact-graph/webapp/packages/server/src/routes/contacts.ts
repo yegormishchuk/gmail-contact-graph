@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   loadContactsFromFiltered,
   loadExcludedContacts,
+  loadSpamStats,
   markContactClear,
   markContactNotHuman,
   restoreContact,
@@ -25,6 +26,11 @@ router.get('/contacts', (req, res) => {
 router.get('/excluded-contacts', (req, res) => {
   const excluded = loadExcludedContacts();
   res.json(excluded);
+});
+
+router.get('/spam-stats', (req, res) => {
+  const stats = loadSpamStats();
+  res.json(stats);
 });
 
 router.post('/contacts/mark-clear', (req, res) => {

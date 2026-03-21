@@ -61,6 +61,20 @@ export function loadExcludedContacts(): ExcludedContact[] {
   return results;
 }
 
+export function loadSpamStats(): { excludedCount: number; excludedTotal: number } {
+  const db = getDatabase();
+  const stmt = db.prepare(`
+    SELECT COUNT(*) as count, COALESCE(SUM(c.received + c.sent), 0) as total
+    FROM contacts c
+    LEFT JOIN contacts_filtered cf ON cf.contact_id = c.id
+    WHERE cf.contact_id IS NULL
+  `);
+  stmt.step();
+  const row = stmt.getAsObject() as unknown as { count: number; total: number };
+  stmt.free();
+  return { excludedCount: row.count as number, excludedTotal: row.total as number };
+}
+
 export function markContactClear(email: string): void {
   const db = getDatabase();
   db.run('UPDATE contacts_filtered SET not_clear = 0 WHERE contact_id = (SELECT id FROM contacts WHERE email = ?)', [email]);

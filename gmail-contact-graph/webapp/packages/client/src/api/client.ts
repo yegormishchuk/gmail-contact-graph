@@ -3,6 +3,7 @@ import type {
   DomainGroups,
   MessageGroups,
   ExcludedContact,
+  SpamStats,
   ApiSuccessResponse,
 } from '@gmail-graph/shared';
 
@@ -33,6 +34,7 @@ export const api = {
     return data;
   }),
   getExcludedContacts: () => fetchJson<ExcludedContact[]>('/excluded-contacts'),
+  getSpamStats: () => fetchJson<SpamStats>('/spam-stats'),
 
   markClear: (email: string) =>
     fetchJson<ApiSuccessResponse>('/contacts/mark-clear', {
