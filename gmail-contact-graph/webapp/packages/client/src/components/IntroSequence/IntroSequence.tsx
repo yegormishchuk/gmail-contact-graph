@@ -147,7 +147,7 @@ export function IntroSequence({ onComplete }: { onComplete: () => void }) {
       timersRef.current.push(t3);
     }, totalDelay + COLOR_MS);
 
-    timersRef.current = [t1, t2];
+    timersRef.current.push(t1, t2);
   }
 
   return (
