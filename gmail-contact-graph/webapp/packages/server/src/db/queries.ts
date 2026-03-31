@@ -9,6 +9,11 @@ export interface DbContact {
   not_clear: number;
 }
 
+interface IntroContact {
+  name: string;
+  email: string;
+}
+
 export function loadContactsFromFiltered(): ContactFiltered[] {
   const db = getDatabase();
   const stmt = db.prepare(`
@@ -111,7 +116,7 @@ export function restoreContact(email: string): boolean {
   return true;
 }
 
-export function loadAllContacts(): { contacts: { name: string; email: string }[]; spamEmails: string[] } {
+export function loadAllContacts(): { contacts: IntroContact[]; excludedEmails: string[] } {
   const db = getDatabase();
 
   const contactsStmt = db.prepare(`
@@ -120,27 +125,27 @@ export function loadAllContacts(): { contacts: { name: string; email: string }[]
     WHERE c.not_spam = 1
     ORDER BY (c.received + c.sent) DESC
   `);
-  const contacts: { name: string; email: string }[] = [];
+  const contacts: IntroContact[] = [];
   while (contactsStmt.step()) {
-    const row = contactsStmt.getAsObject() as unknown as { name: string; email: string };
+    const row = contactsStmt.getAsObject() as unknown as IntroContact;
     contacts.push({ name: row.name || '', email: row.email });
   }
   contactsStmt.free();
 
-  const spamStmt = db.prepare(`
+  const excludedStmt = db.prepare(`
     SELECT c.email
     FROM contacts c
     LEFT JOIN contacts_filtered cf ON cf.contact_id = c.id
     WHERE c.not_spam = 1 AND cf.contact_id IS NULL
   `);
-  const spamEmails: string[] = [];
-  while (spamStmt.step()) {
-    const row = spamStmt.getAsObject() as unknown as { email: string };
-    spamEmails.push(row.email);
+  const excludedEmails: string[] = [];
+  while (excludedStmt.step()) {
+    const row = excludedStmt.getAsObject() as unknown as { email: string };
+    excludedEmails.push(row.email);
   }
-  spamStmt.free();
+  excludedStmt.free();
 
-  return { contacts, spamEmails };
+  return { contacts, excludedEmails };
 }
 
 export function groupContactsByDomain(contacts: ContactFiltered[]): Record<string, ContactFiltered[]> {
