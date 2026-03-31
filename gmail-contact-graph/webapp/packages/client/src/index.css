@@ -1217,8 +1217,8 @@ header {
 
 /* Stat panel */
 .stat-panel {
-  background: rgba(0, 0, 0, 0.85);
-  border: 1px solid rgba(0, 214, 143, 0.25);
+  background: rgba(28, 28, 28, 0.9);
+  border: 1px solid rgba(0, 214, 143, 0.32);
   border-radius: 12px;
   backdrop-filter: blur(10px);
   padding: 20px 24px;
