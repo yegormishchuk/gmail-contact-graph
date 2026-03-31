@@ -24,8 +24,11 @@ export function IntroSequence({ onComplete }: { onComplete: () => void }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'animating'>('loading');
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
   const simulationRef = useRef<d3.Simulation<IntroContact, undefined> | null>(null);
   const excludedEmailsRef = useRef<Set<string>>(new Set());
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     api.getAllContacts()
@@ -76,10 +79,11 @@ export function IntroSequence({ onComplete }: { onComplete: () => void }) {
 
         setPhase('ready');
       })
-      .catch(() => onComplete());
+      .catch(() => onCompleteRef.current());
 
     return () => {
       simulationRef.current?.stop();
+      timersRef.current.forEach(clearTimeout);
     };
   }, []);
 
@@ -123,7 +127,7 @@ export function IntroSequence({ onComplete }: { onComplete: () => void }) {
 
     const totalDelay = excludedEls.length * STAGGER_MS + FADE_MS + PAUSE_MS;
 
-    setTimeout(() => {
+    const t1 = setTimeout(() => {
       svg
         .selectAll<SVGCircleElement, IntroContact>('g.intro-node circle')
         .transition()
@@ -131,16 +135,19 @@ export function IntroSequence({ onComplete }: { onComplete: () => void }) {
         .attr('fill', ACCENT);
     }, totalDelay);
 
-    setTimeout(() => {
+    const t2 = setTimeout(() => {
       if (overlayRef.current) {
         overlayRef.current.style.transition = `opacity ${OVERLAY_FADE_MS}ms ease`;
         overlayRef.current.style.opacity = '0';
       }
-      setTimeout(() => {
+      const t3 = setTimeout(() => {
         localStorage.setItem('intro_seen', 'true');
-        onComplete();
+        onCompleteRef.current();
       }, OVERLAY_FADE_MS);
+      timersRef.current.push(t3);
     }, totalDelay + COLOR_MS);
+
+    timersRef.current = [t1, t2];
   }
 
   return (
