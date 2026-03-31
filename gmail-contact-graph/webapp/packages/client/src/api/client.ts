@@ -35,6 +35,8 @@ export const api = {
   }),
   getExcludedContacts: () => fetchJson<ExcludedContact[]>('/excluded-contacts'),
   getSpamStats: () => fetchJson<SpamStats>('/spam-stats'),
+  getAllContacts: () =>
+    fetchJson<{ contacts: { name: string; email: string }[]; excludedEmails: string[] }>('/contacts/all'),
 
   markClear: (email: string) =>
     fetchJson<ApiSuccessResponse>('/contacts/mark-clear', {
