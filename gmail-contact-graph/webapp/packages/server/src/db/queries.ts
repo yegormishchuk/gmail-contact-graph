@@ -111,6 +111,38 @@ export function restoreContact(email: string): boolean {
   return true;
 }
 
+export function loadAllContacts(): { contacts: { name: string; email: string }[]; spamEmails: string[] } {
+  const db = getDatabase();
+
+  const contactsStmt = db.prepare(`
+    SELECT c.name, c.email
+    FROM contacts c
+    WHERE c.not_spam = 1
+    ORDER BY (c.received + c.sent) DESC
+  `);
+  const contacts: { name: string; email: string }[] = [];
+  while (contactsStmt.step()) {
+    const row = contactsStmt.getAsObject() as unknown as { name: string; email: string };
+    contacts.push({ name: row.name || '', email: row.email });
+  }
+  contactsStmt.free();
+
+  const spamStmt = db.prepare(`
+    SELECT c.email
+    FROM contacts c
+    LEFT JOIN contacts_filtered cf ON cf.contact_id = c.id
+    WHERE c.not_spam = 1 AND cf.contact_id IS NULL
+  `);
+  const spamEmails: string[] = [];
+  while (spamStmt.step()) {
+    const row = spamStmt.getAsObject() as unknown as { email: string };
+    spamEmails.push(row.email);
+  }
+  spamStmt.free();
+
+  return { contacts, spamEmails };
+}
+
 export function groupContactsByDomain(contacts: ContactFiltered[]): Record<string, ContactFiltered[]> {
   const personalDomains = new Set(['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'mail.com', 'protonmail.com']);
   const groups: Record<string, ContactFiltered[]> = {};
