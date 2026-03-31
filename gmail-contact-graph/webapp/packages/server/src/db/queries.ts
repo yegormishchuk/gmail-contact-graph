@@ -1,5 +1,5 @@
 import { getDatabase, saveDatabase } from './index.js';
-import type { ContactFiltered, ExcludedContact } from '@gmail-graph/shared';
+import type { ContactFiltered, ExcludedContact, Contact } from '@gmail-graph/shared';
 
 export interface DbContact {
   name: string;
@@ -9,10 +9,7 @@ export interface DbContact {
   not_clear: number;
 }
 
-interface IntroContact {
-  name: string;
-  email: string;
-}
+export type IntroContact = Pick<Contact, 'name' | 'email'>;
 
 export function loadContactsFromFiltered(): ContactFiltered[] {
   const db = getDatabase();
