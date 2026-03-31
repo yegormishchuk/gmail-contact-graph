@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { useGraphData } from './hooks/useGraphData';
 import { Graph } from './components/Graph';
@@ -8,6 +8,7 @@ import { RankingPanel } from './components/RankingPanel';
 import { Legend } from './components/Legend';
 import { Tooltip } from './components/Tooltip';
 import { StatsPage } from './components/StatsPage';
+import { IntroSequence } from './components/IntroSequence';
 
 function AppContent() {
   const { state } = useAppContext();
@@ -48,9 +49,12 @@ function AppContent() {
 }
 
 function App() {
+  const [showIntro, setShowIntro] = useState(!localStorage.getItem('intro_seen'));
+
   return (
     <AppProvider>
       <AppContent />
+      {showIntro && <IntroSequence onComplete={() => setShowIntro(false)} />}
     </AppProvider>
   );
 }
