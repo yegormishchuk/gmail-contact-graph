@@ -6,6 +6,7 @@ import {
   markContactClear,
   markContactNotHuman,
   restoreContact,
+  loadAllContacts,
 } from '../db/queries.js';
 import { clearCache } from './graph.js';
 
@@ -31,6 +32,11 @@ router.get('/excluded-contacts', (req, res) => {
 router.get('/spam-stats', (req, res) => {
   const stats = loadSpamStats();
   res.json(stats);
+});
+
+router.get('/contacts/all', (req, res) => {
+  const result = loadAllContacts();
+  res.json(result);
 });
 
 router.post('/contacts/mark-clear', (req, res) => {
