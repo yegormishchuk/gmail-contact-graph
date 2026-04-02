@@ -11,7 +11,7 @@ interface IntroContact {
   vy?: number;
 }
 
-const NODE_RADIUS = 14;
+const NODE_RADIUS = 5;
 const GREY = '#4a4a4a';
 const ACCENT = '#00d68f';
 const STAGGER_MS = 80;
@@ -43,9 +43,10 @@ export function IntroSequence({ onComplete }: { onComplete: () => void }) {
         const nodes: IntroContact[] = contacts.map(c => ({ ...c }));
 
         const simulation = d3.forceSimulation<IntroContact>(nodes)
-          .force('charge', d3.forceManyBody().strength(-60))
+          .force('charge', d3.forceManyBody().strength(-15))
           .force('center', d3.forceCenter(W / 2, H / 2))
-          .force('collision', d3.forceCollide(NODE_RADIUS + 6));
+          .force('collision', d3.forceCollide(NODE_RADIUS + 2))
+          .alphaDecay(0.015);
 
         simulationRef.current = simulation;
 
@@ -59,17 +60,6 @@ export function IntroSequence({ onComplete }: { onComplete: () => void }) {
         nodeGroups.append('circle')
           .attr('r', NODE_RADIUS)
           .attr('fill', GREY);
-
-        nodeGroups.append('text')
-          .text(d => {
-            const label = d.name || d.email.split('@')[0];
-            return label.length > 16 ? label.slice(0, 15) + '…' : label;
-          })
-          .attr('text-anchor', 'middle')
-          .attr('dy', NODE_RADIUS + 14)
-          .attr('fill', '#666')
-          .attr('font-size', '10px')
-          .attr('pointer-events', 'none');
 
         simulation.on('tick', () => {
           svg
@@ -114,11 +104,6 @@ export function IntroSequence({ onComplete }: { onComplete: () => void }) {
         .delay(i * STAGGER_MS)
         .duration(FADE_MS)
         .attr('r', 0)
-        .style('opacity', 0);
-      g.select('text')
-        .transition()
-        .delay(i * STAGGER_MS)
-        .duration(FADE_MS)
         .style('opacity', 0);
       g.transition()
         .delay(i * STAGGER_MS + FADE_MS)
