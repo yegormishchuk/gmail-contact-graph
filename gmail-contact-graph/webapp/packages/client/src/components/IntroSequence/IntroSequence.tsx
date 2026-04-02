@@ -11,7 +11,7 @@ interface IntroContact {
   vy?: number;
 }
 
-const NODE_RADIUS = 5;
+const NODE_RADIUS = 7;
 const GREY = '#4a4a4a';
 const ACCENT = '#00d68f';
 const STAGGER_MS = 20;
@@ -45,7 +45,7 @@ export function IntroSequence({ onComplete }: { onComplete: () => void }) {
         const simulation = d3.forceSimulation<IntroContact>(nodes)
           .force('x', d3.forceX(W / 2).strength(0.06))
           .force('y', d3.forceY(H / 2).strength(0.06))
-          .force('collision', d3.forceCollide(NODE_RADIUS + 1))
+          .force('collision', d3.forceCollide(NODE_RADIUS + 5))
           .alphaDecay(0.01);
 
         simulationRef.current = simulation;
