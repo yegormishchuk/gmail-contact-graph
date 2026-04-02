@@ -119,7 +119,6 @@ export function loadAllContacts(): { contacts: IntroContact[]; excludedEmails: s
   const contactsStmt = db.prepare(`
     SELECT c.name, c.email
     FROM contacts c
-    WHERE c.not_spam = 1
     ORDER BY (c.received + c.sent) DESC
   `);
   const contacts: IntroContact[] = [];
@@ -133,7 +132,7 @@ export function loadAllContacts(): { contacts: IntroContact[]; excludedEmails: s
     SELECT c.email
     FROM contacts c
     LEFT JOIN contacts_filtered cf ON cf.contact_id = c.id
-    WHERE c.not_spam = 1 AND cf.contact_id IS NULL
+    WHERE cf.contact_id IS NULL
   `);
   const excludedEmails: string[] = [];
   while (excludedStmt.step()) {
