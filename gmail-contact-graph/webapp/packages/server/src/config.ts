@@ -13,6 +13,7 @@ export const config = {
   DEFAULT_DB_FILE: process.env.MAILS_DB_FILE || path.join(DATA_DIR, 'mails.db'),
 
   MY_EMAIL: (process.env.USER_EMAIL || '').toLowerCase(),
+  MY_NAME: process.env.USER_NAME || (process.env.USER_EMAIL || '').split('@')[0] || 'Me',
 
   // Server
   PORT: parseInt(process.env.PORT || '5000', 10),
