@@ -6,6 +6,9 @@ interface RankingConfig {
   coefficient: number;
 }
 
+// Assigns ordinal ranks to contacts by a given metric (descending).
+// Contacts with equal values get the same rank; the next distinct value
+// skips ranks accordingly (standard competition ranking: 1,1,3,4,...).
 function assignRanks(
   contacts: ContactFiltered[],
   valueFn: (c: ContactFiltered) => number
@@ -41,6 +44,18 @@ export interface CompositeScoreData {
   rankings: RankingInfo[];
 }
 
+// Computes a composite score for every contact across all configured metrics.
+//
+// Algorithm per metric:
+//   points = (totalContacts - rank + 1)   — rank 1 gets N pts, last gets 1 pt
+//   weightedPoints = points * coefficient
+//   compositeScore += weightedPoints
+//
+// Default metrics (RANKING_CONFIGS):
+//   sent     × 1.0  — emails you sent to the contact
+//   received × 0.2  — emails you received from the contact
+//
+// The resulting score is used to size/sort nodes in the graph.
 export function calculateCompositeScores(
   contacts: ContactFiltered[]
 ): Map<string, CompositeScoreData> {
@@ -49,7 +64,6 @@ export function calculateCompositeScores(
   const totalContacts = contacts.length;
   const scores = new Map<string, CompositeScoreData>();
 
-  // Initialize
   for (const c of contacts) {
     scores.set(c.email, { score: 0, rankings: [] });
   }
