@@ -51,6 +51,10 @@ export interface CompositeScoreData {
 //   weightedPoints = points * coefficient
 //   compositeScore += weightedPoints
 //
+// Meetings bonus (added after rank-based scoring):
+//   meetingsPoints = (contactMeetings / totalMeetings) * 300
+//   compositeScore += meetingsPoints
+//
 // Default metrics (RANKING_CONFIGS):
 //   sent     × 1.0  — emails you sent to the contact
 //   received × 0.2  — emails you received from the contact
@@ -89,6 +93,20 @@ export function calculateCompositeScores(
         name: rankConfig.name,
         rank,
         points: weightedPoints,
+      });
+    }
+  }
+
+  const totalMeetings = contacts.reduce((sum, c) => sum + c.meetings_count, 0);
+  if (totalMeetings > 0) {
+    for (const contact of contacts) {
+      const data = scores.get(contact.email)!;
+      const meetingsPoints = (contact.meetings_count / totalMeetings) * 300;
+      data.score += meetingsPoints;
+      data.rankings.push({
+        name: 'meetings',
+        rank: 0,
+        points: meetingsPoints,
       });
     }
   }

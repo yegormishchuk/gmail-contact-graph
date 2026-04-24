@@ -6,6 +6,7 @@ export interface DbContact {
   email: string;
   received: number;
   sent: number;
+  meetings: number;
   not_clear: number;
 }
 
@@ -14,7 +15,7 @@ export type IntroContact = Pick<Contact, 'name' | 'email'>;
 export function loadContactsFromFiltered(): ContactFiltered[] {
   const db = getDatabase();
   const stmt = db.prepare(`
-    SELECT c.name, c.email, c.received, c.sent, cf.not_clear
+    SELECT c.name, c.email, c.received, c.sent, c.meetings, cf.not_clear
     FROM contacts_filtered cf
     JOIN contacts c ON c.id = cf.contact_id
     ORDER BY (c.received + c.sent) DESC
@@ -29,6 +30,7 @@ export function loadContactsFromFiltered(): ContactFiltered[] {
       received_count: row.received as number,
       sent_count: row.sent as number,
       total_count: (row.received as number) + (row.sent as number),
+      meetings_count: row.meetings as number,
       not_clear: row.not_clear === 1,
     });
   }
