@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 
 /// Take an iterator of raw lines and return logical lines with continuations folded in.
 pub fn unfold_lines<I: IntoIterator<Item = String>>(lines: I) -> Vec<String> {
@@ -46,6 +47,28 @@ pub fn split_property(line: &str) -> Option<(String, HashMap<String, String>, St
         }
     }
     Some((name, params, value))
+}
+
+/// Parse an ICS date/datetime value to a Unix timestamp (UTC seconds).
+pub fn parse_ics_date(raw: &str) -> Option<i64> {
+    let s = raw.trim();
+    // YYYYMMDDTHHMMSSZ
+    if s.len() == 16 && s.ends_with('Z') {
+        let dt = NaiveDateTime::parse_from_str(&s[..15], "%Y%m%dT%H%M%S").ok()?;
+        return Some(Utc.from_utc_datetime(&dt).timestamp());
+    }
+    // YYYYMMDDTHHMMSS (floating, treat as UTC)
+    if s.len() == 15 {
+        let dt = NaiveDateTime::parse_from_str(s, "%Y%m%dT%H%M%S").ok()?;
+        return Some(Utc.from_utc_datetime(&dt).timestamp());
+    }
+    // YYYYMMDD (all-day)
+    if s.len() == 8 {
+        let date = NaiveDate::parse_from_str(s, "%Y%m%d").ok()?;
+        let dt = date.and_hms_opt(0, 0, 0)?;
+        return Some(Utc.from_utc_datetime(&dt).timestamp());
+    }
+    None
 }
 
 #[cfg(test)]
@@ -110,5 +133,31 @@ mod tests {
     fn split_property_returns_none_for_no_colon() {
         assert!(split_property("BEGIN:VEVENT").is_some());
         assert!(split_property("malformed").is_none());
+    }
+
+    #[test]
+    fn parse_ics_date_utc() {
+        // 2024-09-17T18:00:00Z = 1726596000
+        let ts = parse_ics_date("20240917T180000Z").unwrap();
+        assert_eq!(ts, 1726596000);
+    }
+
+    #[test]
+    fn parse_ics_date_floating_treated_as_utc() {
+        let ts = parse_ics_date("20240917T180000").unwrap();
+        assert_eq!(ts, 1726596000);
+    }
+
+    #[test]
+    fn parse_ics_date_all_day_is_midnight_utc() {
+        // 2024-09-17T00:00:00Z = 1726531200
+        let ts = parse_ics_date("20240917").unwrap();
+        assert_eq!(ts, 1726531200);
+    }
+
+    #[test]
+    fn parse_ics_date_returns_none_for_garbage() {
+        assert!(parse_ics_date("not-a-date").is_none());
+        assert!(parse_ics_date("").is_none());
     }
 }
