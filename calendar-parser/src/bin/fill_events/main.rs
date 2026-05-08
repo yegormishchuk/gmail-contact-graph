@@ -1,3 +1,4 @@
+mod db;
 mod models;
 mod parsing;
 mod recurrence;
