@@ -1,4 +1,5 @@
 mod models;
+mod parsing;
 
 #[tokio::main]
 async fn main() {
