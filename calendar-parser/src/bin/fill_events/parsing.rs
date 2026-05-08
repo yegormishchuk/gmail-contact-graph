@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
-use crate::models::Attendee;
+use crate::models::{Attendee, CalendarEvent};
 
 /// Take an iterator of raw lines and return logical lines with continuations folded in.
 pub fn unfold_lines<I: IntoIterator<Item = String>>(lines: I) -> Vec<String> {
@@ -111,6 +111,33 @@ pub fn build_attendee(params: &HashMap<String, String>, value: &str) -> Attendee
         role: params.get("ROLE").cloned().unwrap_or_default(),
         partstat: params.get("PARTSTAT").cloned().unwrap_or_default(),
         cutype: params.get("CUTYPE").cloned().unwrap_or_default(),
+    }
+}
+
+/// Apply a single ICS property to a CalendarEvent.
+pub fn apply_property(line: &str, event: &mut CalendarEvent) {
+    let Some((name, params, value)) = split_property(line) else { return; };
+    match name.as_str() {
+        "UID" => event.uid = value,
+        "SUMMARY" => event.summary = unescape_text(&value),
+        "DESCRIPTION" => event.description = unescape_text(&value),
+        "LOCATION" => event.location = unescape_text(&value),
+        "STATUS" => event.status = value,
+        "TRANSP" => event.transp = value,
+        "SEQUENCE" => event.sequence = value.trim().parse().unwrap_or(0),
+        "DTSTART" => event.dtstart = parse_ics_date(&value),
+        "DTEND" => event.dtend = parse_ics_date(&value),
+        "CREATED" => event.created = parse_ics_date(&value),
+        "LAST-MODIFIED" => event.last_modified = parse_ics_date(&value),
+        "RRULE" => event.rrule = value,
+        "ORGANIZER" => {
+            event.organizer_email = strip_mailto(&value).to_ascii_lowercase();
+            event.organizer_name = params.get("CN").cloned().unwrap_or_default();
+        }
+        "ATTENDEE" => {
+            event.attendees.push(build_attendee(&params, &value));
+        }
+        _ => {}
     }
 }
 
@@ -250,5 +277,58 @@ mod tests {
         assert_eq!(a.email, "bare@x.com");
         assert!(a.name.is_empty());
         assert!(a.role.is_empty());
+    }
+
+    #[test]
+    fn apply_property_sets_summary() {
+        let mut e = CalendarEvent::default();
+        apply_property("SUMMARY:My event", &mut e);
+        assert_eq!(e.summary, "My event");
+    }
+
+    #[test]
+    fn apply_property_sets_dtstart() {
+        let mut e = CalendarEvent::default();
+        apply_property("DTSTART:20240917T180000Z", &mut e);
+        assert_eq!(e.dtstart, Some(1726596000));
+    }
+
+    #[test]
+    fn apply_property_unescapes_description() {
+        let mut e = CalendarEvent::default();
+        apply_property("DESCRIPTION:hello\\nworld\\, ok", &mut e);
+        assert_eq!(e.description, "hello\nworld, ok");
+    }
+
+    #[test]
+    fn apply_property_collects_attendees() {
+        let mut e = CalendarEvent::default();
+        apply_property(
+            "ATTENDEE;CN=Foo;ROLE=REQ-PARTICIPANT:mailto:Foo@X.com",
+            &mut e,
+        );
+        apply_property(
+            "ATTENDEE;CN=Bar:mailto:bar@x.com",
+            &mut e,
+        );
+        assert_eq!(e.attendees.len(), 2);
+        assert_eq!(e.attendees[0].email, "foo@x.com");
+        assert_eq!(e.attendees[0].name, "Foo");
+        assert_eq!(e.attendees[1].email, "bar@x.com");
+    }
+
+    #[test]
+    fn apply_property_sets_organizer() {
+        let mut e = CalendarEvent::default();
+        apply_property("ORGANIZER;CN=Me:mailto:me@x.com", &mut e);
+        assert_eq!(e.organizer_email, "me@x.com");
+        assert_eq!(e.organizer_name, "Me");
+    }
+
+    #[test]
+    fn apply_property_sets_rrule() {
+        let mut e = CalendarEvent::default();
+        apply_property("RRULE:FREQ=WEEKLY;BYDAY=MO", &mut e);
+        assert_eq!(e.rrule, "FREQ=WEEKLY;BYDAY=MO");
     }
 }
