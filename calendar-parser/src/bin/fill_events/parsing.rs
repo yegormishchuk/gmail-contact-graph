@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
-use crate::models::{Attendee, CalendarEvent};
+use crate::models::{Attendee, CalendarEvent, ParseState};
 
 /// Take an iterator of raw lines and return logical lines with continuations folded in.
 pub fn unfold_lines<I: IntoIterator<Item = String>>(lines: I) -> Vec<String> {
@@ -139,6 +139,38 @@ pub fn apply_property(line: &str, event: &mut CalendarEvent) {
         }
         _ => {}
     }
+}
+
+/// Extract calendar events from an iterator of unfolded lines.
+/// Detects BEGIN:VEVENT/END:VEVENT boundaries and builds CalendarEvent structs.
+pub fn extract_events<I: IntoIterator<Item = String>>(
+    lines: I,
+    source_file: &str,
+) -> Vec<CalendarEvent> {
+    let mut out = Vec::new();
+    let mut state = ParseState::Seeking;
+    let mut current = CalendarEvent::default();
+
+    for line in lines {
+        match state {
+            ParseState::Seeking => {
+                if line.trim() == "BEGIN:VEVENT" {
+                    current = CalendarEvent::default();
+                    current.source_file = source_file.to_string();
+                    state = ParseState::InEvent;
+                }
+            }
+            ParseState::InEvent => {
+                if line.trim() == "END:VEVENT" {
+                    out.push(std::mem::take(&mut current));
+                    state = ParseState::Seeking;
+                } else {
+                    apply_property(&line, &mut current);
+                }
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -330,5 +362,47 @@ mod tests {
         let mut e = CalendarEvent::default();
         apply_property("RRULE:FREQ=WEEKLY;BYDAY=MO", &mut e);
         assert_eq!(e.rrule, "FREQ=WEEKLY;BYDAY=MO");
+    }
+
+    #[test]
+    fn extract_events_finds_two_events() {
+        use crate::models::CalendarEvent;
+        let lines: Vec<String> = vec![
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "BEGIN:VEVENT",
+            "UID:abc@example.com",
+            "SUMMARY:First",
+            "DTSTART:20240101T120000Z",
+            "END:VEVENT",
+            "BEGIN:VEVENT",
+            "UID:def@example.com",
+            "SUMMARY:Second",
+            "DTSTART:20240202T120000Z",
+            "END:VEVENT",
+            "END:VCALENDAR",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let events: Vec<CalendarEvent> =
+            extract_events(lines.into_iter(), "test.ics");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].uid, "abc@example.com");
+        assert_eq!(events[0].summary, "First");
+        assert_eq!(events[0].source_file, "test.ics");
+        assert_eq!(events[1].uid, "def@example.com");
+        assert_eq!(events[1].summary, "Second");
+    }
+
+    #[test]
+    fn extract_events_empty_calendar_returns_empty() {
+        let lines: Vec<String> = vec!["BEGIN:VCALENDAR", "END:VCALENDAR"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        let events = extract_events(lines.into_iter(), "test.ics");
+        assert!(events.is_empty());
     }
 }
