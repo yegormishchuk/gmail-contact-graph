@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
+use crate::models::Attendee;
 
 /// Take an iterator of raw lines and return logical lines with continuations folded in.
 pub fn unfold_lines<I: IntoIterator<Item = String>>(lines: I) -> Vec<String> {
@@ -89,6 +90,28 @@ pub fn unescape_text(s: &str) -> String {
         }
     }
     out
+}
+
+/// Strip "mailto:" prefix from attendee/organizer value, preserving case of email.
+pub fn strip_mailto(value: &str) -> String {
+    let lower = value.to_ascii_lowercase();
+    if let Some(rest) = lower.strip_prefix("mailto:") {
+        // Preserve original case of the address part
+        value[value.len() - rest.len()..].to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+/// Build an Attendee from ICS property parameters and value.
+pub fn build_attendee(params: &HashMap<String, String>, value: &str) -> Attendee {
+    Attendee {
+        email: strip_mailto(value).to_ascii_lowercase(),
+        name: params.get("CN").cloned().unwrap_or_default(),
+        role: params.get("ROLE").cloned().unwrap_or_default(),
+        partstat: params.get("PARTSTAT").cloned().unwrap_or_default(),
+        cutype: params.get("CUTYPE").cloned().unwrap_or_default(),
+    }
 }
 
 #[cfg(test)]
@@ -195,5 +218,37 @@ mod tests {
     #[test]
     fn unescape_text_handles_trailing_backslash() {
         assert_eq!(unescape_text("end\\"), "end\\");
+    }
+
+    #[test]
+    fn strip_mailto_removes_prefix() {
+        assert_eq!(strip_mailto("mailto:foo@x.com"), "foo@x.com");
+        assert_eq!(strip_mailto("MAILTO:Foo@X.com"), "Foo@X.com");
+        assert_eq!(strip_mailto("foo@x.com"), "foo@x.com");
+    }
+
+    #[test]
+    fn build_attendee_extracts_fields() {
+        let mut params = std::collections::HashMap::new();
+        params.insert("CN".to_string(), "Foo Bar".to_string());
+        params.insert("ROLE".to_string(), "REQ-PARTICIPANT".to_string());
+        params.insert("PARTSTAT".to_string(), "ACCEPTED".to_string());
+        params.insert("CUTYPE".to_string(), "INDIVIDUAL".to_string());
+
+        let a: Attendee = build_attendee(&params, "mailto:foo@x.com");
+        assert_eq!(a.email, "foo@x.com");
+        assert_eq!(a.name, "Foo Bar");
+        assert_eq!(a.role, "REQ-PARTICIPANT");
+        assert_eq!(a.partstat, "ACCEPTED");
+        assert_eq!(a.cutype, "INDIVIDUAL");
+    }
+
+    #[test]
+    fn build_attendee_handles_missing_params() {
+        let params = std::collections::HashMap::new();
+        let a = build_attendee(&params, "mailto:bare@x.com");
+        assert_eq!(a.email, "bare@x.com");
+        assert!(a.name.is_empty());
+        assert!(a.role.is_empty());
     }
 }
