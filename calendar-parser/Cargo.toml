@@ -1,0 +1,22 @@
+[package]
+name = "calendar-parser"
+version = "0.1.0"
+edition = "2021"
+description = "Google Calendar .ics parser → SQLite events table"
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+dotenvy = "0.15"
+
+[[bin]]
+name = "fill_events"
+path = "src/bin/fill_events/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
