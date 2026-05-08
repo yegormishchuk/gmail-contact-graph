@@ -71,6 +71,26 @@ pub fn parse_ics_date(raw: &str) -> Option<i64> {
     None
 }
 
+/// Unescape ICS TEXT value: \n → newline, \, → comma, \; → semicolon, \\ → backslash.
+pub fn unescape_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.peek() {
+                Some('n') | Some('N') => { out.push('\n'); chars.next(); }
+                Some(',') => { out.push(','); chars.next(); }
+                Some(';') => { out.push(';'); chars.next(); }
+                Some('\\') => { out.push('\\'); chars.next(); }
+                _ => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,5 +179,21 @@ mod tests {
     fn parse_ics_date_returns_none_for_garbage() {
         assert!(parse_ics_date("not-a-date").is_none());
         assert!(parse_ics_date("").is_none());
+    }
+
+    #[test]
+    fn unescape_text_handles_all_escapes() {
+        let s = unescape_text("hello\\nworld\\, ok\\; done\\\\end");
+        assert_eq!(s, "hello\nworld, ok; done\\end");
+    }
+
+    #[test]
+    fn unescape_text_passes_through_plain() {
+        assert_eq!(unescape_text("nothing here"), "nothing here");
+    }
+
+    #[test]
+    fn unescape_text_handles_trailing_backslash() {
+        assert_eq!(unescape_text("end\\"), "end\\");
     }
 }
