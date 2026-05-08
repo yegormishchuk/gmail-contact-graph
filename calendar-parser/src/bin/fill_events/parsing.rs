@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 /// Take an iterator of raw lines and return logical lines with continuations folded in.
 pub fn unfold_lines<I: IntoIterator<Item = String>>(lines: I) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
@@ -10,6 +12,40 @@ pub fn unfold_lines<I: IntoIterator<Item = String>>(lines: I) -> Vec<String> {
         }
     }
     out
+}
+
+/// Split an ICS property line into (NAME, params, value).
+/// Returns None if no top-level colon exists.
+pub fn split_property(line: &str) -> Option<(String, HashMap<String, String>, String)> {
+    // Find the first colon NOT inside double quotes.
+    let mut in_quotes = false;
+    let mut colon_pos = None;
+    for (i, c) in line.char_indices() {
+        match c {
+            '"' => in_quotes = !in_quotes,
+            ':' if !in_quotes => {
+                colon_pos = Some(i);
+                break;
+            }
+            _ => {}
+        }
+    }
+    let colon = colon_pos?;
+    let head = &line[..colon];
+    let value = line[colon + 1..].to_string();
+
+    let mut parts = head.split(';');
+    let name = parts.next()?.to_string();
+
+    let mut params: HashMap<String, String> = HashMap::new();
+    for p in parts {
+        if let Some(eq) = p.find('=') {
+            let k = p[..eq].to_string();
+            let v = p[eq + 1..].trim_matches('"').to_string();
+            params.insert(k, v);
+        }
+    }
+    Some((name, params, value))
 }
 
 #[cfg(test)]
@@ -39,5 +75,40 @@ mod tests {
         let input = vec![" orphan".to_string(), "REAL:x".to_string()];
         let out = unfold_lines(input);
         assert_eq!(out, vec![" orphan", "REAL:x"]);
+    }
+
+    #[test]
+    fn split_property_basic() {
+        let (name, params, value) = split_property("SUMMARY:Hello world").unwrap();
+        assert_eq!(name, "SUMMARY");
+        assert!(params.is_empty());
+        assert_eq!(value, "Hello world");
+    }
+
+    #[test]
+    fn split_property_with_params() {
+        let (name, params, value) = split_property(
+            "ATTENDEE;CN=Foo Bar;ROLE=REQ-PARTICIPANT;CUTYPE=INDIVIDUAL:mailto:foo@x.com",
+        )
+        .unwrap();
+        assert_eq!(name, "ATTENDEE");
+        assert_eq!(params.get("CN"), Some(&"Foo Bar".to_string()));
+        assert_eq!(params.get("ROLE"), Some(&"REQ-PARTICIPANT".to_string()));
+        assert_eq!(value, "mailto:foo@x.com");
+    }
+
+    #[test]
+    fn split_property_handles_quoted_param_with_colon() {
+        let (name, params, value) =
+            split_property("X-FOO;CN=\"a:b\":value").unwrap();
+        assert_eq!(name, "X-FOO");
+        assert_eq!(params.get("CN"), Some(&"a:b".to_string()));
+        assert_eq!(value, "value");
+    }
+
+    #[test]
+    fn split_property_returns_none_for_no_colon() {
+        assert!(split_property("BEGIN:VEVENT").is_some());
+        assert!(split_property("malformed").is_none());
     }
 }
