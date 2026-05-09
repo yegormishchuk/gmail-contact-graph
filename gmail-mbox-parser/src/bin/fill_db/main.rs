@@ -22,8 +22,9 @@ use spam::is_spam_contact;
 
 #[tokio::main]
 async fn main() {
-    // Load .env file if present
-    let _ = dotenvy::dotenv();
+    // Load the single project-root .env (binary is invoked from gmail-mbox-parser/).
+    // Fall back to CWD .env in case it's run from the repo root.
+    let _ = dotenvy::from_path("../.env").or_else(|_| dotenvy::from_path(".env"));
 
     let args: Vec<String> = env::args().collect();
 

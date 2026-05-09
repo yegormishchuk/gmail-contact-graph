@@ -34,17 +34,12 @@ make fill-db USER_EMAIL=your.email@gmail.com MBOX_FILE=path/to/mail.mbox DATA_DI
 
 ### With AI verification
 
-Create a `.env` file:
-
-```env
-HF_API_KEY=your_huggingface_api_key
-HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
-```
-
-Then run:
+Set `HF_API_KEY` (and optionally `HF_MODEL`) in the project-root `.env`
+(`../.env`). The same file can supply `USER_EMAIL`, so you can omit it from
+the command line. See `../.env.example` for the full set of keys.
 
 ```bash
-make fill-db USER_EMAIL=your.email@gmail.com MBOX_FILE=path/to/mail.mbox
+make fill-db MBOX_FILE=path/to/mail.mbox
 ```
 
 ## Output

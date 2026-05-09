@@ -23,7 +23,9 @@ const SAFETY_CAP: usize = 10_000;
 
 #[tokio::main]
 async fn main() {
-    let _ = dotenvy::dotenv();
+    // Load the single project-root .env (binary is invoked from calendar-parser/).
+    // Fall back to CWD .env in case it's run from the repo root.
+    let _ = dotenvy::from_path("../.env").or_else(|_| dotenvy::from_path(".env"));
 
     let (inputs, db_path, user_email_arg) = parse_args(env::args().skip(1).collect());
 

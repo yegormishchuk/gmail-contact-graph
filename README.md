@@ -36,12 +36,20 @@ This runs both `fill-db` (parses the mbox into SQLite databases) and `rankings` 
 
 #### Optional: AI-powered spam filtering via Hugging Face
 
-Create `gmail-mbox-parser/.env` (copy from `.env.example`):
+Copy the project-root template and fill in your token:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 HF_API_KEY=your_huggingface_api_key
 HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
 ```
+
+The same `.env` is also used to set `USER_EMAIL` (so you can drop the
+`USER_EMAIL=...` argument from the make commands above) and the webapp's
+`USER_NAME` display value.
 
 ### 4. Install webapp dependencies
 

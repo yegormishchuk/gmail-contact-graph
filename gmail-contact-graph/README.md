@@ -45,13 +45,18 @@ Open http://localhost:5000
 
 ## Configuration
 
-Set via environment variables or `.env` file:
+Configuration is read from the **project-root `.env`** (`../.env` relative to
+this directory) and from process environment variables. The server loads it
+on startup via an inline parser in `packages/server/src/config.ts`.
 
 ```env
-DATA_DIR=~/gmail-data
-MY_EMAIL=your.email@gmail.com
-MY_NAME=Your Name
+USER_EMAIL=your.email@gmail.com   # "you" node in the graph
+USER_NAME=Your Name               # display name (optional; defaults to local-part of USER_EMAIL)
 ```
+
+Database paths default to `../data/contacts.db` and `../data/mails.db`;
+override with `CONTACTS_DB_FILE` / `MAILS_DB_FILE` if needed. Server port
+defaults to `5000`; override with `PORT`.
 
 ## API Endpoints
 
