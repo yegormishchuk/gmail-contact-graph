@@ -3,7 +3,8 @@
 
 DATA_DIR ?= ../data
 DB_PATH  ?= $(DATA_DIR)/contacts.db
-ICS_FILES ?=
+CALENDAR_DIR ?= $(DATA_DIR)/Calendar
+ICS_FILES ?= $(CALENDAR_DIR)
 
 ifeq ($(OS),Windows_NT)
     EXE = .exe
@@ -22,11 +23,7 @@ build:
 	cargo build --release --bin fill_events
 
 fill-events: build
-	@echo "Filling events table from .ics files..."
-	@if [ -z "$(ICS_FILES)" ]; then \
-	  echo "Set ICS_FILES, e.g.: make fill-events ICS_FILES=\"$(DATA_DIR)/Calendar/foo.ics $(DATA_DIR)/Calendar/bar.ics\""; \
-	  exit 1; \
-	fi
+	@echo "Filling events table from $(ICS_FILES)..."
 	$(FILL_EVENTS) $(ICS_FILES) --db $(DB_PATH)
 
 clean:
@@ -35,10 +32,12 @@ clean:
 help:
 	@echo "Calendar Parser - Available targets:"
 	@echo "  make build         - cargo build --release --bin fill_events"
-	@echo "  make fill-events ICS_FILES=\"a.ics b.ics\""
+	@echo "  make fill-events   - parse all .ics files in $(CALENDAR_DIR)"
+	@echo "                       (override with ICS_FILES=\"a.ics b.ics\" or a different dir)"
 	@echo "  make clean         - cargo clean"
 	@echo ""
 	@echo "  Variables:"
-	@echo "    ICS_FILES        - space-separated .ics paths (required)"
+	@echo "    ICS_FILES        - space-separated paths (files or dirs); default $(CALENDAR_DIR)"
+	@echo "    CALENDAR_DIR     - calendar dir (default $(CALENDAR_DIR))"
 	@echo "    DB_PATH          - SQLite path (default $(DB_PATH))"
 	@echo "    DATA_DIR         - data dir (default $(DATA_DIR))"
