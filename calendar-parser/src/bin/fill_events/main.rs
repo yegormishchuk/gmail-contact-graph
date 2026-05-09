@@ -11,7 +11,10 @@ use std::path::{Path, PathBuf};
 use chrono::Utc;
 use rusqlite::Connection;
 
-use db::{insert_event, setup_events_db, InsertCounts, INSERT_SQL};
+use db::{
+    insert_event, populate_event_attendees, setup_event_attendees_table, setup_events_db,
+    InsertCounts, INSERT_SQL,
+};
 use parsing::{extract_events, unfold_lines};
 
 const DEFAULT_DB: &str = "data/contacts.db";
@@ -22,7 +25,12 @@ const SAFETY_CAP: usize = 10_000;
 async fn main() {
     let _ = dotenvy::dotenv();
 
-    let (inputs, db_path) = parse_args(env::args().skip(1).collect());
+    let (inputs, db_path, user_email_arg) = parse_args(env::args().skip(1).collect());
+
+    // Fall back to USER_EMAIL env var (loaded from .env via dotenvy above) when not on CLI.
+    let user_email: Option<String> = user_email_arg
+        .or_else(|| env::var("USER_EMAIL").ok())
+        .filter(|s| !s.trim().is_empty());
 
     let inputs: Vec<String> = if inputs.is_empty() {
         vec![DEFAULT_CALENDAR_DIR.to_string()]
@@ -45,6 +53,7 @@ async fn main() {
 
     let conn = Connection::open(&db_path).expect("failed to open database");
     setup_events_db(&conn);
+    setup_event_attendees_table(&conn);
 
     let today_cutoff = Utc::now().timestamp();
 
@@ -88,11 +97,25 @@ async fn main() {
         "Events: {} masters, {} occurrences, {} skipped (unsupported RRULE).",
         totals.masters, totals.occurrences, totals.skipped_unsupported
     );
+
+    match user_email.as_deref() {
+        Some(email) if !email.trim().is_empty() => {
+            let n = populate_event_attendees(&conn, email);
+            eprintln!("event_attendees: {} rows (excluding {})", n, email);
+        }
+        _ => {
+            eprintln!(
+                "[warn] --user-email not provided; skipping event_attendees population. \
+                 Pass --user-email <you@gmail.com> (or USER_EMAIL=... via Makefile) to enable."
+            );
+        }
+    }
 }
 
-fn parse_args(args: Vec<String>) -> (Vec<String>, String) {
+fn parse_args(args: Vec<String>) -> (Vec<String>, String, Option<String>) {
     let mut ics_files: Vec<String> = Vec::new();
     let mut db_path = DEFAULT_DB.to_string();
+    let mut user_email: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--db" && i + 1 < args.len() {
@@ -100,10 +123,15 @@ fn parse_args(args: Vec<String>) -> (Vec<String>, String) {
             i += 2;
             continue;
         }
+        if args[i] == "--user-email" && i + 1 < args.len() {
+            user_email = Some(args[i + 1].clone());
+            i += 2;
+            continue;
+        }
         ics_files.push(args[i].clone());
         i += 1;
     }
-    (ics_files, db_path)
+    (ics_files, db_path, user_email)
 }
 
 /// Expand each input: pass through files, scan directories for `*.ics` (case-insensitive).
@@ -150,7 +178,7 @@ mod tests {
 
     #[test]
     fn parse_args_collects_files_and_db() {
-        let (files, db) = parse_args(vec![
+        let (files, db, user) = parse_args(vec![
             "a.ics".into(),
             "b.ics".into(),
             "--db".into(),
@@ -158,13 +186,29 @@ mod tests {
         ]);
         assert_eq!(files, vec!["a.ics", "b.ics"]);
         assert_eq!(db, "out.db");
+        assert_eq!(user, None);
     }
 
     #[test]
     fn parse_args_default_db() {
-        let (files, db) = parse_args(vec!["a.ics".into()]);
+        let (files, db, user) = parse_args(vec!["a.ics".into()]);
         assert_eq!(files, vec!["a.ics"]);
         assert_eq!(db, "data/contacts.db");
+        assert_eq!(user, None);
+    }
+
+    #[test]
+    fn parse_args_collects_user_email() {
+        let (files, db, user) = parse_args(vec![
+            "a.ics".into(),
+            "--user-email".into(),
+            "me@x.com".into(),
+            "--db".into(),
+            "out.db".into(),
+        ]);
+        assert_eq!(files, vec!["a.ics"]);
+        assert_eq!(db, "out.db");
+        assert_eq!(user.as_deref(), Some("me@x.com"));
     }
 
     #[test]

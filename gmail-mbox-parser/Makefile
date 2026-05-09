@@ -1,6 +1,11 @@
 # Gmail MBOX Parser - Makefile
 # =============================
 
+# Load project-root .env (KEY=VALUE lines) for things like USER_EMAIL.
+# Override location with `make ... ENV_FILE=path/to/.env`.
+ENV_FILE ?= ../.env
+-include $(ENV_FILE)
+
 # Paths
 TOOLS_DIR = tools
 DATA_DIR ?= ../data
@@ -8,8 +13,8 @@ MBOX_FILE ?= data.mbox
 MBOX_PATH = $(DATA_DIR)/$(MBOX_FILE)
 CONTACTS_DB = $(DATA_DIR)/contacts.db
 
-# User email (required for fill-db)
-USER_EMAIL ?= your_email@example.com
+# User email (required for fill-db). Set on the command line or in $(ENV_FILE).
+USER_EMAIL ?=
 
 # Detect OS for executable extension and commands
 ifeq ($(OS),Windows_NT)
@@ -54,6 +59,9 @@ build-tools:
 .PHONY: fill-db rankings process-all
 
 fill-db: build-parser
+ifeq ($(strip $(USER_EMAIL)),)
+	$(error USER_EMAIL is not set. Add USER_EMAIL=you@gmail.com to $(ENV_FILE) or pass it on the command line)
+endif
 	@echo "Filling database from mbox..."
 	@echo "Using email: $(USER_EMAIL)"
 	@echo "Output dir: $(DATA_DIR)"
@@ -117,7 +125,8 @@ help:
 	@echo "    make clean-all      - Clean everything"
 	@echo ""
 	@echo "  Variables:"
-	@echo "    USER_EMAIL          - Your Gmail address (required)"
+	@echo "    USER_EMAIL          - Your Gmail address (required; can also be set in ../.env)"
+	@echo "    ENV_FILE            - Path to .env (default: ../.env)"
 	@echo "    MBOX_FILE           - Mbox filename (default: data.mbox, resolved to ../data/)"
 	@echo "    DATA_DIR            - Data directory (default: ../data)"
 	@echo ""

@@ -1,10 +1,22 @@
 # Calendar Parser - Makefile
 # ==========================
 
+# Load project-root .env (KEY=VALUE lines) for things like USER_EMAIL.
+# Override location with `make ... ENV_FILE=path/to/.env`.
+ENV_FILE ?= ../.env
+-include $(ENV_FILE)
+
 DATA_DIR ?= ../data
 DB_PATH  ?= $(DATA_DIR)/contacts.db
 CALENDAR_DIR ?= $(DATA_DIR)/Calendar
 ICS_FILES ?= $(CALENDAR_DIR)
+USER_EMAIL ?=
+
+ifeq ($(strip $(USER_EMAIL)),)
+    USER_EMAIL_ARG =
+else
+    USER_EMAIL_ARG = --user-email $(USER_EMAIL)
+endif
 
 ifeq ($(OS),Windows_NT)
     EXE = .exe
@@ -24,7 +36,7 @@ build:
 
 fill-events: build
 	@echo "Filling events table from $(ICS_FILES)..."
-	$(FILL_EVENTS) $(ICS_FILES) --db $(DB_PATH)
+	$(FILL_EVENTS) $(ICS_FILES) --db $(DB_PATH) $(USER_EMAIL_ARG)
 
 clean:
 	cargo clean
@@ -41,3 +53,6 @@ help:
 	@echo "    CALENDAR_DIR     - calendar dir (default $(CALENDAR_DIR))"
 	@echo "    DB_PATH          - SQLite path (default $(DB_PATH))"
 	@echo "    DATA_DIR         - data dir (default $(DATA_DIR))"
+	@echo "    USER_EMAIL       - webapp user email; required to populate event_attendees"
+	@echo "                       (can also be set in ../.env)"
+	@echo "    ENV_FILE         - path to .env (default: ../.env)"
