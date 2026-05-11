@@ -56,6 +56,12 @@ async fn main() {
     } else {
         eprintln!("No candidates for AI verification.");
     }
+
+    // Merge WAL into the main DB file so non-WAL readers (e.g. sql.js in the
+    // webapp) see the latest state instead of a stale pre-WAL snapshot.
+    let conn = Connection::open(db_path).expect("failed to open database");
+    conn.query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |_| Ok(()))
+        .expect("wal_checkpoint failed");
 }
 
 // ---------------------------------------------------------------------------

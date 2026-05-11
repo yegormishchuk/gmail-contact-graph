@@ -112,6 +112,11 @@ async fn main() {
             );
         }
     }
+
+    // Merge WAL into the main DB file so non-WAL readers (e.g. sql.js in the
+    // webapp) see the latest state instead of a stale pre-WAL snapshot.
+    conn.query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |_| Ok(()))
+        .expect("wal_checkpoint failed");
 }
 
 fn parse_args(args: Vec<String>) -> (Vec<String>, String, Option<String>) {
