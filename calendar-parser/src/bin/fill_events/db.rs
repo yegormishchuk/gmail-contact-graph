@@ -223,6 +223,7 @@ pub struct InsertCounts {
 pub fn insert_event(
     stmt: &mut Statement,
     event: &CalendarEvent,
+    cutoff_min: i64,
     today_cutoff: i64,
     safety_cap: usize,
 ) -> InsertCounts {
@@ -230,6 +231,14 @@ pub fn insert_event(
 
     let attendees_json = serde_json::to_string(&event.attendees).unwrap_or_else(|_| "[]".to_string());
     let is_recurring = !event.rrule.is_empty();
+
+    // Non-recurring events must have a dtstart within [cutoff_min, today_cutoff].
+    if !is_recurring {
+        match event.dtstart {
+            Some(ts) if ts >= cutoff_min && ts <= today_cutoff => {}
+            _ => return counts,
+        }
+    }
 
     // Master row
     if stmt
@@ -280,6 +289,9 @@ pub fn insert_event(
     }
 
     for (idx, occ_start) in occs.iter().enumerate() {
+        if *occ_start < cutoff_min {
+            continue;
+        }
         let occ_end = occ_start + duration;
         if stmt
             .execute(params![
@@ -344,7 +356,7 @@ mod tests {
             ..Default::default()
         });
 
-        let counts = insert_event(&mut stmt, &e, 9999999999, 1000);
+        let counts = insert_event(&mut stmt, &e, 0, 9999999999, 1000);
         assert_eq!(counts.masters, 1);
         assert_eq!(counts.occurrences, 0);
 
@@ -372,7 +384,7 @@ mod tests {
         e.dtend = Some(1704114000);   // +1h
         e.rrule = "FREQ=WEEKLY;BYDAY=MO;COUNT=3".into();
 
-        let counts = insert_event(&mut stmt, &e, 9999999999, 1000);
+        let counts = insert_event(&mut stmt, &e, 0, 9999999999, 1000);
         assert_eq!(counts.masters, 1);
         assert_eq!(counts.occurrences, 3);
 
@@ -411,7 +423,7 @@ mod tests {
             Attendee { email: "alice@x.com".into(), partstat: "ACCEPTED".into(), ..Default::default() },
             Attendee { email: "bob@x.com".into(), partstat: "DECLINED".into(), ..Default::default() },
         ];
-        insert_event(&mut stmt, &e1, 9_999_999_999, 1000);
+        insert_event(&mut stmt, &e1, 0, 9_999_999_999, 1000);
 
         // Event 2: alice organizes; webapp user declined.
         let mut e2 = CalendarEvent::default();
@@ -423,7 +435,7 @@ mod tests {
             Attendee { email: "alice@x.com".into(), partstat: "ACCEPTED".into(), ..Default::default() },
             Attendee { email: "me@x.com".into(), partstat: "DECLINED".into(), ..Default::default() },
         ];
-        insert_event(&mut stmt, &e2, 9_999_999_999, 1000);
+        insert_event(&mut stmt, &e2, 0, 9_999_999_999, 1000);
 
         drop(stmt);
 
@@ -486,7 +498,7 @@ mod tests {
         e.dtstart = Some(1000);
         e.rrule = "FREQ=YEARLY".into();
 
-        let counts = insert_event(&mut stmt, &e, 9999999999, 1000);
+        let counts = insert_event(&mut stmt, &e, 0, 9999999999, 1000);
         assert_eq!(counts.masters, 1);
         assert_eq!(counts.occurrences, 0);
         assert_eq!(counts.skipped_unsupported, 1);

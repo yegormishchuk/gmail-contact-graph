@@ -8,7 +8,7 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use rusqlite::Connection;
 
 use db::{
@@ -57,7 +57,9 @@ async fn main() {
     setup_events_db(&conn);
     setup_event_attendees_table(&conn);
 
-    let today_cutoff = Utc::now().timestamp();
+    let now = Utc::now();
+    let today_cutoff = now.timestamp();
+    let cutoff_min = (now - Duration::days(730)).timestamp();
 
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
     let mut stmt = conn.prepare(INSERT_SQL).unwrap();
@@ -85,7 +87,7 @@ async fn main() {
         eprintln!("[file] {}: {} events parsed", source_name, events.len());
 
         for event in &events {
-            let counts = insert_event(&mut stmt, event, today_cutoff, SAFETY_CAP);
+            let counts = insert_event(&mut stmt, event, cutoff_min, today_cutoff, SAFETY_CAP);
             totals.masters += counts.masters;
             totals.occurrences += counts.occurrences;
             totals.skipped_unsupported += counts.skipped_unsupported;
