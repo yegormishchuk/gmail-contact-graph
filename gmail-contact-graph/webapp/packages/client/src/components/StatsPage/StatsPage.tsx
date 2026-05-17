@@ -5,9 +5,18 @@ import type { SpamStats } from '@gmail-graph/shared';
 
 const MIN_GROUP_SIZE = 3;
 
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return '—';
+  const totalMinutes = Math.round(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 export function StatsPage() {
   const { state } = useAppContext();
-  const { rawData, domains, messageGroups } = state;
+  const { rawData, domains, messageGroups, calendarStats } = state;
 
   const [spamStats, setSpamStats] = useState<SpamStats | null>(null);
 
@@ -95,6 +104,14 @@ export function StatsPage() {
               <span className="stat-cell-label">Sent / received</span>
               <span className="stat-cell-value">{sentReceivedRatio}</span>
             </div>
+            <div className="stat-cell">
+              <span className="stat-cell-label">Total meetings</span>
+              <span className="stat-cell-value">{(calendarStats?.totalMeetings ?? 0).toLocaleString()}</span>
+            </div>
+            <div className="stat-cell">
+              <span className="stat-cell-label">Meeting contacts</span>
+              <span className="stat-cell-value">{(calendarStats?.uniqueAttendees ?? 0).toLocaleString()}</span>
+            </div>
           </div>
         </div>
 
@@ -121,6 +138,20 @@ export function StatsPage() {
                 <span className="stat-cell-sub">{topBySent.name}</span>
               </div>
             )}
+            {calendarStats?.topByScore && (
+              <div className="stat-cell">
+                <span className="stat-cell-label">Top by calendar score</span>
+                <span className="stat-cell-value">{Math.round(calendarStats.topByScore.score).toLocaleString()}</span>
+                <span className="stat-cell-sub">{calendarStats.topByScore.name}</span>
+              </div>
+            )}
+            {calendarStats?.topByMeetings && (
+              <div className="stat-cell">
+                <span className="stat-cell-label">Top by meetings</span>
+                <span className="stat-cell-value">{calendarStats.topByMeetings.meetings.toLocaleString()}</span>
+                <span className="stat-cell-sub">{calendarStats.topByMeetings.name}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -137,6 +168,13 @@ export function StatsPage() {
                 <span className="stat-cell-label">Top by volume</span>
                 <span className="stat-cell-value">{topByVolume.total.toLocaleString()}</span>
                 <span className="stat-cell-sub">@{topByVolume.domain}</span>
+              </div>
+            )}
+            {calendarStats?.topOrgByMeetings && (
+              <div className="stat-cell">
+                <span className="stat-cell-label">Top org by meetings</span>
+                <span className="stat-cell-value">{calendarStats.topOrgByMeetings.meetings.toLocaleString()}</span>
+                <span className="stat-cell-sub">@{calendarStats.topOrgByMeetings.domain}</span>
               </div>
             )}
           </div>
@@ -170,6 +208,32 @@ export function StatsPage() {
                 <span className="stat-cell-label">Largest group</span>
                 <span className="stat-cell-value">{largestGroup.count} members</span>
                 <span className="stat-cell-sub" style={{ wordBreak: 'break-word' }}>{largestGroup.subject}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Panel — Calendar */}
+        <div className="stat-panel">
+          <div className="stat-panel-title">Calendar</div>
+          <div className="stat-cells">
+            <div className="stat-cell">
+              <span className="stat-cell-label">Total meetings</span>
+              <span className="stat-cell-value">{(calendarStats?.totalMeetings ?? 0).toLocaleString()}</span>
+            </div>
+            <div className="stat-cell">
+              <span className="stat-cell-label">Unique meeting contacts</span>
+              <span className="stat-cell-value">{(calendarStats?.uniqueAttendees ?? 0).toLocaleString()}</span>
+            </div>
+            <div className="stat-cell">
+              <span className="stat-cell-label">Avg meeting duration</span>
+              <span className="stat-cell-value">{formatDuration(calendarStats?.avgMeetingDurationSeconds ?? 0)}</span>
+            </div>
+            {calendarStats?.topByScore && (
+              <div className="stat-cell">
+                <span className="stat-cell-label">Top by calendar score</span>
+                <span className="stat-cell-value">{Math.round(calendarStats.topByScore.score).toLocaleString()}</span>
+                <span className="stat-cell-sub">{calendarStats.topByScore.name}</span>
               </div>
             )}
           </div>
