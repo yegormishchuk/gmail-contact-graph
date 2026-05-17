@@ -21,12 +21,12 @@ export function RankingPanel() {
   const { rawData, excludedContacts, rankingTab, panelVisible } = state;
   const filterType = state.filters.filterType;
   const isGroupFilter = filterType === 'messageGroups' || filterType === 'organizations';
-  const isContactFilter = filterType === 'moreReceived' || filterType === 'moreSent';
-  const hasFilter = filterType !== null;
+  const isCalendarFilter = filterType === 'calendar';
+  // Group filters use the "filtered" tab; calendar uses the main "ranking" tab with calendar data.
+  const hasFilteredTab = isGroupFilter;
 
-  // Auto-switch to 'filtered' tab when a filter becomes active, back to 'ranking' when cleared
   useEffect(() => {
-    if (filterType !== null) {
+    if (isGroupFilter) {
       dispatch({ type: 'SET_RANKING_TAB', payload: 'filtered' });
     } else {
       dispatch({ type: 'SET_RANKING_TAB', payload: 'ranking' });
@@ -45,28 +45,26 @@ export function RankingPanel() {
     );
   }
 
-  // Get contacts sorted by composite score
-  const contacts = rawData?.nodes
-    .filter(n => !n.isCenter)
+  // Pick the right node set: calendar nodes for Calendar filter, email nodes otherwise.
+  const sourceNodes = isCalendarFilter
+    ? (state.calendarData?.nodes.filter(n => !n.isCenter).map(n => ({
+        id: n.id,
+        name: n.name,
+        email: n.email,
+        isCenter: false,
+        received: 0,
+        sent: 0,
+        compositeScore: n.calendarScore,
+      })) ?? [])
+    : (rawData?.nodes.filter(n => !n.isCenter) ?? []);
+
+  const contacts = [...sourceNodes]
     .sort((a, b) => b.compositeScore - a.compositeScore)
     .filter(n => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
       return n.name.toLowerCase().includes(query) || n.email.toLowerCase().includes(query);
-    }) || [];
-
-  // Filter ranking — contacts
-  const filteredContacts: GraphNode[] = isContactFilter
-    ? (rawData?.nodes
-        .filter(n => !n.isCenter)
-        .filter(n => filterType === 'moreReceived' ? n.received > n.sent : n.sent > n.received)
-        .sort((a, b) => b.compositeScore - a.compositeScore)
-        .filter(n => {
-          if (!searchQuery) return true;
-          const q = searchQuery.toLowerCase();
-          return n.name.toLowerCase().includes(q) || n.email.toLowerCase().includes(q);
-        }) ?? [])
-    : [];
+    });
 
   // Filter ranking — groups
   const groupRanking: GroupRankItem[] = (() => {
@@ -233,20 +231,9 @@ export function RankingPanel() {
     return { ...contact, place: currentPlace };
   });
 
-  // Filtered contacts with places
-  let filteredPlace = 0;
-  let filteredPrevScore: number | null = null;
-  const filteredContactsWithPlace = filteredContacts.map((contact, index) => {
-    if (filteredPrevScore !== contact.compositeScore) {
-      filteredPlace = index + 1;
-    }
-    filteredPrevScore = contact.compositeScore;
-    return { ...contact, place: filteredPlace };
-  });
-
   const filterTabLabel = isGroupFilter
     ? (filterType === 'messageGroups' ? 'Groups' : 'Orgs')
-    : (filterType === 'moreReceived' ? 'Received' : filterType === 'moreSent' ? 'Sent' : 'Filter');
+    : 'Filter';
 
   return (
     <div className="ranking-panel">
@@ -258,7 +245,7 @@ export function RankingPanel() {
           >
             Ranking
           </button>
-          {hasFilter && (
+          {hasFilteredTab && (
             <button
               className={`ranking-tab filter-tab ${rankingTab === 'filtered' ? 'active' : ''}`}
               onClick={() => handleTabChange('filtered')}
@@ -307,45 +294,25 @@ export function RankingPanel() {
               <span className="ranking-score">
                 {Math.round(contact.compositeScore)}
               </span>
-              <button
-                className="ranking-delete"
-                title="Remove contact"
-                onClick={(e) => handleDelete(contact.email, e)}
-              >
-                🗑
-              </button>
+              {!isCalendarFilter && (
+                <button
+                  className="ranking-delete"
+                  title="Remove contact"
+                  onClick={(e) => handleDelete(contact.email, e)}
+                >
+                  🗑
+                </button>
+              )}
             </div>
           ))}
+          {contactsWithPlace.length === 0 && isCalendarFilter && (
+            <div className="ranking-empty">No calendar data available</div>
+          )}
         </div>
       )}
 
-      {rankingTab === 'filtered' && hasFilter && (
+      {rankingTab === 'filtered' && hasFilteredTab && (
         <div className="ranking-list">
-          {isContactFilter && filteredContactsWithPlace.map((contact) => (
-            <div
-              key={contact.email}
-              className="ranking-item"
-              onClick={(e) => handleContactClick(contact, e)}
-            >
-              <span className={`ranking-place ${getPlaceClass(contact.place)}`}>
-                {contact.place}
-              </span>
-              <span className="ranking-name" title={contact.name}>
-                {contact.name}
-              </span>
-              <span className="ranking-score">
-                {Math.round(contact.compositeScore)}
-              </span>
-              <button
-                className="ranking-delete"
-                title="Remove contact"
-                onClick={(e) => handleDelete(contact.email, e)}
-              >
-                🗑
-              </button>
-            </div>
-          ))}
-
           {isGroupFilter && groupRanking.map((group, index) => (
             <div
               key={group.label}
@@ -366,9 +333,6 @@ export function RankingPanel() {
             </div>
           ))}
 
-          {isContactFilter && filteredContactsWithPlace.length === 0 && (
-            <div className="ranking-empty">No contacts match this filter</div>
-          )}
           {isGroupFilter && groupRanking.length === 0 && (
             <div className="ranking-empty">No groups found</div>
           )}
