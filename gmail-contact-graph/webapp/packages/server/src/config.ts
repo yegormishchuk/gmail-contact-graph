@@ -34,6 +34,7 @@ export const config = {
   // Database files - check data folder first, then project root
   CONTACTS_DB_FILE: process.env.CONTACTS_DB_FILE || path.join(DATA_DIR, 'contacts.db'),
   DEFAULT_DB_FILE: process.env.MAILS_DB_FILE || path.join(DATA_DIR, 'mails.db'),
+  EVENTS_DB_FILE: process.env.EVENTS_DB_FILE || path.join(DATA_DIR, 'events.db'),
 
   MY_EMAIL: (process.env.USER_EMAIL || '').toLowerCase(),
   MY_NAME: process.env.USER_NAME || (process.env.USER_EMAIL || '').split('@')[0] || 'Me',
