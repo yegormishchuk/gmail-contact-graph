@@ -1,4 +1,4 @@
-import { getEventsDatabase } from './events.js';
+import { getDatabase } from './index.js';
 import { config } from '../config.js';
 import type { CalendarGraphData, CalendarNode, CalendarStats } from '@gmail-graph/shared';
 
@@ -7,8 +7,19 @@ const PERSONAL_DOMAINS = new Set([
   'icloud.com', 'aol.com', 'mail.com', 'protonmail.com',
 ]);
 
+// True when the calendar parser has populated event_attendees / events in contacts.db.
+function hasCalendarTables(db: ReturnType<typeof getDatabase>): boolean {
+  const stmt = db.prepare(
+    `SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name IN ('events','event_attendees')`
+  );
+  stmt.step();
+  const n = (stmt.getAsObject() as unknown as { n: number }).n;
+  stmt.free();
+  return n === 2;
+}
+
 export function loadCalendarGraph(): CalendarGraphData {
-  const db = getEventsDatabase();
+  const db = getDatabase();
   const userEmail = config.MY_EMAIL;
 
   const centerNode: CalendarNode = {
@@ -23,7 +34,7 @@ export function loadCalendarGraph(): CalendarGraphData {
     calendarScore: 999999999,
   };
 
-  if (!db) {
+  if (!hasCalendarTables(db)) {
     return { nodes: [centerNode], userEmail };
   }
 
@@ -69,7 +80,7 @@ export function loadCalendarGraph(): CalendarGraphData {
 }
 
 export function loadCalendarStats(): CalendarStats {
-  const db = getEventsDatabase();
+  const db = getDatabase();
   const empty: CalendarStats = {
     totalMeetings: 0,
     uniqueAttendees: 0,
@@ -79,7 +90,7 @@ export function loadCalendarStats(): CalendarStats {
     topOrgByMeetings: null,
   };
 
-  if (!db) return empty;
+  if (!hasCalendarTables(db)) return empty;
 
   // Totals: events count + average duration over events with both timestamps
   let totalMeetings = 0;
