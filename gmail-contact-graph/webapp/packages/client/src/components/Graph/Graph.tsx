@@ -3,7 +3,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useD3Simulation } from '../../hooks/useD3Simulation';
 import type { GroupHoverData } from '../../hooks/useD3Simulation';
 import { filterData } from '../../utils/filterData';
-import type { GraphNode } from '@gmail-graph/shared';
+import type { GraphData, GraphNode } from '@gmail-graph/shared';
 import { GroupTooltip } from '../GroupTooltip';
 
 export function Graph() {
@@ -26,10 +26,37 @@ export function Graph() {
     setHoveredGroupPos(position ?? null);
   }, []);
 
-  const filteredData = useMemo(
-    () => state.rawData ? filterData(state.rawData, state.filters) : null,
-    [state.rawData, state.filters]
-  );
+  // Map calendar data to the GraphData shape (so useD3Simulation can render it).
+  // compositeScore = calendarScore; received/sent unused but required by the type.
+  const calendarAsGraphData: GraphData | null = useMemo(() => {
+    if (!state.calendarData) return null;
+    const nodes: GraphNode[] = state.calendarData.nodes.map(n => ({
+      id: n.id,
+      name: n.name,
+      email: n.email,
+      isCenter: n.isCenter,
+      received: 0,
+      sent: 0,
+      compositeScore: n.calendarScore,
+    }));
+    return {
+      nodes,
+      links: [],
+      stats: {
+        totalContacts: nodes.length - 1,
+        displayedContacts: nodes.length - 1,
+        totalReceived: 0,
+        totalSent: 0,
+      },
+    };
+  }, [state.calendarData]);
+
+  const filteredData = useMemo(() => {
+    if (state.filters.filterType === 'calendar') {
+      return calendarAsGraphData ? filterData(calendarAsGraphData, state.filters) : null;
+    }
+    return state.rawData ? filterData(state.rawData, state.filters) : null;
+  }, [state.rawData, calendarAsGraphData, state.filters]);
 
   const { resetZoom, focusNode, focusGroup } = useD3Simulation({
     svgRef,

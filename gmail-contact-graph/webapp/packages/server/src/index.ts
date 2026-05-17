@@ -9,6 +9,7 @@ import { graphRouter } from './routes/graph.js';
 import { contactsRouter } from './routes/contacts.js';
 import { domainsRouter } from './routes/domains.js';
 import { groupsRouter } from './routes/groups.js';
+import { calendarRouter } from './routes/calendar.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +27,7 @@ async function startServer() {
   app.use('/api', contactsRouter);
   app.use('/api', domainsRouter);
   app.use('/api', groupsRouter);
+  app.use('/api', calendarRouter);
 
   // Health check
   app.get('/api/health', (req, res) => {

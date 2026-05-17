@@ -5,6 +5,8 @@ import type {
   ExcludedContact,
   SpamStats,
   ApiSuccessResponse,
+  CalendarGraphData,
+  CalendarStats,
 } from '@gmail-graph/shared';
 
 const API_BASE = '/api';
@@ -35,6 +37,8 @@ export const api = {
   }),
   getExcludedContacts: () => fetchJson<ExcludedContact[]>('/excluded-contacts'),
   getSpamStats: () => fetchJson<SpamStats>('/spam-stats'),
+  getCalendarGraph: () => fetchJson<CalendarGraphData>('/calendar-graph'),
+  getCalendarStats: () => fetchJson<CalendarStats>('/calendar-stats'),
   getAllContacts: () =>
     fetchJson<{ contacts: { name: string; email: string }[]; excludedEmails: string[] }>('/contacts/all'),
 
