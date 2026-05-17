@@ -3,11 +3,24 @@ import { useAppContext } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
 
+function formatDurationSec(seconds: number | null | undefined): string {
+  if (!seconds || seconds <= 0) return '—';
+  const totalMinutes = Math.round(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 const OFFSET = 14;
 
 export function Tooltip() {
   const { state, dispatch } = useAppContext();
   const { selectedNode, selectedNodePosition, domains, messageGroups } = state;
+  const isCalendarMode = state.filters.filterType === 'calendar';
+  const calendarInfo = isCalendarMode && selectedNode
+    ? state.calendarData?.nodes.find(n => n.email.toLowerCase() === selectedNode.email.toLowerCase()) ?? null
+    : null;
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: -9999, top: -9999 });
   const [showAllGroups, setShowAllGroups] = useState(false);
@@ -146,31 +159,64 @@ export function Tooltip() {
         </div>
       )}
 
-      <div className="tooltip-stats">
-        <div className="tooltip-stat">
-          <span className="tooltip-stat-label" style={{ color: '#00a86b' }}>Received</span>
-          <span className="tooltip-stat-value" style={{ color: '#00a86b' }}>
-            {selectedNode.received.toLocaleString()} ({receivedPercent}%)
-          </span>
+      {isCalendarMode && calendarInfo ? (
+        <div className="tooltip-stats">
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label">Meetings</span>
+            <span className="tooltip-stat-value">{calendarInfo.totalEvents.toLocaleString()}</span>
+          </div>
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label">Avg duration</span>
+            <span className="tooltip-stat-value">{formatDurationSec(calendarInfo.avgDurationSeconds)}</span>
+          </div>
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label">Avg attendees</span>
+            <span className="tooltip-stat-value">
+              {calendarInfo.avgAttendees !== null ? calendarInfo.avgAttendees.toFixed(1) : '—'}
+            </span>
+          </div>
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label">Acceptance</span>
+            <span className="tooltip-stat-value">
+              {calendarInfo.acceptanceRate !== null
+                ? `${Math.round(calendarInfo.acceptanceRate * 100)}%`
+                : '—'}
+            </span>
+          </div>
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label">Score</span>
+            <span className="tooltip-stat-value">{Math.round(calendarInfo.calendarScore).toLocaleString()}</span>
+          </div>
         </div>
-        <div className="tooltip-stat">
-          <span className="tooltip-stat-label" style={{ color: graphConfig.sentColor }}>Sent</span>
-          <span className="tooltip-stat-value" style={{ color: graphConfig.sentColor }}>
-            {selectedNode.sent.toLocaleString()} ({sentPercent}%)
-          </span>
+      ) : (
+        <div className="tooltip-stats">
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label" style={{ color: '#00a86b' }}>Received</span>
+            <span className="tooltip-stat-value" style={{ color: '#00a86b' }}>
+              {selectedNode.received.toLocaleString()} ({receivedPercent}%)
+            </span>
+          </div>
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label" style={{ color: graphConfig.sentColor }}>Sent</span>
+            <span className="tooltip-stat-value" style={{ color: graphConfig.sentColor }}>
+              {selectedNode.sent.toLocaleString()} ({sentPercent}%)
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="tooltip-buttons">
-        {selectedNode.notClear && (
-          <button className="mark-human-btn" style={{ display: 'block' }} onClick={handleMarkHuman}>
-            It's a human
+      {!isCalendarMode && (
+        <div className="tooltip-buttons">
+          {selectedNode.notClear && (
+            <button className="mark-human-btn" style={{ display: 'block' }} onClick={handleMarkHuman}>
+              It's a human
+            </button>
+          )}
+          <button className="mark-not-human-btn" onClick={handleMarkNotHuman}>
+            Not a human
           </button>
-        )}
-        <button className="mark-not-human-btn" onClick={handleMarkNotHuman}>
-          Not a human
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
