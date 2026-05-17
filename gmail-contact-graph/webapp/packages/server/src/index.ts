@@ -5,10 +5,12 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import { initDatabase } from './db/index.js';
+import { initEventsDatabase } from './db/events.js';
 import { graphRouter } from './routes/graph.js';
 import { contactsRouter } from './routes/contacts.js';
 import { domainsRouter } from './routes/domains.js';
 import { groupsRouter } from './routes/groups.js';
+import { calendarRouter } from './routes/calendar.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,6 +18,7 @@ async function startServer() {
   // Initialize database
   await initDatabase();
   console.log('Database initialized');
+  await initEventsDatabase();
 
   const app = express();
   app.use(cors());
@@ -26,6 +29,7 @@ async function startServer() {
   app.use('/api', contactsRouter);
   app.use('/api', domainsRouter);
   app.use('/api', groupsRouter);
+  app.use('/api', calendarRouter);
 
   // Health check
   app.get('/api/health', (req, res) => {
