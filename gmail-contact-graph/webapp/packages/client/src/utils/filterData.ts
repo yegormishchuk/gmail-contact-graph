@@ -2,19 +2,12 @@ import type { GraphData, GraphNode } from '@gmail-graph/shared';
 
 interface Filters {
   limit: number;
-  filterType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null;
+  filterType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations';
   searchQuery: string;
 }
 
 export function filterData(rawData: GraphData, filters: Filters): GraphData {
   let nodes = rawData.nodes.filter(n => !n.isCenter);
-
-  // Apply filter type
-  if (filters.filterType === 'moreReceived') {
-    nodes = nodes.filter(n => n.received > n.sent);
-  } else if (filters.filterType === 'moreSent') {
-    nodes = nodes.filter(n => n.sent > n.received);
-  }
 
   // Sort by composite score
   nodes.sort((a, b) => b.compositeScore - a.compositeScore);
