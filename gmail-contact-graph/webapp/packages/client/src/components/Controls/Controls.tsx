@@ -44,7 +44,7 @@ export function Controls() {
   // Clamp displayed value so the thumb stays in-range
   const sliderValue = Math.min(state.filters.limit, sliderMax);
 
-  const handleFilterChange = (newType: 'moreReceived' | 'moreSent' | 'messageGroups' | 'organizations' | null) => {
+  const handleFilterChange = (newType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations') => {
     dispatch({ type: 'SET_FILTER_TYPE', payload: newType });
 
     if (newType === 'messageGroups' || newType === 'organizations') {
@@ -61,7 +61,7 @@ export function Controls() {
   };
 
   const handleClearFilters = () => {
-    dispatch({ type: 'SET_FILTER_TYPE', payload: null });
+    dispatch({ type: 'SET_FILTER_TYPE', payload: 'overall' });
     dispatch({ type: 'SET_FILTER_LIMIT', payload: DEFAULT_CONTACT_LIMIT });
     setSearchQuery('');
     dispatch({ type: 'SET_SEARCH_QUERY', payload: '' });
@@ -94,21 +94,31 @@ export function Controls() {
           <input
             type="radio"
             name="filter-type"
-            value="moreReceived"
-            checked={state.filters.filterType === 'moreReceived'}
-            onChange={() => handleFilterChange('moreReceived')}
+            value="overall"
+            checked={state.filters.filterType === 'overall'}
+            onChange={() => handleFilterChange('overall')}
           />
-          <span className="filter-label received">More received</span>
+          <span className="filter-label">Overall</span>
         </label>
         <label className="filter-radio">
           <input
             type="radio"
             name="filter-type"
-            value="moreSent"
-            checked={state.filters.filterType === 'moreSent'}
-            onChange={() => handleFilterChange('moreSent')}
+            value="gmail"
+            checked={state.filters.filterType === 'gmail'}
+            onChange={() => handleFilterChange('gmail')}
           />
-          <span className="filter-label sent">More sent</span>
+          <span className="filter-label">Gmail</span>
+        </label>
+        <label className="filter-radio">
+          <input
+            type="radio"
+            name="filter-type"
+            value="calendar"
+            checked={state.filters.filterType === 'calendar'}
+            onChange={() => handleFilterChange('calendar')}
+          />
+          <span className="filter-label">Calendar</span>
         </label>
         <label className="filter-radio">
           <input
