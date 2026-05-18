@@ -28,6 +28,7 @@ export function loadCalendarGraph(): CalendarGraphData {
     email: userEmail,
     isCenter: true,
     totalEvents: 0,
+    organizedEvents: 0,
     avgDurationSeconds: null,
     avgAttendees: null,
     acceptanceRate: null,
@@ -40,7 +41,7 @@ export function loadCalendarGraph(): CalendarGraphData {
 
   const stmt = db.prepare(`
     SELECT
-      email, name, total_events_count, avg_duration_seconds,
+      email, name, total_events_count, organized_events_count, avg_duration_seconds,
       avg_attendee_count, acceptance_rate,
       (avg_duration_seconds / avg_attendee_count) * total_events_count AS score
     FROM event_attendees
@@ -57,6 +58,7 @@ export function loadCalendarGraph(): CalendarGraphData {
       email: string;
       name: string;
       total_events_count: number;
+      organized_events_count: number;
       avg_duration_seconds: number;
       avg_attendee_count: number;
       acceptance_rate: number | null;
@@ -68,6 +70,7 @@ export function loadCalendarGraph(): CalendarGraphData {
       email: row.email,
       isCenter: false,
       totalEvents: row.total_events_count,
+      organizedEvents: row.organized_events_count,
       avgDurationSeconds: row.avg_duration_seconds,
       avgAttendees: row.avg_attendee_count,
       acceptanceRate: row.acceptance_rate ?? null,

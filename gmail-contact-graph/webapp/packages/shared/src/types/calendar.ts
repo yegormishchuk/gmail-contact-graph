@@ -4,6 +4,7 @@ export interface CalendarNode {
   email: string;
   isCenter: boolean;
   totalEvents: number;
+  organizedEvents: number;
   avgDurationSeconds: number | null;
   avgAttendees: number | null;
   acceptanceRate: number | null;

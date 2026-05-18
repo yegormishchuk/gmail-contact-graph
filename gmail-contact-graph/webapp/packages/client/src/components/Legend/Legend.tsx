@@ -1,20 +1,23 @@
 import React from 'react';
+import { useAppContext } from '../../context/AppContext';
 
 export function Legend() {
+  const { state } = useAppContext();
+  const isCalendar = state.filters.filterType === 'calendar';
   return (
     <div className="legend">
       <div className="legend-title">Legend</div>
       <div className="legend-item">
         <div className="legend-color received"></div>
-        <span>Emails received</span>
+        <span>{isCalendar ? 'Events organized' : 'Emails received'}</span>
       </div>
       <div className="legend-item">
         <div className="legend-color sent"></div>
-        <span>Emails sent</span>
+        <span>{isCalendar ? 'Events attended' : 'Emails sent'}</span>
       </div>
       <div className="legend-item">
         <div className="legend-color border-indicator"></div>
-        <span>Has outgoing emails</span>
+        <span>{isCalendar ? 'Has organized events' : 'Has outgoing emails'}</span>
       </div>
       <div className="legend-item">
         <div className="legend-color domain-indicator"></div>

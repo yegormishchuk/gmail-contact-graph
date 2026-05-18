@@ -27,7 +27,8 @@ export function Graph() {
   }, []);
 
   // Map calendar data to the GraphData shape (so useD3Simulation can render it).
-  // compositeScore = calendarScore; received/sent unused but required by the type.
+  // compositeScore = calendarScore. Reuse received/sent fill to show
+  // organized / total ratio in darker green (receivedColor) over light green.
   const calendarAsGraphData: GraphData | null = useMemo(() => {
     if (!state.calendarData) return null;
     const nodes: GraphNode[] = state.calendarData.nodes.map(n => ({
@@ -35,8 +36,8 @@ export function Graph() {
       name: n.name,
       email: n.email,
       isCenter: n.isCenter,
-      received: 0,
-      sent: 0,
+      received: n.organizedEvents,
+      sent: Math.max(0, n.totalEvents - n.organizedEvents),
       compositeScore: n.calendarScore,
     }));
     return {
