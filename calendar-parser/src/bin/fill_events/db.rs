@@ -50,6 +50,7 @@ pub fn setup_event_attendees_table(conn: &Connection) {
          CREATE TABLE event_attendees (
              email                  TEXT PRIMARY KEY,
              name                   TEXT NOT NULL DEFAULT '',
+             contact_id             INTEGER,
              organized_events_count INTEGER NOT NULL DEFAULT 0,
              invited_events_count   INTEGER NOT NULL DEFAULT 0,
              total_events_count     INTEGER NOT NULL DEFAULT 0,
@@ -59,7 +60,8 @@ pub fn setup_event_attendees_table(conn: &Connection) {
              acceptance_rate        REAL,
              accepted_count         INTEGER NOT NULL DEFAULT 0,
              declined_count         INTEGER NOT NULL DEFAULT 0
-         );",
+         );
+         CREATE INDEX IF NOT EXISTS idx_event_attendees_contact_id ON event_attendees(contact_id);",
     )
     .unwrap();
 }
@@ -212,6 +214,33 @@ pub fn populate_event_attendees(conn: &Connection, user_email: &str) -> u64 {
         count += 1;
     }
     count
+}
+
+/// Link rows in event_attendees to rows in the contacts table by exact (case-insensitive)
+/// email match. Sets `contact_id` and overwrites `name` with the contact's name.
+/// Returns the number of rows updated. Returns 0 if the contacts table is missing.
+pub fn link_event_attendees_to_contacts(conn: &Connection) -> u64 {
+    let has_contacts: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='contacts'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    if has_contacts == 0 {
+        return 0;
+    }
+
+    conn.execute(
+        "UPDATE event_attendees \
+         SET contact_id = c.id, \
+             name = c.name \
+         FROM contacts c \
+         WHERE LOWER(c.email) = LOWER(event_attendees.email)",
+        [],
+    )
+    .map(|n| n as u64)
+    .unwrap_or(0)
 }
 
 pub struct InsertCounts {

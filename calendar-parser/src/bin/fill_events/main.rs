@@ -12,8 +12,8 @@ use chrono::{Duration, Utc};
 use rusqlite::Connection;
 
 use db::{
-    insert_event, populate_event_attendees, setup_event_attendees_table, setup_events_db,
-    InsertCounts, INSERT_SQL,
+    insert_event, link_event_attendees_to_contacts, populate_event_attendees,
+    setup_event_attendees_table, setup_events_db, InsertCounts, INSERT_SQL,
 };
 use parsing::{extract_events, unfold_lines};
 
@@ -106,6 +106,8 @@ async fn main() {
         Some(email) if !email.trim().is_empty() => {
             let n = populate_event_attendees(&conn, email);
             eprintln!("event_attendees: {} rows (excluding {})", n, email);
+            let linked = link_event_attendees_to_contacts(&conn);
+            eprintln!("event_attendees: linked {} rows to contacts", linked);
         }
         _ => {
             eprintln!(
