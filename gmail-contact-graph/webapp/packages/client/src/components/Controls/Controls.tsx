@@ -29,10 +29,14 @@ function countQualifyingGroups(
 export function Controls() {
   const { state, dispatch } = useAppContext();
   const [searchQuery, setSearchQuery] = useState('');
-  const { messageGroups, domains, rawData } = state;
+  const { messageGroups, domains, rawData, calendarData } = state;
 
   const isGroupFilter = state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations';
-  const maxContacts = rawData?.stats.totalContacts || 500;
+  const isCalendarFilter = state.filters.filterType === 'calendar';
+  const calendarContacts = calendarData ? calendarData.nodes.filter(n => !n.isCenter).length : 0;
+  const maxContacts = isCalendarFilter
+    ? (calendarContacts || 500)
+    : (rawData?.stats.totalContacts || 500);
 
   const qualifyingGroups = (state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations')
     ? countQualifyingGroups(state.filters.filterType, rawData, messageGroups, domains)
