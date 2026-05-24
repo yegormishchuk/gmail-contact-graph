@@ -807,7 +807,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       .transition('opacity').duration(150)
       .style('opacity', 1);
 
-  }, [options.selectedNode, options.data, options.domains, options.messageGroups, options.filterType]);
+  }, [options.selectedNode, options.data, options.domains, options.messageGroups, options.eventGroups, options.filterType]);
 
   const focusGroup = useCallback((
     label: string,
