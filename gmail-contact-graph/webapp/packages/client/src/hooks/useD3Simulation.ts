@@ -723,6 +723,40 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     if (!options.selectedNode) return;
 
     const selectedEmail = options.selectedNode.email.toLowerCase();
+
+    // Calendar view: draw ropes for the event groups containing the selected attendee.
+    if (options.filterType === 'calendar') {
+      const selectedEventGroups = Object.entries(options.eventGroups?.groups ?? {})
+        .filter(([_, emails]) =>
+          emails.map(e => e.toLowerCase()).includes(selectedEmail) &&
+          emails.length >= MIN_MSG_GROUP_SIZE
+        )
+        .sort(([, a], [, b]) => b.length - a.length)
+        .slice(0, MAX_EVENT_ROPES);
+
+      const allVisibleMemberEmails = new Set<string>();
+      const largeBorderColors = new Map<string, string[]>();
+
+      selectedEventGroups.forEach(([label, emails], groupIdx) => {
+        const memberEmails = emails.map(e => e.toLowerCase());
+        memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
+
+        const groupColor = graphConfig.groupColors[groupIdx % graphConfig.groupColors.length];
+
+        if (memberEmails.length <= ROPE_MAX_SIZE) {
+          drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, groupColor, label);
+        } else {
+          memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
+            const prev = largeBorderColors.get(email) ?? [];
+            largeBorderColors.set(email, [...prev, groupColor]);
+          });
+        }
+      });
+
+      highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail);
+      return;
+    }
+
     const emailDomain = selectedEmail.split('@')[1];
     const domainUsers = options.domains?.domain_groups?.[emailDomain] ?? [];
 
@@ -771,41 +805,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       }
     });
 
-    // ── Animate colored borders for large-group members ───────────────────────
-    if (largeBorderColors.size > 0) {
-      nodesGroupRef.current.selectAll<SVGGElement, GraphNode>('g.node-contact')
-        .each(function(d) {
-          const colors = largeBorderColors.get(d.email.toLowerCase());
-          if (colors && colors.length > 0) {
-            const color = colors.length === 1 ? colors[0] : blendColors(colors);
-            const el = d3.select(this);
-            el.select<SVGCircleElement>('.node-border')
-              .transition('border').duration(420).ease(d3.easeCubicOut)
-              .attr('stroke', color)
-              .attr('stroke-width', 4)
-              .on('end', () => el.classed('node-group-member', true));
-          }
-        });
-    }
-
-    // ── Animate non-members fading out ────────────────────────────────────────
-    if (allVisibleMemberEmails.size > 1) {
-      nodesGroupRef.current.selectAll<SVGGElement, GraphNode>('g.node-contact')
-        .each(function(d) {
-          const email = d.email.toLowerCase();
-          if (!allVisibleMemberEmails.has(email) && email !== selectedEmail) {
-            d3.select(this)
-              .transition('opacity').duration(380).ease(d3.easeCubicOut)
-              .style('opacity', 0.15);
-          }
-        });
-    }
-
-    // ── Selected node stays fully visible ─────────────────────────────────────
-    nodesGroupRef.current.selectAll<SVGGElement, GraphNode>('g.node-contact')
-      .filter(d => d.email.toLowerCase() === selectedEmail)
-      .transition('opacity').duration(150)
-      .style('opacity', 1);
+    highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail);
 
   }, [options.selectedNode, options.data, options.domains, options.messageGroups, options.eventGroups, options.filterType]);
 
@@ -885,6 +885,47 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function highlightGroupMembers(
+  nodesGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
+  allVisibleMemberEmails: Set<string>,
+  largeBorderColors: Map<string, string[]>,
+  selectedEmail: string,
+) {
+  // Colored borders for members of large (rope-skipped) groups
+  if (largeBorderColors.size > 0) {
+    nodesGroup.selectAll<SVGGElement, GraphNode>('g.node-contact').each(function (d) {
+      const colors = largeBorderColors.get(d.email.toLowerCase());
+      if (colors && colors.length > 0) {
+        const color = colors.length === 1 ? colors[0] : blendColors(colors);
+        const el = d3.select(this);
+        el.select<SVGCircleElement>('.node-border')
+          .transition('border').duration(420).ease(d3.easeCubicOut)
+          .attr('stroke', color)
+          .attr('stroke-width', 4)
+          .on('end', () => el.classed('node-group-member', true));
+      }
+    });
+  }
+
+  // Fade out non-members
+  if (allVisibleMemberEmails.size > 1) {
+    nodesGroup.selectAll<SVGGElement, GraphNode>('g.node-contact').each(function (d) {
+      const email = d.email.toLowerCase();
+      if (!allVisibleMemberEmails.has(email) && email !== selectedEmail) {
+        d3.select(this)
+          .transition('opacity').duration(380).ease(d3.easeCubicOut)
+          .style('opacity', 0.15);
+      }
+    });
+  }
+
+  // Keep the selected node fully visible
+  nodesGroup.selectAll<SVGGElement, GraphNode>('g.node-contact')
+    .filter(d => d.email.toLowerCase() === selectedEmail)
+    .transition('opacity').duration(150)
+    .style('opacity', 1);
+}
 
 function drawRope(
   group: d3.Selection<SVGGElement, unknown, null, undefined>,
