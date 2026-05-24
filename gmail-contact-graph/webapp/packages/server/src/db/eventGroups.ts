@@ -48,7 +48,7 @@ export function buildEventGroups(rows: EventRow[], userEmail: string): EventGrou
 
     let entry = byUid.get(r.uid);
     if (!entry) {
-      entry = { label: '', dtstart: r.dtstart ?? null, members: new Set<string>() };
+      entry = { label: '', dtstart: r.dtstart, members: new Set<string>() };
       byUid.set(r.uid, entry);
     }
     if (!entry.label && r.summary && r.summary.trim()) {
@@ -75,7 +75,8 @@ export function buildEventGroups(rows: EventRow[], userEmail: string): EventGrou
       const date = formatDate(entry.dtstart);
       label = date ? `${base} — ${date}` : base;
       if (groups[label] !== undefined) {
-        const n = (suffixCounters.get(base) ?? 1) + 1;
+        let n = (suffixCounters.get(base) ?? 1) + 1;
+        while (groups[`${base} (${n})`] !== undefined) n++;
         suffixCounters.set(base, n);
         label = `${base} (${n})`;
       }

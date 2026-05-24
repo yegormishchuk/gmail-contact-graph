@@ -31,7 +31,7 @@ function row(partial: Partial<EventRow>): EventRow {
   assert.deepEqual(r.groups['Standup'].sort(), ['alice@x.com', 'bob@x.com']);
 }
 
-// 3. Groups with < 2 members are dropped.
+// 3. Groups with < 2 non-self attendees are dropped.
 {
   const rows = [
     row({ uid: 'solo', summary: 'Just us', attendees_json: JSON.stringify([{ email: 'me@x.com' }, { email: 'only@x.com' }]) }),
@@ -52,6 +52,8 @@ function row(partial: Partial<EventRow>): EventRow {
   assert.equal(r.total_groups, 2);
   assert.ok(r.groups['1:1'], 'first keeps base label');
   assert.ok(r.groups['1:1 — 2024-02-14'], 'second is date-suffixed');
+  assert.deepEqual(r.groups['1:1'].sort(), ['a@x.com', 'b@x.com']);
+  assert.deepEqual(r.groups['1:1 — 2024-02-14'].sort(), ['a@x.com', 'b@x.com']);
 }
 
 // 5. Untitled events get a placeholder label.
