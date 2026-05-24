@@ -29,3 +29,8 @@ export interface CalendarStats {
   topByMeetings: { name: string; email: string; meetings: number } | null;
   topOrgByMeetings: { domain: string; meetings: number } | null;
 }
+
+export interface EventGroups {
+  total_groups: number;
+  groups: Record<string, string[]>; // event label -> attendee emails
+}
