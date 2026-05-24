@@ -7,6 +7,7 @@ import type {
   ApiSuccessResponse,
   CalendarGraphData,
   CalendarStats,
+  EventGroups,
 } from '@gmail-graph/shared';
 
 const API_BASE = '/api';
@@ -39,6 +40,7 @@ export const api = {
   getSpamStats: () => fetchJson<SpamStats>('/spam-stats'),
   getCalendarGraph: () => fetchJson<CalendarGraphData>('/calendar-graph'),
   getCalendarStats: () => fetchJson<CalendarStats>('/calendar-stats'),
+  getEventGroups: () => fetchJson<EventGroups>('/event-groups'),
   getAllContacts: () =>
     fetchJson<{ contacts: { name: string; email: string }[]; excludedEmails: string[] }>('/contacts/all'),
 

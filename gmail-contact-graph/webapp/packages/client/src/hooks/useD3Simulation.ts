@@ -20,7 +20,7 @@ interface UseD3SimulationOptions {
   domains: DomainGroups | null;
   messageGroups: MessageGroups | null;
   selectedNode: GraphNode | null;
-  filterType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations';
+  filterType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations' | 'eventGroups';
   limit: number;
   onNodeClick: (node: GraphNode, position: { x: number; y: number }) => void;
   onGroupHover?: (data: GroupHoverData | null, position?: { x: number; y: number }) => void;

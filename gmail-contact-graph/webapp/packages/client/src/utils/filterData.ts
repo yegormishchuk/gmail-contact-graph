@@ -2,7 +2,7 @@ import type { GraphData, GraphNode } from '@gmail-graph/shared';
 
 interface Filters {
   limit: number;
-  filterType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations';
+  filterType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations' | 'eventGroups';
   searchQuery: string;
 }
 
