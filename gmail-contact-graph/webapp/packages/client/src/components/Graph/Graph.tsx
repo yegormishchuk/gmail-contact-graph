@@ -53,7 +53,9 @@ export function Graph() {
   }, [state.calendarData]);
 
   const filteredData = useMemo(() => {
-    if (state.filters.filterType === 'calendar') {
+    const usesCalendar =
+      state.filters.filterType === 'calendar' || state.filters.filterType === 'eventGroups';
+    if (usesCalendar) {
       return calendarAsGraphData ? filterData(calendarAsGraphData, state.filters) : null;
     }
     return state.rawData ? filterData(state.rawData, state.filters) : null;
@@ -64,6 +66,7 @@ export function Graph() {
     data: filteredData,
     domains: state.domains,
     messageGroups: state.messageGroups,
+    eventGroups: state.eventGroups,
     selectedNode: state.selectedNode,
     limit: state.filters.limit,
     onNodeClick: handleNodeClick,

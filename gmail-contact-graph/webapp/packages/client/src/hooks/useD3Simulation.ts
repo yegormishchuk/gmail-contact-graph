@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
-import type { GraphData, GraphNode, DomainGroups, MessageGroups } from '@gmail-graph/shared';
+import type { GraphData, GraphNode, DomainGroups, MessageGroups, EventGroups } from '@gmail-graph/shared';
 import { graphConfig } from '../utils/graphConfig';
 import { getNodeRadius } from '../utils/filterData';
 import type { GroupHoverData } from '../utils/groupTypes';
@@ -8,6 +8,7 @@ export type { GroupHoverData };
 
 const MIN_MSG_GROUP_SIZE = 3;
 const ROPE_MAX_SIZE = 8;
+const MAX_EVENT_ROPES = 8;
 
 interface RopeLink {
   source: GraphNode;
@@ -19,6 +20,7 @@ interface UseD3SimulationOptions {
   data: GraphData | null;
   domains: DomainGroups | null;
   messageGroups: MessageGroups | null;
+  eventGroups: EventGroups | null;
   selectedNode: GraphNode | null;
   filterType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations' | 'eventGroups';
   limit: number;
@@ -49,7 +51,10 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
   useEffect(() => {
     if (!options.svgRef.current || !options.data) return;
 
-    const isGroupMode = options.filterType === 'messageGroups' || options.filterType === 'organizations';
+    const isGroupMode =
+      options.filterType === 'messageGroups' ||
+      options.filterType === 'organizations' ||
+      options.filterType === 'eventGroups';
 
     // Stop and clear any previous group simulations
     groupSimulationsRef.current.forEach(s => s.stop());
@@ -103,6 +108,15 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
             .filter((n): n is GraphNode => n !== undefined);
           if (members.length >= MIN_MSG_GROUP_SIZE) {
             groups.push({ label: subject, members });
+          }
+        });
+      } else if (options.filterType === 'eventGroups' && options.eventGroups) {
+        Object.entries(options.eventGroups.groups).forEach(([label, emails]) => {
+          const members = emails
+            .map(e => nodesByEmail.get(e.toLowerCase()))
+            .filter((n): n is GraphNode => n !== undefined);
+          if (members.length >= MIN_MSG_GROUP_SIZE) {
+            groups.push({ label, members });
           }
         });
       }
@@ -664,11 +678,14 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     return () => {
       simulation.stop();
     };
-  }, [options.data, options.svgRef, options.onNodeClick, options.domains, options.messageGroups, options.filterType]);
+  }, [options.data, options.svgRef, options.onNodeClick, options.domains, options.messageGroups, options.eventGroups, options.filterType]);
 
   // Group visualization effect — runs when selected node or data/groups change
   useEffect(() => {
-    const isGroupMode = options.filterType === 'messageGroups' || options.filterType === 'organizations';
+    const isGroupMode =
+      options.filterType === 'messageGroups' ||
+      options.filterType === 'organizations' ||
+      options.filterType === 'eventGroups';
     if (isGroupMode) return;
 
     if (!domainLinksGroupRef.current || !groupLinksGroupRef.current || !nodesGroupRef.current) return;
