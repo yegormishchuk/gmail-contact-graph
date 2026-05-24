@@ -14,7 +14,10 @@ export function filterData(rawData: GraphData, filters: Filters): GraphData {
 
   // Apply contact limit only for non-group filters.
   // Group filters apply their own limit (number of groups) inside useD3Simulation.
-  const isGroupFilter = filters.filterType === 'messageGroups' || filters.filterType === 'organizations';
+  const isGroupFilter =
+    filters.filterType === 'messageGroups' ||
+    filters.filterType === 'organizations' ||
+    filters.filterType === 'eventGroups';
   if (!isGroupFilter) {
     nodes = nodes.slice(0, filters.limit);
   }
