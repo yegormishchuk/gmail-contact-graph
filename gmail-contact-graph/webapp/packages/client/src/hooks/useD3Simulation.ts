@@ -8,7 +8,7 @@ export type { GroupHoverData };
 
 const MIN_MSG_GROUP_SIZE = 3;
 const ROPE_MAX_SIZE = 8;
-const MAX_EVENT_ROPES = 8;
+const MAX_EVENT_GROUPS = 8;
 
 interface RopeLink {
   source: GraphNode;
@@ -815,7 +815,11 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
     const selectedEmail = options.selectedNode.email.toLowerCase();
 
-    // Calendar view: draw ropes for the event groups containing the selected attendee.
+    // Calendar view: instead of drawing a web of ropes, colour each co-attendee's
+    // circle border by the event group it belongs to — like the Gmail org-border
+    // highlight (e.g. nd.edu in yellow), but with a distinct colour per event group.
+    // A shared attendee takes the first (largest) group's colour, so colours never
+    // blend into gray.
     if (options.filterType === 'calendar') {
       const selectedEventGroups = Object.entries(options.eventGroups?.groups ?? {})
         .filter(([_, emails]) =>
@@ -823,22 +827,23 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           emails.length >= MIN_MSG_GROUP_SIZE
         )
         .sort(([, a], [, b]) => b.length - a.length)
-        .slice(0, MAX_EVENT_ROPES);
+        .slice(0, MAX_EVENT_GROUPS);
 
       const allVisibleMemberEmails = new Set<string>();
+      const borderColors = new Map<string, string[]>();
 
-      // Always draw a colored rope per event group (no size-based gray-border
-      // fallback) so calendar ropes match the Gmail palette/style even for the
-      // large attendee lists typical of calendar events.
-      selectedEventGroups.forEach(([label, emails], groupIdx) => {
-        const memberEmails = emails.map(e => e.toLowerCase());
-        memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
-
+      selectedEventGroups.forEach(([_, emails], groupIdx) => {
         const groupColor = graphConfig.groupColors[groupIdx % graphConfig.groupColors.length];
-        drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, groupColor, label);
+        emails
+          .map(e => e.toLowerCase())
+          .filter(e => nodeMap.has(e))
+          .forEach(e => {
+            allVisibleMemberEmails.add(e);
+            if (!borderColors.has(e)) borderColors.set(e, [groupColor]); // first group wins — single colour, no blend
+          });
       });
 
-      highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, new Map(), selectedEmail);
+      highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, borderColors, selectedEmail);
       return;
     }
 
