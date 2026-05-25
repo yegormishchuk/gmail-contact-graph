@@ -3,7 +3,7 @@ import { useAppContext } from '../../context/AppContext';
 
 export function Legend() {
   const { state } = useAppContext();
-  const isCalendar = state.filters.filterType === 'calendar';
+  const isCalendar = state.filters.filterType === 'calendar' || state.filters.filterType === 'eventGroups';
   return (
     <div className="legend">
       <div className="legend-title">Legend</div>

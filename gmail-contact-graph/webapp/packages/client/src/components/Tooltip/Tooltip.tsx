@@ -17,7 +17,7 @@ const OFFSET = 14;
 export function Tooltip() {
   const { state, dispatch } = useAppContext();
   const { selectedNode, selectedNodePosition, domains, messageGroups } = state;
-  const isCalendarMode = state.filters.filterType === 'calendar';
+  const isCalendarMode = state.filters.filterType === 'calendar' || state.filters.filterType === 'eventGroups';
   const calendarInfo = isCalendarMode && selectedNode
     ? state.calendarData?.nodes.find(n => n.email.toLowerCase() === selectedNode.email.toLowerCase()) ?? null
     : null;
@@ -138,13 +138,13 @@ export function Tooltip() {
       <div className="tooltip-name">{selectedNode.name}</div>
       <div className="tooltip-email">{selectedNode.email}</div>
 
-      {hasDomain && (
+      {!isCalendarMode && hasDomain && (
         <div className="tooltip-org visible">
           @{emailDomain} ({domainUsers.length} contacts)
         </div>
       )}
 
-      {contactGroups.length > 0 && (
+      {!isCalendarMode && contactGroups.length > 0 && (
         <div className="tooltip-groups visible">
           {visibleGroups.map(({ subject, count }, i) => (
             <div key={subject} style={{ color: graphConfig.groupColors[i % graphConfig.groupColors.length] }}>
