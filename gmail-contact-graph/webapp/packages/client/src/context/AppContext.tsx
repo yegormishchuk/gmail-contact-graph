@@ -7,6 +7,7 @@ import type {
   ExcludedContact,
   CalendarGraphData,
   CalendarStats,
+  EventGroups,
 } from '@gmail-graph/shared';
 import type { GroupHoverData } from '../utils/groupTypes';
 
@@ -18,10 +19,11 @@ interface AppState {
   excludedContacts: ExcludedContact[];
   calendarData: CalendarGraphData | null;
   calendarStats: CalendarStats | null;
+  eventGroups: EventGroups | null;
 
   filters: {
     limit: number;
-    filterType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations';
+    filterType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations' | 'eventGroups';
     searchQuery: string;
   };
 
@@ -44,6 +46,7 @@ const initialState: AppState = {
   excludedContacts: [],
   calendarData: null,
   calendarStats: null,
+  eventGroups: null,
   filters: {
     limit: 50,
     filterType: 'overall',
@@ -63,11 +66,11 @@ const initialState: AppState = {
 // Actions
 type Action =
   | { type: 'SET_DATA'; payload: { graph: GraphData; domains: DomainGroups; groups: MessageGroups; excluded: ExcludedContact[] } }
-  | { type: 'SET_CALENDAR_DATA'; payload: { graph: CalendarGraphData; stats: CalendarStats } }
+  | { type: 'SET_CALENDAR_DATA'; payload: { graph: CalendarGraphData; stats: CalendarStats; eventGroups: EventGroups } }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_FILTER_LIMIT'; payload: number }
-  | { type: 'SET_FILTER_TYPE'; payload: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations' }
+  | { type: 'SET_FILTER_TYPE'; payload: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations' | 'eventGroups' }
   | { type: 'SET_SEARCH_QUERY'; payload: string }
   | { type: 'SELECT_NODE'; payload: GraphNode | null; position?: { x: number; y: number } | null }
   | { type: 'SELECT_GROUP'; payload: GroupHoverData | null; position?: { x: number; y: number } | null }
@@ -143,6 +146,7 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         calendarData: action.payload.graph,
         calendarStats: action.payload.stats,
+        eventGroups: action.payload.eventGroups,
       };
     case 'MARK_CONTACT_CLEAR': {
       if (!state.rawData) return state;

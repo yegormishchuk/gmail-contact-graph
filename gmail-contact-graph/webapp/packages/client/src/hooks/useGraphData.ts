@@ -10,13 +10,14 @@ export function useGraphData() {
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
 
-        const [graph, domains, groups, excluded, calendarGraph, calendarStats] = await Promise.all([
+        const [graph, domains, groups, excluded, calendarGraph, calendarStats, eventGroups] = await Promise.all([
           api.getGraph(),
           api.getDomains(),
           api.getMessageGroups(),
           api.getExcludedContacts(),
           api.getCalendarGraph(),
           api.getCalendarStats(),
+          api.getEventGroups(),
         ]);
 
         dispatch({
@@ -25,7 +26,7 @@ export function useGraphData() {
         });
         dispatch({
           type: 'SET_CALENDAR_DATA',
-          payload: { graph: calendarGraph, stats: calendarStats },
+          payload: { graph: calendarGraph, stats: calendarStats, eventGroups },
         });
       } catch (err) {
         dispatch({

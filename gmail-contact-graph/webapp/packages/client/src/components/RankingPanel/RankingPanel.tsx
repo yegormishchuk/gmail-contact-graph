@@ -20,8 +20,8 @@ export function RankingPanel() {
 
   const { rawData, excludedContacts, rankingTab, panelVisible } = state;
   const filterType = state.filters.filterType;
-  const isGroupFilter = filterType === 'messageGroups' || filterType === 'organizations';
-  const isCalendarFilter = filterType === 'calendar';
+  const isGroupFilter = filterType === 'messageGroups' || filterType === 'organizations' || filterType === 'eventGroups';
+  const usesCalendarNodes = filterType === 'calendar' || filterType === 'eventGroups';
   // Group filters use the "filtered" tab; calendar uses the main "ranking" tab with calendar data.
   const hasFilteredTab = isGroupFilter;
 
@@ -46,7 +46,7 @@ export function RankingPanel() {
   }
 
   // Pick the right node set: calendar nodes for Calendar filter, email nodes otherwise.
-  const sourceNodes = isCalendarFilter
+  const sourceNodes = usesCalendarNodes
     ? (state.calendarData?.nodes.filter(n => !n.isCenter).map(n => ({
         id: n.id,
         name: n.name,
@@ -68,40 +68,60 @@ export function RankingPanel() {
 
   // Filter ranking — groups
   const groupRanking: GroupRankItem[] = (() => {
-    if (!isGroupFilter || !rawData) return [];
-    const nodesByEmail = new Map(
-      rawData.nodes.filter(n => !n.isCenter).map(n => [n.email.toLowerCase(), n])
-    );
+    if (!isGroupFilter) return [];
     const items: GroupRankItem[] = [];
 
-    if (filterType === 'messageGroups' && state.messageGroups) {
-      Object.entries(state.messageGroups.groups).forEach(([subject, emails]) => {
+    if (filterType === 'eventGroups' && state.eventGroups && state.calendarData) {
+      const calByEmail = new Map(
+        state.calendarData.nodes.filter(n => !n.isCenter).map(n => [n.email.toLowerCase(), n])
+      );
+      Object.entries(state.eventGroups.groups).forEach(([label, emails]) => {
         const members = emails
-          .map(e => nodesByEmail.get(e.toLowerCase()))
-          .filter((n): n is GraphNode => n !== undefined);
+          .map(e => calByEmail.get(e.toLowerCase()))
+          .filter((n): n is NonNullable<typeof n> => n !== undefined);
         if (members.length >= MIN_GROUP_SIZE) {
           items.push({
-            label: subject,
-            totalScore: members.reduce((sum, m) => sum + m.compositeScore, 0),
+            label,
+            totalScore: members.reduce((sum, m) => sum + m.calendarScore, 0),
             memberCount: members.length,
             color: '',
           });
         }
       });
-    } else if (filterType === 'organizations' && state.domains) {
-      Object.entries(state.domains.domain_groups).forEach(([domain, users]) => {
-        const members = users
-          .map(u => nodesByEmail.get(u.email.toLowerCase()))
-          .filter((n): n is GraphNode => n !== undefined);
-        if (members.length >= MIN_GROUP_SIZE) {
-          items.push({
-            label: `@${domain}`,
-            totalScore: members.reduce((sum, m) => sum + m.compositeScore, 0),
-            memberCount: members.length,
-            color: '',
-          });
-        }
-      });
+    } else if (rawData) {
+      const nodesByEmail = new Map(
+        rawData.nodes.filter(n => !n.isCenter).map(n => [n.email.toLowerCase(), n])
+      );
+
+      if (filterType === 'messageGroups' && state.messageGroups) {
+        Object.entries(state.messageGroups.groups).forEach(([subject, emails]) => {
+          const members = emails
+            .map(e => nodesByEmail.get(e.toLowerCase()))
+            .filter((n): n is GraphNode => n !== undefined);
+          if (members.length >= MIN_GROUP_SIZE) {
+            items.push({
+              label: subject,
+              totalScore: members.reduce((sum, m) => sum + m.compositeScore, 0),
+              memberCount: members.length,
+              color: '',
+            });
+          }
+        });
+      } else if (filterType === 'organizations' && state.domains) {
+        Object.entries(state.domains.domain_groups).forEach(([domain, users]) => {
+          const members = users
+            .map(u => nodesByEmail.get(u.email.toLowerCase()))
+            .filter((n): n is GraphNode => n !== undefined);
+          if (members.length >= MIN_GROUP_SIZE) {
+            items.push({
+              label: `@${domain}`,
+              totalScore: members.reduce((sum, m) => sum + m.compositeScore, 0),
+              memberCount: members.length,
+              color: '',
+            });
+          }
+        });
+      }
     }
 
     items.sort((a, b) => b.totalScore - a.totalScore);
@@ -156,7 +176,20 @@ export function RankingPanel() {
       color: group.color,
     };
 
-    // Compute full stats from rawData
+    // Calendar-sourced event groups: compute stats from calendar nodes.
+    if (filterType === 'eventGroups' && state.eventGroups && state.calendarData) {
+      const calByEmail = new Map(
+        state.calendarData.nodes.filter(n => !n.isCenter).map(n => [n.email.toLowerCase(), n])
+      );
+      const emails = state.eventGroups.groups[group.label] ?? [];
+      const members = emails
+        .map(e2 => calByEmail.get(e2.toLowerCase()))
+        .filter((n): n is NonNullable<typeof n> => n !== undefined);
+      data.totalReceived = members.reduce((s, m) => s + m.organizedEvents, 0);
+      data.totalSent = members.reduce((s, m) => s + Math.max(0, m.totalEvents - m.organizedEvents), 0);
+      const orgs = new Set(members.map(m => m.email.split('@')[1]?.toLowerCase()).filter(Boolean));
+      data.orgCount = orgs.size;
+    } else // Compute full stats from rawData
     if (rawData) {
       const nodesByEmail = new Map(
         rawData.nodes.filter(n => !n.isCenter).map(n => [n.email.toLowerCase(), n])
@@ -232,7 +265,7 @@ export function RankingPanel() {
   });
 
   const filterTabLabel = isGroupFilter
-    ? (filterType === 'messageGroups' ? 'Groups' : 'Orgs')
+    ? (filterType === 'messageGroups' ? 'Groups' : filterType === 'organizations' ? 'Orgs' : 'Events')
     : 'Filter';
 
   return (
@@ -294,7 +327,7 @@ export function RankingPanel() {
               <span className="ranking-score">
                 {Math.round(contact.compositeScore)}
               </span>
-              {!isCalendarFilter && (
+              {!usesCalendarNodes && (
                 <button
                   className="ranking-delete"
                   title="Remove contact"
@@ -305,7 +338,7 @@ export function RankingPanel() {
               )}
             </div>
           ))}
-          {contactsWithPlace.length === 0 && isCalendarFilter && (
+          {contactsWithPlace.length === 0 && usesCalendarNodes && (
             <div className="ranking-empty">No calendar data available</div>
           )}
         </div>

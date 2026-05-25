@@ -1,6 +1,7 @@
 import { getDatabase } from './index.js';
 import { config } from '../config.js';
-import type { CalendarGraphData, CalendarNode, CalendarStats } from '@gmail-graph/shared';
+import type { CalendarGraphData, CalendarNode, CalendarStats, EventGroups } from '@gmail-graph/shared';
+import { buildEventGroups, type EventRow } from './eventGroups.js';
 
 const PERSONAL_DOMAINS = new Set([
   'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
@@ -201,4 +202,31 @@ export function loadCalendarStats(): CalendarStats {
     topByMeetings,
     topOrgByMeetings,
   };
+}
+
+export function loadEventGroups(): EventGroups {
+  const db = getDatabase();
+  if (!hasCalendarTables(db)) {
+    return { total_groups: 0, groups: {} };
+  }
+
+  const rows: EventRow[] = [];
+  const stmt = db.prepare('SELECT uid, summary, dtstart, attendees_json FROM events');
+  while (stmt.step()) {
+    const row = stmt.getAsObject() as unknown as {
+      uid: string;
+      summary: string;
+      dtstart: number | null;
+      attendees_json: string;
+    };
+    rows.push({
+      uid: row.uid,
+      summary: row.summary || '',
+      dtstart: row.dtstart ?? null,
+      attendees_json: row.attendees_json || '[]',
+    });
+  }
+  stmt.free();
+
+  return buildEventGroups(rows, config.MY_EMAIL);
 }

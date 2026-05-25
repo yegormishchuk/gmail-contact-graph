@@ -1,16 +1,27 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import type { GraphData, DomainGroups, MessageGroups } from '@gmail-graph/shared';
+import type { GraphData, DomainGroups, MessageGroups, CalendarGraphData, EventGroups } from '@gmail-graph/shared';
 
 const MIN_GROUP_SIZE = 3;
 const DEFAULT_CONTACT_LIMIT = 50;
 
 function countQualifyingGroups(
-  filterType: 'messageGroups' | 'organizations',
+  filterType: 'messageGroups' | 'organizations' | 'eventGroups',
   rawData: GraphData | null,
   messageGroups: MessageGroups | null,
   domains: DomainGroups | null,
+  calendarData: CalendarGraphData | null,
+  eventGroups: EventGroups | null,
 ): number {
+  if (filterType === 'eventGroups') {
+    if (!calendarData || !eventGroups) return 0;
+    const calEmails = new Set(
+      calendarData.nodes.filter(n => !n.isCenter).map(n => n.email.toLowerCase())
+    );
+    return Object.values(eventGroups.groups).filter(emails =>
+      emails.filter(e => calEmails.has(e.toLowerCase())).length >= MIN_GROUP_SIZE
+    ).length;
+  }
   if (!rawData) return 0;
   const nodeEmails = new Set(rawData.nodes.filter(n => !n.isCenter).map(n => n.email.toLowerCase()));
   if (filterType === 'messageGroups' && messageGroups) {
@@ -29,17 +40,23 @@ function countQualifyingGroups(
 export function Controls() {
   const { state, dispatch } = useAppContext();
   const [searchQuery, setSearchQuery] = useState('');
-  const { messageGroups, domains, rawData, calendarData } = state;
+  const { messageGroups, domains, rawData, calendarData, eventGroups } = state;
 
-  const isGroupFilter = state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations';
+  const isGroupFilter =
+    state.filters.filterType === 'messageGroups' ||
+    state.filters.filterType === 'organizations' ||
+    state.filters.filterType === 'eventGroups';
   const isCalendarFilter = state.filters.filterType === 'calendar';
   const calendarContacts = calendarData ? calendarData.nodes.filter(n => !n.isCenter).length : 0;
   const maxContacts = isCalendarFilter
     ? (calendarContacts || 500)
     : (rawData?.stats.totalContacts || 500);
 
-  const qualifyingGroups = (state.filters.filterType === 'messageGroups' || state.filters.filterType === 'organizations')
-    ? countQualifyingGroups(state.filters.filterType, rawData, messageGroups, domains)
+  const qualifyingGroups = isGroupFilter
+    ? countQualifyingGroups(
+        state.filters.filterType as 'messageGroups' | 'organizations' | 'eventGroups',
+        rawData, messageGroups, domains, calendarData, eventGroups,
+      )
     : 0;
 
   const sliderMax = isGroupFilter ? Math.max(qualifyingGroups, 1) : maxContacts;
@@ -48,11 +65,11 @@ export function Controls() {
   // Clamp displayed value so the thumb stays in-range
   const sliderValue = Math.min(state.filters.limit, sliderMax);
 
-  const handleFilterChange = (newType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations') => {
+  const handleFilterChange = (newType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations' | 'eventGroups') => {
     dispatch({ type: 'SET_FILTER_TYPE', payload: newType });
 
-    if (newType === 'messageGroups' || newType === 'organizations') {
-      const count = countQualifyingGroups(newType, rawData, messageGroups, domains);
+    if (newType === 'messageGroups' || newType === 'organizations' || newType === 'eventGroups') {
+      const count = countQualifyingGroups(newType, rawData, messageGroups, domains, calendarData, eventGroups);
       dispatch({ type: 'SET_FILTER_LIMIT', payload: Math.max(count, 1) });
     } else {
       // Restore a sensible contact limit when leaving group mode
@@ -143,6 +160,16 @@ export function Controls() {
             onChange={() => handleFilterChange('organizations')}
           />
           <span className="filter-label">Organizations</span>
+        </label>
+        <label className="filter-radio">
+          <input
+            type="radio"
+            name="filter-type"
+            value="eventGroups"
+            checked={state.filters.filterType === 'eventGroups'}
+            onChange={() => handleFilterChange('eventGroups')}
+          />
+          <span className="filter-label">Event Groups</span>
         </label>
       </div>
 
