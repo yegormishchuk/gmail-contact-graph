@@ -735,25 +735,19 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         .slice(0, MAX_EVENT_ROPES);
 
       const allVisibleMemberEmails = new Set<string>();
-      const largeBorderColors = new Map<string, string[]>();
 
+      // Always draw a colored rope per event group (no size-based gray-border
+      // fallback) so calendar ropes match the Gmail palette/style even for the
+      // large attendee lists typical of calendar events.
       selectedEventGroups.forEach(([label, emails], groupIdx) => {
         const memberEmails = emails.map(e => e.toLowerCase());
         memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
 
         const groupColor = graphConfig.groupColors[groupIdx % graphConfig.groupColors.length];
-
-        if (memberEmails.length <= ROPE_MAX_SIZE) {
-          drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, groupColor, label);
-        } else {
-          memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
-            const prev = largeBorderColors.get(email) ?? [];
-            largeBorderColors.set(email, [...prev, groupColor]);
-          });
-        }
+        drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, groupColor, label);
       });
 
-      highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail);
+      highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, new Map(), selectedEmail);
       return;
     }
 

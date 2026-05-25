@@ -16,7 +16,7 @@ const OFFSET = 14;
 
 export function Tooltip() {
   const { state, dispatch } = useAppContext();
-  const { selectedNode, selectedNodePosition, domains, messageGroups } = state;
+  const { selectedNode, selectedNodePosition, domains, messageGroups, eventGroups } = state;
   const isCalendarMode = state.filters.filterType === 'calendar' || state.filters.filterType === 'eventGroups';
   const calendarInfo = isCalendarMode && selectedNode
     ? state.calendarData?.nodes.find(n => n.email.toLowerCase() === selectedNode.email.toLowerCase()) ?? null
@@ -104,6 +104,19 @@ export function Tooltip() {
 
   const visibleGroups = showAllGroups ? contactGroups : contactGroups.slice(0, 2);
 
+  // Find event groups the attendee belongs to (calendar-data modes), sorted by attendee count desc.
+  const eventContactGroups = isCalendarMode && eventGroups?.groups
+    ? Object.entries(eventGroups.groups)
+        .filter(([_, emails]) =>
+          emails.map(e => e.toLowerCase()).includes(selectedNode.email.toLowerCase()) &&
+          emails.length >= 3
+        )
+        .map(([label, emails]) => ({ label, count: emails.length }))
+        .sort((a, b) => b.count - a.count)
+    : [];
+
+  const visibleEventGroups = showAllGroups ? eventContactGroups : eventContactGroups.slice(0, 2);
+
   const handleClose = () => {
     dispatch({ type: 'SELECT_NODE', payload: null });
   };
@@ -154,6 +167,21 @@ export function Tooltip() {
           {contactGroups.length > 2 && (
             <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
               {showAllGroups ? 'Show less' : `+${contactGroups.length - 2} more groups`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {isCalendarMode && eventContactGroups.length > 0 && (
+        <div className="tooltip-groups visible">
+          {visibleEventGroups.map(({ label, count }, i) => (
+            <div key={label} style={{ color: graphConfig.groupColors[i % graphConfig.groupColors.length] }}>
+              "{label}" ({count} attendees)
+            </div>
+          ))}
+          {eventContactGroups.length > 2 && (
+            <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
+              {showAllGroups ? 'Show less' : `+${eventContactGroups.length - 2} more events`}
             </button>
           )}
         </div>
