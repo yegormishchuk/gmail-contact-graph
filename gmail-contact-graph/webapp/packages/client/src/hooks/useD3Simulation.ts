@@ -40,6 +40,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
   const nodesGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
   const nodesDataRef = useRef<GraphNode[]>([]);
   const groupCellsRef = useRef<{ label: string; cx: number; cy: number; r: number }[]>([]);
+  const groupExpandRef = useRef<((label: string) => void) | null>(null);
 
   const resetZoom = useCallback(() => {
     if (!options.svgRef.current || !zoomRef.current) return;
@@ -59,6 +60,8 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     // Stop and clear any previous group simulations
     groupSimulationsRef.current.forEach(s => s.stop());
     groupSimulationsRef.current = [];
+    // Cleared each run; only the group-mode branch installs an expander.
+    groupExpandRef.current = null;
 
     if (isGroupMode) {
       // SVG setup
@@ -171,7 +174,13 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
       const groupColors = graphConfig.groupColors;
 
-      type Cell = { group: GroupEntry; cx: number; cy: number; r: number; color: string };
+      // Collapsed cells are small uniform circles, so they pack into a dense grid.
+      // Each cell stores both its collapsed radius (grid layout) and the full
+      // expanded radius used when the user clicks to reveal attendees.
+      const computeCollapsedR = (members: GraphNode[]): number =>
+        Math.min(86, graphConfig.centerNodeRadius + 8 + Math.sqrt(members.length) * 9);
+
+      type Cell = { group: GroupEntry; cx: number; cy: number; r: number; expandedR: number; color: string };
       const cells: Cell[] = [];
 
       let curX = PADDING;
@@ -179,7 +188,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       let rowMaxY = 0;
 
       groups.forEach((group, i) => {
-        const r = computeGroupR(group.members);
+        const r = computeCollapsedR(group.members);
         if (curX + 2 * r > width - PADDING && curX > PADDING) {
           curX = PADDING;
           curY = rowMaxY + PADDING;
@@ -188,13 +197,13 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         const cy = curY + r;
         curX = cx + r + PADDING;
         rowMaxY = Math.max(rowMaxY, cy + r);
-        cells.push({ group, cx, cy, r, color: groupColors[i % groupColors.length] });
+        cells.push({ group, cx, cy, r, expandedR: computeGroupR(group.members), color: groupColors[i % groupColors.length] });
       });
 
-      // Store cell positions for focusGroup
-      groupCellsRef.current = cells.map(c => ({ label: c.group.label, cx: c.cx, cy: c.cy, r: c.r }));
+      // Store cell positions for focusGroup (expanded radius so the camera frames the opened cluster)
+      groupCellsRef.current = cells.map(c => ({ label: c.group.label, cx: c.cx, cy: c.cy, r: c.expandedR }));
 
-      // Center the layout in the viewport initially
+      // Center the collapsed grid in the viewport initially
       const totalWidth = cells.length > 0 ? Math.max(...cells.map(c => c.cx + c.r)) + PADDING : width;
       const totalHeight = rowMaxY + PADDING;
       const initialTranslateX = (width - totalWidth) / 2;
@@ -214,27 +223,40 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         .attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 6)
         .attr('stroke', 'rgba(255, 255, 255, 0.4)').attr('stroke-width', 1.5);
 
-      // Render each group
-      cells.forEach(({ group, cx, cy, r, color }, groupIdx) => {
+      // Only one cell is expanded (showing attendees) at a time.
+      let expandedLabel: string | null = null;
+      const cellApi = new Map<string, { expand: () => void; collapse: (resetCamera?: boolean) => void }>();
+      const collapseAll = (except?: string, resetCamera = false) => {
+        cellApi.forEach((api, label) => {
+          if (label !== except) api.collapse(resetCamera);
+        });
+      };
+      groupExpandRef.current = (label: string) => cellApi.get(label)?.expand();
+
+      // Render each group collapsed (a small labeled circle); clicking expands it.
+      cells.forEach((cell, groupIdx) => {
+        const { group, cx, cy, r, expandedR, color } = cell;
+
         const groupG = g.append('g')
           .attr('class', 'group-cell')
           .attr('data-cx', cx)
           .attr('data-cy', cy)
-          .style('transition', 'transform 0.25s ease, opacity 0.25s ease');
+          .style('transition', 'opacity 0.25s ease');
 
-        // Boundary circle
-        groupG.append('circle')
+        // Boundary circle — animates between collapsed (r) and expanded (expandedR)
+        const boundary = groupG.append('circle')
           .attr('cx', cx).attr('cy', cy).attr('r', r)
           .attr('fill', color + '08')
           .attr('stroke', color)
           .attr('stroke-width', 1.5)
           .attr('stroke-dasharray', '6 3')
-          .attr('opacity', 0.7);
+          .attr('opacity', 0.7)
+          .style('cursor', 'pointer');
 
-        // Group label above circle
+        // Group label above circle (repositioned when the cell expands/collapses)
         const truncated = group.label.length > 25 ? group.label.substring(0, 23) + '…' : group.label;
-        groupG.append('text')
-          .attr('x', cx).attr('y', cy - r - 4)
+        const labelText = groupG.append('text')
+          .attr('x', cx).attr('y', cy - r - 6)
           .attr('text-anchor', 'middle')
           .attr('fill', color)
           .attr('font-size', '12px')
@@ -243,128 +265,232 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           .style('text-shadow', '0 1px 4px rgba(0,0,0,0.9)')
           .text(truncated);
 
-        // Center "me" node — same style as common graph
-        groupG.append('circle')
-          .attr('cx', cx).attr('cy', cy)
-          .attr('r', graphConfig.centerNodeRadius)
-          .attr('fill', graphConfig.centerColor)
-          .attr('stroke', '#fff')
-          .attr('stroke-width', 4);
-        groupG.append('text')
-          .attr('x', cx).attr('y', cy + graphConfig.centerNodeRadius + 15)
+        // Member-count badge, centered — shown only while collapsed
+        const countText = groupG.append('text')
+          .attr('x', cx).attr('y', cy)
           .attr('text-anchor', 'middle')
-          .attr('class', 'label label-center')
+          .attr('dominant-baseline', 'central')
+          .attr('fill', '#fff')
+          .attr('font-size', '16px')
+          .attr('font-weight', '700')
           .attr('pointer-events', 'none')
-          .text('me');
+          .text(group.members.length);
 
-        // Contact nodes — sorted by score descending (highest = closest to center)
-        const sorted = [...group.members].sort((a, b) => b.compositeScore - a.compositeScore);
-        const maxGroupScore = sorted[0]?.compositeScore || 1;
-        const nodesGroup = groupG.append('g').attr('class', 'nodes');
+        // Lazily-rendered expanded content (me + attendees + labels + sim).
+        let contentG: d3.Selection<SVGGElement, unknown, null, undefined> | null = null;
+        let sim: d3.Simulation<GraphNode, undefined> | null = null;
 
-        // Pre-position contacts in concentric rings: inner ring = highest-score contacts
-        const nodePositions = new Map<string, { x: number; y: number }>();
-        let ringR = graphConfig.centerNodeRadius + INNER_GAP;
-        let ringRemaining = sorted.slice();
+        const renderExpanded = () => {
+          contentG = groupG.append('g').attr('class', 'group-expanded');
 
-        while (ringRemaining.length > 0) {
-          const nodeR = getNodeRadius(ringRemaining[0], maxGroupScore);
-          const maxRingR = r - OUTER_MARGIN - nodeR;
-          const clampedRingR = Math.min(ringR, maxRingR);
-          const isLastRing = clampedRingR >= maxRingR;
-          const circumference = 2 * Math.PI * clampedRingR;
-          const capacity = isLastRing
-            ? ringRemaining.length
-            : Math.max(1, Math.floor(circumference / (nodeR * 2 + 8)));
-          const batch = ringRemaining.splice(0, capacity);
+          // Center "me" node — same style as common graph
+          contentG.append('circle')
+            .attr('cx', cx).attr('cy', cy)
+            .attr('r', graphConfig.centerNodeRadius)
+            .attr('fill', graphConfig.centerColor)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 4);
+          contentG.append('text')
+            .attr('x', cx).attr('y', cy + graphConfig.centerNodeRadius + 15)
+            .attr('text-anchor', 'middle')
+            .attr('class', 'label label-center')
+            .attr('pointer-events', 'none')
+            .text('me');
 
-          batch.forEach((node, i) => {
-            const angle = -Math.PI / 2 + (i / batch.length) * 2 * Math.PI;
-            nodePositions.set(node.email, {
-              x: cx + clampedRingR * Math.cos(angle),
-              y: cy + clampedRingR * Math.sin(angle),
+          // Contact nodes — sorted by score descending (highest = closest to center)
+          const sorted = [...group.members].sort((a, b) => b.compositeScore - a.compositeScore);
+          const maxGroupScore = sorted[0]?.compositeScore || 1;
+          const nodesGroup = contentG.append('g').attr('class', 'nodes');
+
+          // Pre-position contacts in concentric rings (sized to the expanded radius)
+          const nodePositions = new Map<string, { x: number; y: number }>();
+          let ringR = graphConfig.centerNodeRadius + INNER_GAP;
+          let ringRemaining = sorted.slice();
+
+          while (ringRemaining.length > 0) {
+            const nodeR = getNodeRadius(ringRemaining[0], maxGroupScore);
+            const maxRingR = expandedR - OUTER_MARGIN - nodeR;
+            const clampedRingR = Math.min(ringR, maxRingR);
+            const isLastRing = clampedRingR >= maxRingR;
+            const circumference = 2 * Math.PI * clampedRingR;
+            const capacity = isLastRing
+              ? ringRemaining.length
+              : Math.max(1, Math.floor(circumference / (nodeR * 2 + 8)));
+            const batch = ringRemaining.splice(0, capacity);
+
+            batch.forEach((node, i) => {
+              const angle = -Math.PI / 2 + (i / batch.length) * 2 * Math.PI;
+              nodePositions.set(node.email, {
+                x: cx + clampedRingR * Math.cos(angle),
+                y: cy + clampedRingR * Math.sin(angle),
+              });
             });
-          });
 
-          if (isLastRing) break;
-          ringR = clampedRingR + nodeR * 2 + RING_GAP;
-        }
-
-        const simNodes: GraphNode[] = group.members.map(n => {
-          const pos = nodePositions.get(n.email) || { x: cx, y: cy };
-          return { ...n, x: pos.x, y: pos.y };
-        });
-
-        const nodeGroups = nodesGroup.selectAll<SVGGElement, GraphNode>('g.node')
-          .data(simNodes)
-          .enter()
-          .append('g')
-          .attr('class', d => {
-            let cls = 'node node-contact';
-            if (d.notClear) cls += ' node-unclear';
-            return cls;
-          });
-
-        nodeGroups.each(function(d, nodeIdx) {
-          const nodeG = d3.select(this);
-          const radius = getNodeRadius(d, maxGroupScore);
-          const total = (d.sent || 0) + (d.received || 0);
-          const receivedRatio = total > 0 ? d.received / total : 0.5;
-
-          const clipId = `clip-g${groupIdx}-node-${nodeIdx}`;
-          const nodeDefs = nodeG.append('defs');
-          nodeDefs.append('clipPath')
-            .attr('id', clipId)
-            .append('circle').attr('r', radius);
-
-          const clipped = nodeG.append('g').attr('clip-path', `url(#${clipId})`);
-          clipped.append('rect')
-            .attr('x', -radius).attr('y', -radius)
-            .attr('width', radius * 2).attr('height', radius * 2)
-            .attr('fill', graphConfig.sentColor);
-
-          const fillHeight = radius * 2 * receivedRatio;
-          clipped.append('rect')
-            .attr('x', -radius).attr('y', radius - fillHeight)
-            .attr('width', radius * 2).attr('height', fillHeight)
-            .attr('fill', graphConfig.receivedColor);
-
-          const hasSent = d.sent > 0;
-          nodeG.append('circle')
-            .attr('r', radius).attr('fill', 'none')
-            .attr('stroke', hasSent ? graphConfig.sentColor : 'rgba(255,255,255,0.3)')
-            .attr('stroke-width', hasSent ? graphConfig.borderWidth : 1.5)
-            .attr('class', 'node-border');
-
-          if (d.notClear) {
-            nodeG.append('circle')
-              .attr('r', radius)
-              .attr('fill', 'url(#hatch-pattern)')
-              .attr('class', 'node-hatch');
+            if (isLastRing) break;
+            ringR = clampedRingR + nodeR * 2 + RING_GAP;
           }
-        });
 
-        // Labels
-        const labelsG = groupG.append('g').attr('class', 'labels');
-        const labels = labelsG.selectAll<SVGTextElement, GraphNode>('text')
-          .data(simNodes)
-          .enter()
-          .append('text')
-          .attr('class', 'label')
-          .attr('text-anchor', 'middle')
-          .text(d => {
-            const name = d.name;
-            return name.length > 12 ? name.substring(0, 10) + '...' : name;
+          const simNodes: GraphNode[] = group.members.map(n => {
+            const pos = nodePositions.get(n.email) || { x: cx, y: cy };
+            return { ...n, x: pos.x, y: pos.y };
           });
 
-        // Click handler
-        nodeGroups.on('click', function(event, d) {
-          if (d.isCenter) return;
-          event.stopPropagation();
-          options.onNodeClick(d, { x: event.clientX, y: event.clientY });
-        });
+          const nodeGroups = nodesGroup.selectAll<SVGGElement, GraphNode>('g.node')
+            .data(simNodes)
+            .enter()
+            .append('g')
+            .attr('class', d => {
+              let cls = 'node node-contact';
+              if (d.notClear) cls += ' node-unclear';
+              return cls;
+            });
 
-        // Group hover stats
+          nodeGroups.each(function(d, nodeIdx) {
+            const nodeG = d3.select(this);
+            const radius = getNodeRadius(d, maxGroupScore);
+            const total = (d.sent || 0) + (d.received || 0);
+            const receivedRatio = total > 0 ? d.received / total : 0.5;
+
+            const clipId = `clip-g${groupIdx}-node-${nodeIdx}`;
+            const nodeDefs = nodeG.append('defs');
+            nodeDefs.append('clipPath')
+              .attr('id', clipId)
+              .append('circle').attr('r', radius);
+
+            const clipped = nodeG.append('g').attr('clip-path', `url(#${clipId})`);
+            clipped.append('rect')
+              .attr('x', -radius).attr('y', -radius)
+              .attr('width', radius * 2).attr('height', radius * 2)
+              .attr('fill', graphConfig.sentColor);
+
+            const fillHeight = radius * 2 * receivedRatio;
+            clipped.append('rect')
+              .attr('x', -radius).attr('y', radius - fillHeight)
+              .attr('width', radius * 2).attr('height', fillHeight)
+              .attr('fill', graphConfig.receivedColor);
+
+            const hasSent = d.sent > 0;
+            nodeG.append('circle')
+              .attr('r', radius).attr('fill', 'none')
+              .attr('stroke', hasSent ? graphConfig.sentColor : 'rgba(255,255,255,0.3)')
+              .attr('stroke-width', hasSent ? graphConfig.borderWidth : 1.5)
+              .attr('class', 'node-border');
+
+            if (d.notClear) {
+              nodeG.append('circle')
+                .attr('r', radius)
+                .attr('fill', 'url(#hatch-pattern)')
+                .attr('class', 'node-hatch');
+            }
+          });
+
+          // Labels
+          const labelsG = contentG.append('g').attr('class', 'labels');
+          const labels = labelsG.selectAll<SVGTextElement, GraphNode>('text')
+            .data(simNodes)
+            .enter()
+            .append('text')
+            .attr('class', 'label')
+            .attr('text-anchor', 'middle')
+            .text(d => {
+              const name = d.name;
+              return name.length > 12 ? name.substring(0, 10) + '...' : name;
+            });
+
+          // Click handler — select the attendee
+          nodeGroups.on('click', function(event, d) {
+            if (d.isCenter) return;
+            event.stopPropagation();
+            options.onNodeClick(d, { x: event.clientX, y: event.clientY });
+          });
+
+          // Simulation — contacts are already pre-positioned; only collision polish needed
+          const centerPhantom: GraphNode = {
+            ...centerNode,
+            isCenter: true,
+            fx: cx,
+            fy: cy,
+            x: cx,
+            y: cy,
+          };
+          const allSimNodes = [centerPhantom, ...simNodes];
+
+          sim = d3.forceSimulation(allSimNodes)
+            .force('x', d3.forceX<GraphNode>(d => {
+              if (d.isCenter) return cx;
+              const pos = nodePositions.get(d.email);
+              return pos ? pos.x : cx;
+            }).strength(d => d.isCenter ? 1 : 0.6))
+            .force('y', d3.forceY<GraphNode>(d => {
+              if (d.isCenter) return cy;
+              const pos = nodePositions.get(d.email);
+              return pos ? pos.y : cy;
+            }).strength(d => d.isCenter ? 1 : 0.6))
+            .force('collide', d3.forceCollide<GraphNode>()
+              .radius(d => getNodeRadius(d, maxGroupScore) + graphConfig.collisionPadding)
+            );
+
+          groupSimulationsRef.current.push(sim);
+
+          sim.on('tick', () => {
+            nodeGroups.attr('transform', d => `translate(${d.x || cx},${d.y || cy})`);
+            labels
+              .attr('x', d => d.x || cx)
+              .attr('y', d => (d.y || cy) + getNodeRadius(d, maxGroupScore) + 15);
+          });
+        };
+
+        const expand = () => {
+          if (expandedLabel === group.label) return;
+          collapseAll(group.label);
+          expandedLabel = group.label;
+          countText.style('opacity', 0);
+          boundary.transition().duration(320).ease(d3.easeCubicOut).attr('r', expandedR);
+          labelText.transition().duration(320).ease(d3.easeCubicOut).attr('y', cy - expandedR - 6);
+          renderExpanded();
+          groupG.raise();
+          // Fade other cells so the expanded cluster doesn't collide with neighbors
+          g.selectAll<SVGGElement, unknown>('.group-cell')
+            .filter(function() { return this !== groupG.node(); })
+            .style('opacity', '0.05')
+            .style('pointer-events', 'none');
+          // Pan/zoom the camera to frame the expanded cluster
+          const vw = container.clientWidth;
+          const vh = container.clientHeight;
+          const scale = Math.min(2.2, Math.min(vw, vh) / (expandedR * 2.6));
+          const tx = vw / 2 - scale * cx;
+          const ty = vh / 2 - scale * cy;
+          const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+          transformRef.current = transform;
+          svg.transition().duration(550).call(zoom.transform, transform);
+        };
+
+        const collapse = (resetCamera = false) => {
+          const wasExpanded = expandedLabel === group.label;
+          if (wasExpanded) expandedLabel = null;
+          if (sim) {
+            sim.stop();
+            const idx = groupSimulationsRef.current.indexOf(sim);
+            if (idx >= 0) groupSimulationsRef.current.splice(idx, 1);
+            sim = null;
+          }
+          if (contentG) { contentG.remove(); contentG = null; }
+          boundary.transition().duration(250).ease(d3.easeCubicOut).attr('r', r);
+          labelText.transition().duration(250).ease(d3.easeCubicOut).attr('y', cy - r - 6);
+          countText.style('opacity', 1);
+          // Restore the other cells
+          g.selectAll<SVGGElement, unknown>('.group-cell')
+            .style('opacity', null)
+            .style('pointer-events', null);
+          if (wasExpanded && resetCamera) {
+            transformRef.current = initialTransform;
+            svg.transition().duration(450).call(zoom.transform, initialTransform);
+          }
+        };
+
+        cellApi.set(group.label, { expand, collapse });
+
+        // Group hover stats (tooltip)
         const totalSent = group.members.reduce((sum, m) => sum + (m.sent || 0), 0);
         const totalReceived = group.members.reduce((sum, m) => sum + (m.received || 0), 0);
         const orgSet = new Set(group.members.map(m => m.email.split('@')[1]?.toLowerCase()).filter(Boolean));
@@ -379,10 +505,8 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
         groupG
           .on('mouseenter', function(event: MouseEvent) {
-            // Scale up hovered group around its center
-            d3.select(this).raise()
-              .style('transform', `translate(${cx}px,${cy}px) scale(1.06) translate(${-cx}px,${-cy}px)`);
-            // Dim other groups
+            if (expandedLabel) return; // no hover effects while a cell is open
+            d3.select(this).raise();
             g.selectAll<SVGGElement, unknown>('.group-cell').filter(function() { return this !== event.currentTarget; })
               .style('opacity', '0.38');
             if (options.onGroupHover) {
@@ -390,12 +514,13 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
             }
           })
           .on('mousemove', function(event: MouseEvent) {
+            if (expandedLabel) return;
             if (options.onGroupHover) {
               options.onGroupHover(groupHoverData, { x: event.clientX, y: event.clientY });
             }
           })
           .on('mouseleave', function() {
-            d3.select(this).style('transform', null);
+            if (expandedLabel) return;
             g.selectAll<SVGGElement, unknown>('.group-cell').style('opacity', null);
             if (options.onGroupHover) {
               options.onGroupHover(null);
@@ -404,52 +529,18 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           .on('click', function(event: MouseEvent) {
             // Don't trigger from contact node clicks (they stop propagation)
             event.stopPropagation();
-            // Pan camera to center on this group
-            const vw = container.clientWidth;
-            const vh = container.clientHeight;
-            const scale = Math.min(2.5, Math.min(vw, vh) / (r * 2.8));
-            const tx = vw / 2 - scale * cx;
-            const ty = vh / 2 - scale * cy;
-            const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
-            transformRef.current = transform;
-            svg.transition().duration(600).call(zoom.transform, transform);
+            if (expandedLabel === group.label) {
+              collapse(true);
+            } else {
+              expand();
+            }
           });
-
-        // Simulation — contacts are already pre-positioned; only collision polish needed
-        const centerPhantom: GraphNode = {
-          ...centerNode,
-          isCenter: true,
-          fx: cx,
-          fy: cy,
-          x: cx,
-          y: cy,
-        };
-        const allSimNodes = [centerPhantom, ...simNodes];
-
-        const sim = d3.forceSimulation(allSimNodes)
-          .force('x', d3.forceX<GraphNode>(d => {
-            if (d.isCenter) return cx;
-            const pos = nodePositions.get(d.email);
-            return pos ? pos.x : cx;
-          }).strength(d => d.isCenter ? 1 : 0.6))
-          .force('y', d3.forceY<GraphNode>(d => {
-            if (d.isCenter) return cy;
-            const pos = nodePositions.get(d.email);
-            return pos ? pos.y : cy;
-          }).strength(d => d.isCenter ? 1 : 0.6))
-          .force('collide', d3.forceCollide<GraphNode>()
-            .radius(d => getNodeRadius(d, maxGroupScore) + graphConfig.collisionPadding)
-          );
-
-        groupSimulationsRef.current.push(sim);
-
-        sim.on('tick', () => {
-          nodeGroups.attr('transform', d => `translate(${d.x || cx},${d.y || cy})`);
-          labels
-            .attr('x', d => d.x || cx)
-            .attr('y', d => (d.y || cy) + getNodeRadius(d, maxGroupScore) + 15);
-        });
       }); // end cells.forEach
+
+      // Clicking empty background collapses the open cell
+      svg.on('click', () => {
+        if (expandedLabel) collapseAll(undefined, true);
+      });
 
       return () => {
         groupSimulationsRef.current.forEach(s => s.stop());
@@ -818,6 +909,17 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     if (!container) { onNotFound?.(); return; }
     const vw = container.clientWidth;
     const vh = container.clientHeight;
+
+    // In group mode, expanding the cell also pans/zooms the camera to frame it.
+    if (groupExpandRef.current) {
+      groupExpandRef.current(label);
+      window.setTimeout(() => {
+        const rect = svgEl.getBoundingClientRect();
+        onFound({ x: rect.left + vw / 2, y: rect.top + vh / 2 });
+      }, 580);
+      return;
+    }
+
     const scale = Math.min(2.5, Math.min(vw, vh) / (cell.r * 2.8));
     const tx = vw / 2 - scale * cell.cx;
     const ty = vh / 2 - scale * cell.cy;
