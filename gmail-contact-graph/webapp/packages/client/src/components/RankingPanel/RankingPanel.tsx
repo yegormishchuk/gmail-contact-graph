@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
+import { buildOverallGraph } from '../../utils/buildOverallGraph';
 import type { GraphNode } from '@gmail-graph/shared';
 import type { GroupHoverData } from '../../utils/groupTypes';
 
@@ -22,8 +23,20 @@ export function RankingPanel() {
   const filterType = state.filters.filterType;
   const isGroupFilter = filterType === 'messageGroups' || filterType === 'organizations' || filterType === 'eventGroups';
   const usesCalendarNodes = filterType === 'calendar' || filterType === 'eventGroups';
+  const isOverallMode = filterType === 'overall';
   // Group filters use the "filtered" tab; calendar uses the main "ranking" tab with calendar data.
   const hasFilteredTab = isGroupFilter;
+
+  // Set of emails that exist in the gmail graph (used to hide trash for calendar-only contacts in overall mode).
+  const gmailEmails = useMemo(
+    () => new Set((rawData?.nodes ?? []).filter(n => !n.isCenter).map(n => n.email.toLowerCase())),
+    [rawData],
+  );
+
+  const overallNodes = useMemo(() => {
+    if (!isOverallMode || !rawData) return null;
+    return buildOverallGraph(rawData, state.calendarData).data.nodes.filter(n => !n.isCenter);
+  }, [isOverallMode, rawData, state.calendarData]);
 
   useEffect(() => {
     if (isGroupFilter) {
@@ -45,7 +58,10 @@ export function RankingPanel() {
     );
   }
 
-  // Pick the right node set: calendar nodes for Calendar filter, email nodes otherwise.
+  // Pick the right node set:
+  // - Calendar filter: calendar nodes only
+  // - Overall filter: merged gmail+calendar nodes with combined Borda points
+  // - Otherwise: gmail nodes
   const sourceNodes = usesCalendarNodes
     ? (state.calendarData?.nodes.filter(n => !n.isCenter).map(n => ({
         id: n.id,
@@ -56,7 +72,9 @@ export function RankingPanel() {
         sent: 0,
         compositeScore: n.calendarScore,
       })) ?? [])
-    : (rawData?.nodes.filter(n => !n.isCenter) ?? []);
+    : isOverallMode
+      ? (overallNodes ?? [])
+      : (rawData?.nodes.filter(n => !n.isCenter) ?? []);
 
   const contacts = [...sourceNodes]
     .sort((a, b) => b.compositeScore - a.compositeScore)
@@ -327,7 +345,7 @@ export function RankingPanel() {
               <span className="ranking-score">
                 {Math.round(contact.compositeScore)}
               </span>
-              {!usesCalendarNodes && (
+              {!usesCalendarNodes && (!isOverallMode || gmailEmails.has(contact.email.toLowerCase())) && (
                 <button
                   className="ranking-delete"
                   title="Remove contact"
