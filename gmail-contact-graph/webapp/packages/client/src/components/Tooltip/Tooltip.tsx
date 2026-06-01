@@ -18,7 +18,8 @@ export function Tooltip() {
   const { state, dispatch } = useAppContext();
   const { selectedNode, selectedNodePosition, domains, messageGroups, eventGroups } = state;
   const isCalendarMode = state.filters.filterType === 'calendar' || state.filters.filterType === 'eventGroups';
-  const calendarInfo = isCalendarMode && selectedNode
+  const isOverallMode = state.filters.filterType === 'overall';
+  const calendarInfo = (isCalendarMode || isOverallMode) && selectedNode
     ? state.calendarData?.nodes.find(n => n.email.toLowerCase() === selectedNode.email.toLowerCase()) ?? null
     : null;
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -104,8 +105,8 @@ export function Tooltip() {
 
   const visibleGroups = showAllGroups ? contactGroups : contactGroups.slice(0, 2);
 
-  // Find event groups the attendee belongs to (calendar-data modes), sorted by attendee count desc.
-  const eventContactGroups = isCalendarMode && eventGroups?.groups
+  // Find event groups the attendee belongs to (calendar-data and overall modes), sorted by attendee count desc.
+  const eventContactGroups = (isCalendarMode || isOverallMode) && eventGroups?.groups
     ? Object.entries(eventGroups.groups)
         .filter(([_, emails]) =>
           emails.map(e => e.toLowerCase()).includes(selectedNode.email.toLowerCase()) &&
@@ -172,13 +173,17 @@ export function Tooltip() {
         </div>
       )}
 
-      {isCalendarMode && eventContactGroups.length > 0 && (
+      {(isCalendarMode || isOverallMode) && eventContactGroups.length > 0 && (
         <div className="tooltip-groups visible">
-          {visibleEventGroups.map(({ label, count }, i) => (
-            <div key={label} style={{ color: graphConfig.groupColors[i % graphConfig.groupColors.length] }}>
-              "{label}" ({count} attendees)
-            </div>
-          ))}
+          {visibleEventGroups.map(({ label, count }, i) => {
+            // In overall mode, offset palette so event-group colors differ from message-group colors
+            const colorIdx = isOverallMode ? (i + contactGroups.length) : i;
+            return (
+              <div key={label} style={{ color: graphConfig.groupColors[colorIdx % graphConfig.groupColors.length] }}>
+                "{label}" ({count} attendees)
+              </div>
+            );
+          })}
           {eventContactGroups.length > 2 && (
             <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
               {showAllGroups ? 'Show less' : `+${eventContactGroups.length - 2} more events`}
@@ -187,7 +192,54 @@ export function Tooltip() {
         </div>
       )}
 
-      {isCalendarMode && calendarInfo ? (
+      {isOverallMode && (
+        <div className="tooltip-stats">
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label" style={{ color: '#00a86b' }}>Received</span>
+            <span className="tooltip-stat-value" style={{ color: '#00a86b' }}>
+              {selectedNode.received.toLocaleString()} ({receivedPercent}%)
+            </span>
+          </div>
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label" style={{ color: graphConfig.sentColor }}>Sent</span>
+            <span className="tooltip-stat-value" style={{ color: graphConfig.sentColor }}>
+              {selectedNode.sent.toLocaleString()} ({sentPercent}%)
+            </span>
+          </div>
+          {calendarInfo && (
+            <>
+              <div className="tooltip-stat">
+                <span className="tooltip-stat-label">Meetings</span>
+                <span className="tooltip-stat-value">{calendarInfo.totalEvents.toLocaleString()}</span>
+              </div>
+              <div className="tooltip-stat">
+                <span className="tooltip-stat-label">Avg duration</span>
+                <span className="tooltip-stat-value">{formatDurationSec(calendarInfo.avgDurationSeconds)}</span>
+              </div>
+              <div className="tooltip-stat">
+                <span className="tooltip-stat-label">Avg attendees</span>
+                <span className="tooltip-stat-value">
+                  {calendarInfo.avgAttendees !== null ? calendarInfo.avgAttendees.toFixed(1) : '—'}
+                </span>
+              </div>
+              <div className="tooltip-stat">
+                <span className="tooltip-stat-label">Acceptance</span>
+                <span className="tooltip-stat-value">
+                  {calendarInfo.acceptanceRate !== null
+                    ? `${Math.round(calendarInfo.acceptanceRate * 100)}%`
+                    : '—'}
+                </span>
+              </div>
+            </>
+          )}
+          <div className="tooltip-stat">
+            <span className="tooltip-stat-label">Overall score</span>
+            <span className="tooltip-stat-value">{Math.round(selectedNode.compositeScore).toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+
+      {!isOverallMode && (isCalendarMode && calendarInfo ? (
         <div className="tooltip-stats">
           <div className="tooltip-stat">
             <span className="tooltip-stat-label">Meetings</span>
@@ -231,7 +283,7 @@ export function Tooltip() {
             </span>
           </div>
         </div>
-      )}
+      ))}
 
       {!isCalendarMode && (
         <div className="tooltip-buttons">

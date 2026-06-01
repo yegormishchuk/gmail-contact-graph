@@ -444,6 +444,8 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           if (expandedLabel === group.label) return;
           collapseAll(group.label);
           expandedLabel = group.label;
+          // Clear any lingering hover tooltip — mouseleave is suppressed while expanded.
+          if (options.onGroupHover) options.onGroupHover(null);
           countText.style('opacity', 0);
           boundary.transition().duration(320).ease(d3.easeCubicOut).attr('r', expandedR);
           labelText.transition().duration(320).ease(d3.easeCubicOut).attr('y', cy - expandedR - 6);
@@ -894,6 +896,35 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         });
       }
     });
+
+    // --- Event groups (overall mode shows both gmail message ropes and calendar event ropes) ---
+    if (options.filterType === 'overall') {
+      const selectedEventGroups = Object.entries(options.eventGroups?.groups ?? {})
+        .filter(([_, emails]) =>
+          emails.map(e => e.toLowerCase()).includes(selectedEmail) &&
+          emails.length >= MIN_MSG_GROUP_SIZE
+        )
+        .sort(([, a], [, b]) => b.length - a.length)
+        .slice(0, MAX_EVENT_GROUPS);
+
+      selectedEventGroups.forEach(([label, emails], eventIdx) => {
+        const memberEmails = emails.map(e => e.toLowerCase());
+        memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
+
+        // Offset palette so event-group colors differ from message-group colors
+        const colorIdx = (eventIdx + selectedMsgGroups.length) % graphConfig.groupColors.length;
+        const groupColor = graphConfig.groupColors[colorIdx];
+
+        if (memberEmails.length <= ROPE_MAX_SIZE) {
+          drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, groupColor, label);
+        } else {
+          memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
+            const prev = largeBorderColors.get(email) ?? [];
+            largeBorderColors.set(email, [...prev, groupColor]);
+          });
+        }
+      });
+    }
 
     highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail);
 
