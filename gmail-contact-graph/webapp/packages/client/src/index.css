@@ -280,7 +280,8 @@ h1 {
 
 .tooltip-stats {
     display: flex;
-    gap: 24px;
+    flex-wrap: wrap;
+    gap: 12px 24px;
 }
 
 .tooltip-stat {
