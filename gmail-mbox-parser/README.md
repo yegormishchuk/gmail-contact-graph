@@ -46,7 +46,7 @@ make fill-db MBOX_FILE=path/to/mail.mbox
 
 The parser creates two SQLite databases in `DATA_DIR`:
 
-- `contacts.db` - Contact information with filtering tables
+- `contacts.db` - Contact information with filtering tables (and `events` / `event_attendees` once the sibling [calendar-parser](../calendar-parser) is run)
 - `mails.db` - Parsed email metadata
 
 ### Database schema
@@ -57,6 +57,18 @@ The parser creates two SQLite databases in `DATA_DIR`:
 
 **mails.db:**
 - Email metadata (subject, date, recipients, etc.)
+
+## Companion: calendar-parser
+
+For Google Calendar coverage in the webapp (Calendar / Overall / Event Groups
+views), run the sibling [`calendar-parser`](../calendar-parser) crate after
+`fill-db`. It populates the `events` and `event_attendees` tables in the same
+`contacts.db`:
+
+```bash
+cd ../calendar-parser
+make fill-events USER_EMAIL=you@gmail.com
+```
 
 ## Integration
 

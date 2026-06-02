@@ -6,14 +6,17 @@ Interactive web visualization of your Gmail communication network. Explore conta
 
 - Interactive D3.js force-directed graph visualization
 - Contact search and filtering
-- Domain grouping (see contacts by organization)
-- Composite ranking based on email frequency
+- Five filter modes: **Overall** (combined Gmail + Calendar ranking), **Gmail**, **Calendar**, **Event Groups**, **Domains**
+- Calendar co-attendee graph with per-event-group colored ropes and collapsible mini-star clusters
+- Tooltip and ranking panel adapt to the active mode (calendar-specific fields when in Calendar mode, event list per contact, etc.)
+- Composite email ranking and Borda-style overall ranking that merges Gmail + Calendar
 - Manual contact review (mark as human/not human)
 
 ## Prerequisites
 
-- Python 3.8+
-- Databases from [gmail-mbox-parser](https://github.com/YOUR_USERNAME/gmail-mbox-parser)
+- Node.js 18+
+- `contacts.db` and `mails.db` from [gmail-mbox-parser](../gmail-mbox-parser)
+- (Optional) `events` / `event_attendees` tables populated by [calendar-parser](../calendar-parser) — enables the Calendar, Overall, and Event Groups views
 
 ## Installation
 
@@ -55,20 +58,27 @@ USER_NAME=Your Name               # display name (optional; defaults to local-pa
 ```
 
 Database paths default to `../data/contacts.db` and `../data/mails.db`;
-override with `CONTACTS_DB_FILE` / `MAILS_DB_FILE` if needed. Server port
+override with `CONTACTS_DB_FILE` / `MAILS_DB_FILE` if needed. Calendar data
+(`events`, `event_attendees`) is read from the same `contacts.db`. Server port
 defaults to `5000`; override with `PORT`.
 
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/graph` | GET | Graph data for D3.js |
+| `/api/graph` | GET | Gmail graph data for D3.js |
 | `/api/contacts` | GET | All contacts |
+| `/api/contacts/all` | GET | Every contact (used by the intro animation) |
 | `/api/domains` | GET | Contacts grouped by domain |
 | `/api/message-groups` | GET | Multi-recipient emails |
 | `/api/excluded-contacts` | GET | Filtered spam/non-human |
+| `/api/spam-stats` | GET | Counts for spam-filtering panel |
+| `/api/calendar-graph` | GET | Calendar co-attendee graph |
+| `/api/calendar-stats` | GET | Calendar summary stats |
+| `/api/event-groups` | GET | Recurring-event / event-group clusters |
 | `/api/contacts/mark-clear` | POST | Mark contact as human |
 | `/api/contacts/mark-not-human` | POST | Remove contact |
+| `/api/contacts/restore` | POST | Restore a previously removed contact |
 
 ## Commands
 
