@@ -47,10 +47,16 @@ export function Controls() {
     state.filters.filterType === 'organizations' ||
     state.filters.filterType === 'eventGroups';
   const isCalendarFilter = state.filters.filterType === 'calendar';
+  const isOverallFilter = state.filters.filterType === 'overall';
   const calendarContacts = calendarData ? calendarData.nodes.filter(n => !n.isCenter).length : 0;
-  const maxContacts = isCalendarFilter
-    ? (calendarContacts || 500)
-    : (rawData?.stats.totalContacts || 500);
+  // Overall mode caps at the Borda window (top 150 of each side) — no point
+  // scrolling past 150 since beyond that contacts get 0 combined points.
+  const OVERALL_MAX = 150;
+  const maxContacts = isOverallFilter
+    ? OVERALL_MAX
+    : isCalendarFilter
+      ? (calendarContacts || 500)
+      : (rawData?.stats.totalContacts || 500);
 
   const qualifyingGroups = isGroupFilter
     ? countQualifyingGroups(
