@@ -56,8 +56,8 @@ export function Graph() {
   const overallGraphData: GraphData | null = useMemo(() => {
     if (state.filters.filterType !== 'overall') return null;
     if (!state.rawData) return null;
-    return buildOverallGraph(state.rawData, state.calendarData).data;
-  }, [state.rawData, state.calendarData, state.filters.filterType]);
+    return buildOverallGraph(state.rawData, state.calendarData, state.filters.limit).data;
+  }, [state.rawData, state.calendarData, state.filters.filterType, state.filters.limit]);
 
   const filteredData = useMemo(() => {
     const usesCalendar =

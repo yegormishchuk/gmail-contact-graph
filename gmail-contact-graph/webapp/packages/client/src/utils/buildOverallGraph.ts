@@ -38,6 +38,7 @@ export interface OverallPointsInfo {
 export function buildOverallGraph(
   gmail: GraphData,
   calendar: CalendarGraphData | null,
+  perSideLimit?: number,
 ): { data: GraphData; pointsByEmail: Map<string, OverallPointsInfo> } {
   const gmailContacts = gmail.nodes
     .filter(n => !n.isCenter)
@@ -48,6 +49,14 @@ export function buildOverallGraph(
 
   const gmailPoints = assignPoints(gmailContacts);
   const calendarPoints = assignPoints(calendarContacts);
+
+  // Slider controls the per-side cutoff: include emails ranked <= perSideLimit
+  // in EITHER gmail OR calendar. Union keeps the calendar side visible no
+  // matter how dominant gmail's point totals are.
+  const sideCap = perSideLimit ?? TOP_N;
+  const includedEmails = new Set<string>();
+  gmailPoints.forEach((info, e) => { if (info.rank <= sideCap) includedEmails.add(e); });
+  calendarPoints.forEach((info, e) => { if (info.rank <= sideCap) includedEmails.add(e); });
 
   const gmailByEmail = new Map(gmail.nodes.map(n => [n.email.toLowerCase(), n]));
   const calendarByEmail = new Map(
@@ -112,9 +121,9 @@ export function buildOverallGraph(
     });
   }
 
-  // Filter out contacts with 0 total points and no other signal (would clutter the graph).
+  // Keep only contacts inside the per-side window (or center).
   const usefulNodes = nodes.filter(
-    n => n.isCenter || (pointsByEmail.get(n.email.toLowerCase())?.totalPoints ?? 0) > 0,
+    n => n.isCenter || includedEmails.has(n.email.toLowerCase()),
   );
 
   // Reuse gmail links; calendar contributes ranking + tooltip data + ropes (via eventGroups)
