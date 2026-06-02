@@ -12,13 +12,14 @@ export function filterData(rawData: GraphData, filters: Filters): GraphData {
   // Sort by composite score
   nodes.sort((a, b) => b.compositeScore - a.compositeScore);
 
-  // Apply contact limit only for non-group filters.
-  // Group filters apply their own limit (number of groups) inside useD3Simulation.
+  // Apply contact limit only for non-group filters and not overall mode.
+  // - Group filters apply their own limit (number of groups) inside useD3Simulation.
+  // - Overall mode shows all merged contacts (already capped by the Borda window in buildOverallGraph).
   const isGroupFilter =
     filters.filterType === 'messageGroups' ||
     filters.filterType === 'organizations' ||
     filters.filterType === 'eventGroups';
-  if (!isGroupFilter) {
+  if (!isGroupFilter && filters.filterType !== 'overall') {
     nodes = nodes.slice(0, filters.limit);
   }
 
