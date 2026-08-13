@@ -18,6 +18,8 @@ project makes no outbound network requests at all.
 
 - **Rust 1.70+** — for the mbox and calendar parsers
 - **Node.js 18+** — for the webapp
+- **GNU Make** — optional; every step below also lists the plain `cargo` / `npm`
+  commands under a "Without `make`" toggle
 
 ## Quick start
 
@@ -94,6 +96,24 @@ make process-all MBOX_FILE=your-export.mbox
 
 This runs both `fill-db` (parses the mbox into SQLite databases) and `rankings` (generates contact ranking files). All output goes to `../data/`.
 
+<details>
+<summary>Without <code>make</code></summary>
+
+```bash
+cd gmail-mbox-parser
+cargo build --release --bin fill_db
+cargo build --release --manifest-path tools/Cargo.toml
+./target/release/fill_db ../data/data.mbox ../data/contacts.db
+./tools/target/release/generate_rankings ../data/contacts.db ../data
+```
+
+`fill_db` reads `USER_EMAIL` from the project-root `.env`; pass it as an extra
+argument (`fill_db <mbox> you@gmail.com <db>`) to override it. On Windows the
+binaries are `target\release\fill_db.exe` and
+`tools\target\release\generate_rankings.exe`.
+
+</details>
+
 ### 5. (Optional) Parse calendar events
 
 If you exported calendar data, populate the `events` and `event_attendees`
@@ -109,6 +129,20 @@ make fill-events
 file in `data/Calendar/` by default; override with `ICS_FILES="a.ics b.ics"` or
 a different `CALENDAR_DIR`.
 
+<details>
+<summary>Without <code>make</code></summary>
+
+```bash
+cd calendar-parser
+cargo build --release --bin fill_events
+./target/release/fill_events ../data/Calendar --db ../data/contacts.db
+```
+
+Add `--user-email you@gmail.com` to override the `.env` value. On Windows the
+binary is `target\release\fill_events.exe`.
+
+</details>
+
 ### 6. Build and run the webapp
 
 ```bash
@@ -118,6 +152,18 @@ make run
 ```
 
 Open [http://localhost:5000](http://localhost:5000).
+
+<details>
+<summary>Without <code>make</code></summary>
+
+```bash
+cd gmail-contact-graph/webapp
+npm install
+npm run build
+npm start
+```
+
+</details>
 
 The webapp auto-detects calendar data: if the `events` / `event_attendees`
 tables exist in `contacts.db`, the Calendar, Overall, and Event Groups filter

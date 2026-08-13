@@ -20,22 +20,59 @@ use spam::is_spam_contact;
 // Main
 // ---------------------------------------------------------------------------
 
+const DEFAULT_DB_PATH: &str = "data/contacts.db";
+const USAGE: &str = "Usage: fill_db <mbox_file> [user_email] [db_path]";
+
+/// Splits the positional arguments into `(mbox_path, user_email, db_path)`.
+///
+/// The email is optional on the command line so it can come from `USER_EMAIL`
+/// in the environment instead, matching `fill_events`. An argument is read as
+/// the email only if it contains '@', which keeps `<mbox> <db>` unambiguous.
+fn parse_args(args: &[String]) -> Option<(&str, Option<&str>, &str)> {
+    let mbox_path = args.first()?;
+    let mut user_email = None;
+    let mut db_path = DEFAULT_DB_PATH;
+
+    for arg in &args[1..] {
+        if user_email.is_none() && arg.contains('@') {
+            user_email = Some(arg.as_str());
+        } else {
+            db_path = arg.as_str();
+        }
+    }
+
+    Some((mbox_path.as_str(), user_email, db_path))
+}
+
 #[tokio::main]
 async fn main() {
     // Load the single project-root .env (binary is invoked from gmail-mbox-parser/).
     // Fall back to CWD .env in case it's run from the repo root.
     let _ = dotenvy::from_path("../.env").or_else(|_| dotenvy::from_path(".env"));
 
-    let args: Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().skip(1).collect();
 
-    if args.len() < 3 {
-        eprintln!("Usage: fill_db <mbox_file> <user_email> [db_path]");
-        std::process::exit(1);
-    }
+    let (mbox_path, email_arg, db_path) = match parse_args(&args) {
+        Some(parsed) => parsed,
+        None => {
+            eprintln!("{}", USAGE);
+            std::process::exit(1);
+        }
+    };
 
-    let mbox_path = &args[1];
-    let user_email = args[2].to_lowercase();
-    let db_path = args.get(3).map(|s| s.as_str()).unwrap_or("data/contacts.db");
+    let user_email = match email_arg
+        .map(str::to_string)
+        .or_else(|| env::var("USER_EMAIL").ok())
+        .map(|email| email.trim().to_lowercase())
+        .filter(|email| !email.is_empty())
+    {
+        Some(email) => email,
+        None => {
+            eprintln!("{}", USAGE);
+            eprintln!("No user email: pass it as an argument or set USER_EMAIL in ../.env");
+            std::process::exit(1);
+        }
+    };
 
     eprintln!("     mbox: {}", mbox_path);
     eprintln!("user_email: {}", user_email);
@@ -459,4 +496,44 @@ fn fallback_fill_filtered(db_path: &str, candidates: &[ContactCandidate]) {
     conn.execute_batch("COMMIT").unwrap();
 
     eprintln!("Fallback: {} contacts added to filtered (all with not_clear=1)", count);
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn parses_the_full_makefile_form() {
+        let args = args(&["../data/data.mbox", "you@gmail.com", "../data/contacts.db"]);
+        let (mbox, email, db) = parse_args(&args).unwrap();
+        assert_eq!(mbox, "../data/data.mbox");
+        assert_eq!(email, Some("you@gmail.com"));
+        assert_eq!(db, "../data/contacts.db");
+    }
+
+    #[test]
+    fn omitted_email_leaves_the_db_path_in_place() {
+        let args = args(&["../data/data.mbox", "../data/contacts.db"]);
+        let (mbox, email, db) = parse_args(&args).unwrap();
+        assert_eq!(mbox, "../data/data.mbox");
+        assert_eq!(email, None);
+        assert_eq!(db, "../data/contacts.db");
+    }
+
+    #[test]
+    fn mbox_alone_falls_back_to_the_default_db() {
+        let args = args(&["../data/data.mbox"]);
+        let (mbox, email, db) = parse_args(&args).unwrap();
+        assert_eq!(mbox, "../data/data.mbox");
+        assert_eq!(email, None);
+        assert_eq!(db, DEFAULT_DB_PATH);
+    }
+
+    #[test]
+    fn no_arguments_is_rejected() {
+        assert!(parse_args(&[]).is_none());
+    }
 }
