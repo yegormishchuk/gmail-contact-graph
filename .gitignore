@@ -1,6 +1,9 @@
-# Data files
+# Data files — keep the directory skeleton, ignore the contents
 data/*
 !data/.gitkeep
+!data/Calendar/
+data/Calendar/*
+!data/Calendar/.gitkeep
 *.mbox
 
 # Credentials and tokens - NEVER commit these!
@@ -30,6 +33,11 @@ env/
 .DS_Store
 Thumbs.db
 
+# Local-only tooling (faker-based anonymizers for demo recordings)
+scripts/
+
+# Agent tooling / local assistant config
+.claude/
 .superpowers/
 docs/
 CLAUDE.md

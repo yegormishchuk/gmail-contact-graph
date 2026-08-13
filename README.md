@@ -2,10 +2,36 @@
 
 Visualize your Gmail and Google Calendar communication network as an interactive graph. Parse your Gmail and Calendar exports, extract contacts and co-attendees, and explore them through a D3.js force-directed web interface.
 
+## Privacy
+
+Everything runs on your machine. The parsers read your local Takeout export and
+write SQLite files into `data/`; the webapp serves them from localhost. Nothing
+is uploaded, and `data/` is gitignored so your mail can't be committed by
+accident.
+
+The one exception is opt-in. If you set `HF_API_KEY`, contact **names and email
+addresses** — never subjects or message bodies — are sent to the Hugging Face
+API to classify them as human or automated. Leave `HF_API_KEY` empty and the
+project makes no outbound network requests at all.
+
 ## Dependencies
 
 - **Rust 1.70+** — for the mbox and calendar parsers
 - **Node.js 18+** — for the webapp
+
+## Quick start
+
+```bash
+git clone <repo-url> gmail-contact-graph
+cd gmail-contact-graph
+cp .env.example .env                          # set USER_EMAIL
+
+# put your Google Takeout export at data/data.mbox, then:
+cd gmail-mbox-parser      && make process-all
+cd ../gmail-contact-graph && make setup && make run
+```
+
+Open [http://localhost:5000](http://localhost:5000).
 
 ## Step-by-step setup
 
@@ -18,84 +44,85 @@ Go to [Google Takeout](https://takeout.google.com) and export:
 
 ### 2. Place the exports in the data directory
 
-Put the `.mbox` file directly in `data/` (default name: `data.mbox`; pass `MBOX_FILE=...` to override).
+Takeout names the mail export something like `All mail Including Spam and
+Trash.mbox`. Put it directly in `data/` and rename it to `data.mbox`, or keep
+the original name and pass `MBOX_FILE="All mail Including Spam and Trash.mbox"`
+to the `make` commands below.
 
 Put the calendar `.ics` files in `data/Calendar/` (override with `CALENDAR_DIR=...` or `ICS_FILES=...`).
 
-### 3. Parse the mbox and generate databases + rankings
+### 3. Configure `.env`
 
-```bash
-cd gmail-mbox-parser
-make process-all USER_EMAIL=you@gmail.com
-```
-
-If your mbox file has a different name than `data.mbox`:
-
-```bash
-make process-all USER_EMAIL=you@gmail.com MBOX_FILE=your-export.mbox
-```
-
-This runs both `fill-db` (parses the mbox into SQLite databases) and `rankings` (generates contact ranking files). All output goes to `../data/`.
-
-### 3b. (Optional) Parse calendar events
-
-If you exported calendar data, populate the `events` and `event_attendees`
-tables in `contacts.db`:
-
-```bash
-cd ../calendar-parser
-make fill-events USER_EMAIL=you@gmail.com
-```
-
-`USER_EMAIL` is required so the parser knows which attendee is "you" when
-building the `event_attendees` table. It can also be set in the project-root
-`.env`. The parser reads every `.ics` file in `data/Calendar/` by default;
-override with `ICS_FILES="a.ics b.ics"` or a different `CALENDAR_DIR`.
-
-#### Optional: AI-powered spam filtering via Hugging Face
-
-Copy the project-root template and fill in your token:
+From the repository root, copy the template and fill it in:
 
 ```bash
 cp .env.example .env
 ```
 
 ```env
+USER_EMAIL=you@gmail.com           # required — identifies "you" in the graph
+USER_NAME=Your Name                # optional — display name for your node
+HF_API_KEY=                        # optional — see below
+```
+
+A single project-root `.env` feeds all three components: both Rust parsers read
+it, and so does the webapp server. Setting `USER_EMAIL` here means you can drop
+the `USER_EMAIL=...` argument from every `make` command below.
+
+**Optional: AI-powered spam filtering via Hugging Face.** With `HF_API_KEY` set,
+the mbox parser additionally verifies borderline contacts against a hosted LLM.
+Set it **now** — it takes effect during step 4, and enabling it later means
+re-parsing the whole mbox.
+
+```env
 HF_API_KEY=your_huggingface_api_key
 HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
 ```
 
-The same `.env` is also used to set `USER_EMAIL` (so you can drop the
-`USER_EMAIL=...` argument from the make commands above) and the webapp's
-`USER_NAME` display value.
+### 4. Parse the mbox and generate databases + rankings
 
-### 4. Install webapp dependencies
+```bash
+cd gmail-mbox-parser
+make process-all
+```
+
+If your mbox file has a different name than `data.mbox`:
+
+```bash
+make process-all MBOX_FILE=your-export.mbox
+```
+
+This runs both `fill-db` (parses the mbox into SQLite databases) and `rankings` (generates contact ranking files). All output goes to `../data/`.
+
+### 5. (Optional) Parse calendar events
+
+If you exported calendar data, populate the `events` and `event_attendees`
+tables in `contacts.db`:
+
+```bash
+cd ../calendar-parser
+make fill-events
+```
+
+`USER_EMAIL` (from step 3) is required so the parser knows which attendee is
+"you" when building the `event_attendees` table. The parser reads every `.ics`
+file in `data/Calendar/` by default; override with `ICS_FILES="a.ics b.ics"` or
+a different `CALENDAR_DIR`.
+
+### 6. Build and run the webapp
 
 ```bash
 cd ../gmail-contact-graph
-make install
-```
-
-The webapp auto-detects calendar data: if the `events` / `event_attendees`
-tables exist in `contacts.db`, the Calendar, Overall, and Event Groups filter
-modes light up. If you skipped step 3b, only the Gmail and Domains views are
-populated.
-
-### 5. Build and run the webapp
-
-```bash
-make build
-make run
-```
-
-Or combine install + build in one step:
-
-```bash
-make setup
+make setup    # install dependencies + build
 make run
 ```
 
 Open [http://localhost:5000](http://localhost:5000).
+
+The webapp auto-detects calendar data: if the `events` / `event_attendees`
+tables exist in `contacts.db`, the Calendar, Overall, and Event Groups filter
+modes light up. If you skipped step 5, only the Gmail and Domains views are
+populated.
 
 ---
 
@@ -111,7 +138,7 @@ Open [http://localhost:5000](http://localhost:5000).
 | `received_per_month_ranking.txt` | Received emails normalized by relationship duration |
 | `duration_ranking.txt` | Contacts ranked by communication duration |
 | `email_length_ranking.txt` | Contacts ranked by average email length |
-| `composite_ranking.txt` | Combined score ranking (sent × 1.0 + received × 0.2) |
+| `composite_ranking.txt` | Borda-style combined ranking: rank points from the sent and received rankings, weighted 1.0 and 0.2 |
 
 ## Filter modes in the webapp
 
@@ -134,3 +161,12 @@ Open [http://localhost:5000](http://localhost:5000).
 | `gmail-contact-graph/` | `make setup` | Install deps + build |
 | `gmail-contact-graph/` | `make run` | Start production server (port 5000) |
 | `gmail-contact-graph/` | `make dev` | Start dev servers (API:5000, Client:3000) |
+
+## License
+
+Copyright (C) 2026 Yegor Mishchuk
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [LICENSE](LICENSE) for the full text.

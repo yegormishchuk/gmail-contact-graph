@@ -1,9 +1,13 @@
 # Gmail Contact Graph Webapp - Makefile
 # =====================================
 
-# User email (required for the webapp to work correctly)
-USER_EMAIL ?= you@example.com
+# User email for the webapp's "you" node. Normally read from the project-root
+# .env by packages/server/src/config.ts. Set it here only to override that for
+# a single run: make run USER_EMAIL=you@example.com
+USER_EMAIL ?=
+ifneq ($(strip $(USER_EMAIL)),)
 export USER_EMAIL
+endif
 
 # ============================================
 # Main targets
@@ -81,7 +85,7 @@ help:
 	@echo "    make clean          - Remove node_modules and build files"
 	@echo ""
 	@echo "  Variables (set in Makefile or override on command line):"
-	@echo "    USER_EMAIL          - Your email address (default: $(USER_EMAIL))"
+	@echo "    USER_EMAIL          - Override the ../.env value for this run"
 	@echo "    CONTACTS_DB_FILE    - Path to contacts.db"
 	@echo "    MAILS_DB_FILE       - Path to mails.db"
 	@echo "    PORT                - Server port (default: 5000)"

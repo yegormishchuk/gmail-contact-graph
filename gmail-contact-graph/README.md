@@ -18,33 +18,8 @@ Interactive web visualization of your Gmail communication network. Explore conta
 - `contacts.db` and `mails.db` from [gmail-mbox-parser](../gmail-mbox-parser)
 - (Optional) `events` / `event_attendees` tables populated by [calendar-parser](../calendar-parser) — enables the Calendar, Overall, and Event Groups views
 
-## Installation
-
-```bash
-git clone https://github.com/YOUR_USERNAME/gmail-contact-graph.git
-cd gmail-contact-graph
-make setup
-```
-
-## Usage
-
-### 1. Generate data with gmail-mbox-parser
-
-First, use the parser to create the databases:
-
-```bash
-# In gmail-mbox-parser repo
-DATA_DIR=~/gmail-data make fill-db USER_EMAIL=you@gmail.com MBOX_FILE=~/mail.mbox
-```
-
-### 2. Run the webapp
-
-```bash
-# Point to the same data directory
-DATA_DIR=~/gmail-data MY_EMAIL=you@gmail.com MY_NAME="Your Name" make run
-```
-
-Open http://localhost:5000
+Setup and the full parse-then-visualize pipeline are documented in the
+[project README](../README.md). This file covers the webapp package itself.
 
 ## Configuration
 
@@ -83,9 +58,13 @@ defaults to `5000`; override with `PORT`.
 ## Commands
 
 ```
-make setup          Create virtual environment
-make run            Start web application
-make run-dev        Start in development mode
-make clean          Remove venv and cache
+make setup          Install npm dependencies and build
+make install        Install npm dependencies
+make build          Build all packages (shared, server, client)
+make run            Start production server (port 5000)
+make dev            Start dev servers (API 5000, client 3000)
+make dev-server     Start API server only
+make dev-client     Start React client only
+make clean          Remove node_modules and build output
 make help           Show all commands
 ```

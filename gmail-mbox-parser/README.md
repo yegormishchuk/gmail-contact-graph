@@ -16,21 +16,27 @@ High-performance Rust parser for Gmail MBOX exports. Extracts contacts with spam
 - Gmail data export (.mbox file from Google Takeout)
 - Hugging Face API key (optional, for AI verification)
 
-## Installation
-
-```bash
-git clone https://github.com/YOUR_USERNAME/gmail-mbox-parser.git
-cd gmail-mbox-parser
-make build
-```
+Setup and the full parse-then-visualize pipeline are documented in the
+[project README](../README.md). This file covers the parser itself.
 
 ## Usage
 
 ### Basic usage
 
 ```bash
-make fill-db USER_EMAIL=your.email@gmail.com MBOX_FILE=path/to/mail.mbox DATA_DIR=~/gmail-data
+make build
+make fill-db USER_EMAIL=your.email@gmail.com MBOX_FILE=data.mbox
 ```
+
+`MBOX_FILE` is a **filename**, not a path — it is resolved inside `DATA_DIR`
+(default `../data`). To read an mbox that lives somewhere else, move the
+directory rather than the filename:
+
+```bash
+make fill-db USER_EMAIL=you@gmail.com DATA_DIR=~/gmail-data MBOX_FILE=mail.mbox
+```
+
+`DATA_DIR` is also where the databases and ranking files are written.
 
 ### With AI verification
 
@@ -39,7 +45,7 @@ Set `HF_API_KEY` (and optionally `HF_MODEL`) in the project-root `.env`
 the command line. See `../.env.example` for the full set of keys.
 
 ```bash
-make fill-db MBOX_FILE=path/to/mail.mbox
+make fill-db MBOX_FILE=data.mbox
 ```
 
 ## Output
@@ -70,24 +76,15 @@ cd ../calendar-parser
 make fill-events USER_EMAIL=you@gmail.com
 ```
 
-## Integration
-
-Use with [gmail-contact-graph](https://github.com/YOUR_USERNAME/gmail-contact-graph) webapp to visualize your email network:
-
-```bash
-# Run parser
-DATA_DIR=~/gmail-data make fill-db USER_EMAIL=you@gmail.com MBOX_FILE=~/mail.mbox
-
-# Run webapp (in gmail-contact-graph repo)
-DATA_DIR=~/gmail-data make run
-```
-
 ## Commands
 
 ```
 make build          Build parser and tools
 make fill-db        Parse mbox and create databases
 make rankings       Generate ranking files
+make process-all    Run fill-db + rankings
 make clean          Clean build artifacts
+make clean-data     Remove generated ranking files
+make clean-db       Remove databases
 make help           Show all commands
 ```
