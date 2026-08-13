@@ -154,10 +154,13 @@ populated.
 
 | Directory | Command | Description |
 |---|---|---|
-| `gmail-mbox-parser/` | `make process-all USER_EMAIL=...` | Parse mbox + generate rankings |
-| `gmail-mbox-parser/` | `make fill-db USER_EMAIL=...` | Parse mbox only |
+| `gmail-mbox-parser/` | `make process-all` | Parse mbox + generate rankings |
+| `gmail-mbox-parser/` | `make fill-db` | Parse mbox only |
 | `gmail-mbox-parser/` | `make rankings` | Generate rankings only |
-| `calendar-parser/`   | `make fill-events USER_EMAIL=...` | Parse `.ics` files into `events` / `event_attendees` |
+| `calendar-parser/`   | `make fill-events` | Parse `.ics` files into `events` / `event_attendees` |
+
+All commands read `USER_EMAIL` from the project-root `.env` (step 3); pass
+`USER_EMAIL=...` on the command line to override it for a single run.
 | `gmail-contact-graph/` | `make setup` | Install deps + build |
 | `gmail-contact-graph/` | `make run` | Start production server (port 5000) |
 | `gmail-contact-graph/` | `make dev` | Start dev servers (API:5000, Client:3000) |
