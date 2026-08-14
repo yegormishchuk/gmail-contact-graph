@@ -8,6 +8,7 @@ data/Calendar/*
 
 # Credentials and tokens - NEVER commit these!
 credentials.json
+token.json
 token.pickle
 *.pickle
 
