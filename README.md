@@ -28,7 +28,7 @@ git clone <repo-url> gmail-contact-graph
 cd gmail-contact-graph
 cp .env.example .env                          # set USER_EMAIL
 
-# put your Google Takeout export at data/data.mbox, then:
+# put your Google Takeout export at data/Email/data.mbox, then:
 cd gmail-mbox-parser      && make process-all
 cd ../gmail-contact-graph && make setup && make run
 ```
@@ -47,7 +47,7 @@ Go to [Google Takeout](https://takeout.google.com) and export:
 ### 2. Place the exports in the data directory
 
 Takeout names the mail export something like `All mail Including Spam and
-Trash.mbox`. Put it directly in `data/` and rename it to `data.mbox`, or keep
+Trash.mbox`. Put it in `data/Email/` and rename it to `data.mbox`, or keep
 the original name and pass `MBOX_FILE="All mail Including Spam and Trash.mbox"`
 to the `make` commands below.
 
@@ -94,7 +94,7 @@ If your mbox file has a different name than `data.mbox`:
 make process-all MBOX_FILE=your-export.mbox
 ```
 
-This runs both `fill-db` (parses the mbox into SQLite databases) and `rankings` (generates contact ranking files). All output goes to `../data/`.
+This runs both `fill-db` (parses the mbox into SQLite databases) and `rankings` (generates contact ranking files). The databases land in `../data/`, the ranking files in `../data/rankings/`.
 
 <details>
 <summary>Without <code>make</code></summary>
@@ -103,8 +103,8 @@ This runs both `fill-db` (parses the mbox into SQLite databases) and `rankings` 
 cd gmail-mbox-parser
 cargo build --release --bin fill_db
 cargo build --release --manifest-path tools/Cargo.toml
-./target/release/fill_db ../data/data.mbox ../data/contacts.db
-./tools/target/release/generate_rankings ../data/contacts.db ../data
+./target/release/fill_db ../data/Email/data.mbox ../data/contacts.db
+./tools/target/release/generate_rankings ../data/contacts.db ../data/rankings
 ```
 
 `fill_db` reads `USER_EMAIL` from the project-root `.env`; pass it as an extra
@@ -172,19 +172,32 @@ populated.
 
 ---
 
-## Output files (in `data/`)
+## The `data/` directory
+
+```
+data/
+├── Calendar/    # calendar exports: *.ics
+├── Email/       # mail exports: *.mbox
+├── rankings/    # generated *_ranking.txt files
+├── contacts.db  # shared database, written by both parsers
+└── mails.db     # email metadata
+```
+
+Inputs go in `Calendar/` and `Email/`; everything else is generated.
+
+### Output files
 
 | File | Description |
 |---|---|
 | `contacts.db` | Extracted contacts with spam filtering, plus `events` and `event_attendees` if calendar parser is run |
 | `mails.db` | Parsed email metadata |
-| `sent_ranking.txt` | Contacts ranked by emails sent |
-| `received_ranking.txt` | Contacts ranked by emails received |
-| `sent_per_month_ranking.txt` | Sent emails normalized by relationship duration |
-| `received_per_month_ranking.txt` | Received emails normalized by relationship duration |
-| `duration_ranking.txt` | Contacts ranked by communication duration |
-| `email_length_ranking.txt` | Contacts ranked by average email length |
-| `composite_ranking.txt` | Borda-style combined ranking: rank points from the sent and received rankings, weighted 1.0 and 0.2 |
+| `rankings/sent_ranking.txt` | Contacts ranked by emails sent |
+| `rankings/received_ranking.txt` | Contacts ranked by emails received |
+| `rankings/sent_per_month_ranking.txt` | Sent emails normalized by relationship duration |
+| `rankings/received_per_month_ranking.txt` | Received emails normalized by relationship duration |
+| `rankings/duration_ranking.txt` | Contacts ranked by communication duration |
+| `rankings/email_length_ranking.txt` | Contacts ranked by average email length |
+| `rankings/composite_ranking.txt` | Borda-style combined ranking: rank points from the sent and received rankings, weighted 1.0 and 0.2 |
 
 ## Filter modes in the webapp
 

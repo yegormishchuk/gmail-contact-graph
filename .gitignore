@@ -4,6 +4,12 @@ data/*
 !data/Calendar/
 data/Calendar/*
 !data/Calendar/.gitkeep
+!data/Email/
+data/Email/*
+!data/Email/.gitkeep
+!data/rankings/
+data/rankings/*
+!data/rankings/.gitkeep
 *.mbox
 
 # Credentials and tokens - NEVER commit these!

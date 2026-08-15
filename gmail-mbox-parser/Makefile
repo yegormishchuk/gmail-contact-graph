@@ -9,8 +9,10 @@ ENV_FILE ?= ../.env
 # Paths
 TOOLS_DIR = tools
 DATA_DIR ?= ../data
+MBOX_DIR ?= $(DATA_DIR)/Email
+RANKINGS_DIR ?= $(DATA_DIR)/rankings
 MBOX_FILE ?= data.mbox
-MBOX_PATH = $(DATA_DIR)/$(MBOX_FILE)
+MBOX_PATH = $(MBOX_DIR)/$(MBOX_FILE)
 CONTACTS_DB = $(DATA_DIR)/contacts.db
 
 # User email (required for fill-db). Set on the command line or in $(ENV_FILE).
@@ -64,14 +66,15 @@ ifeq ($(strip $(USER_EMAIL)),)
 endif
 	@echo "Filling database from mbox..."
 	@echo "Using email: $(USER_EMAIL)"
+	@echo "Reading mbox: $(MBOX_PATH)"
 	@echo "Output dir: $(DATA_DIR)"
 	@$(MKDIR)
 	$(FILL_DB) "$(MBOX_PATH)" "$(USER_EMAIL)" "$(CONTACTS_DB)"
 
 rankings: build-tools
 	@echo "Generating rankings..."
-	$(GENERATE_RANKINGS) "$(CONTACTS_DB)" "$(DATA_DIR)"
-	@echo "Rankings generated in $(DATA_DIR)/"
+	$(GENERATE_RANKINGS) "$(CONTACTS_DB)" "$(RANKINGS_DIR)"
+	@echo "Rankings generated in $(RANKINGS_DIR)/"
 
 process-all: fill-db rankings
 	@echo "All processing complete."
@@ -87,12 +90,7 @@ clean:
 
 clean-data:
 	@echo "Removing generated ranking files..."
-	rm -f $(DATA_DIR)/sent_ranking.txt
-	rm -f $(DATA_DIR)/sent_per_month_ranking.txt
-	rm -f $(DATA_DIR)/received_ranking.txt
-	rm -f $(DATA_DIR)/received_per_month_ranking.txt
-	rm -f $(DATA_DIR)/duration_ranking.txt
-	rm -f $(DATA_DIR)/email_length_ranking.txt
+	rm -f $(RANKINGS_DIR)/*_ranking.txt
 
 clean-db:
 	@echo "Removing databases..."
@@ -127,8 +125,10 @@ help:
 	@echo "  Variables:"
 	@echo "    USER_EMAIL          - Your Gmail address (required; can also be set in ../.env)"
 	@echo "    ENV_FILE            - Path to .env (default: ../.env)"
-	@echo "    MBOX_FILE           - Mbox filename (default: data.mbox, resolved to ../data/)"
+	@echo "    MBOX_FILE           - Mbox filename (default: data.mbox, resolved inside MBOX_DIR)"
 	@echo "    DATA_DIR            - Data directory (default: ../data)"
+	@echo "    MBOX_DIR            - Mbox directory (default: \$$(DATA_DIR)/Email)"
+	@echo "    RANKINGS_DIR        - Ranking output dir (default: \$$(DATA_DIR)/rankings)"
 	@echo ""
 	@echo "  Example:"
 	@echo "    make fill-db USER_EMAIL=john@gmail.com MBOX_FILE=gmail_data.mbox"

@@ -28,15 +28,26 @@ make build
 make fill-db USER_EMAIL=your.email@gmail.com MBOX_FILE=data.mbox
 ```
 
-`MBOX_FILE` is a **filename**, not a path — it is resolved inside `DATA_DIR`
-(default `../data`). To read an mbox that lives somewhere else, move the
-directory rather than the filename:
+`MBOX_FILE` is a **filename**, not a path — it is resolved inside `MBOX_DIR`
+(default `$(DATA_DIR)/Email`, i.e. `../data/Email`). To read an mbox that lives
+somewhere else, move the directory rather than the filename:
 
 ```bash
-make fill-db USER_EMAIL=you@gmail.com DATA_DIR=~/gmail-data MBOX_FILE=mail.mbox
+make fill-db USER_EMAIL=you@gmail.com MBOX_DIR=~/gmail-data MBOX_FILE=mail.mbox
 ```
 
-`DATA_DIR` is also where the databases and ranking files are written.
+`DATA_DIR` (default `../data`) is the root of the data layout:
+
+```
+data/
+├── Calendar/    # .ics input for the sibling calendar-parser
+├── Email/       # .mbox input          — MBOX_DIR
+├── rankings/    # *_ranking.txt output — RANKINGS_DIR
+├── contacts.db
+└── mails.db
+```
+
+`MBOX_DIR` and `RANKINGS_DIR` can be overridden independently of `DATA_DIR`.
 
 ### With AI verification
 
@@ -50,7 +61,8 @@ make fill-db MBOX_FILE=data.mbox
 
 ## Output
 
-The parser creates two SQLite databases in `DATA_DIR`:
+The parser creates two SQLite databases in `DATA_DIR`, and `make rankings`
+writes the `*_ranking.txt` files into `RANKINGS_DIR`:
 
 - `contacts.db` - Contact information with filtering tables (and `events` / `event_attendees` once the sibling [calendar-parser](../calendar-parser) is run)
 - `mails.db` - Parsed email metadata
@@ -58,8 +70,8 @@ The parser creates two SQLite databases in `DATA_DIR`:
 ### Database schema
 
 **contacts.db:**
-- `contacts_candidates` - All extracted contacts
-- `contacts_filtered` - Human-verified contacts (spam removed)
+- `contacts` - All extracted contacts with their metrics (sent, received, duration, average_chars, meetings, not_spam)
+- `contacts_filtered` - Contacts that passed spam filtering: a join table referencing `contacts(id)`, plus a `not_clear` flag
 
 **mails.db:**
 - Email metadata (subject, date, recipients, etc.)
