@@ -44,10 +44,11 @@ impl Contact {
 fn load_contacts(db_path: &str) -> Result<Vec<Contact>> {
     let conn = Connection::open(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT name, email, sent, received,
-                COALESCE(duration, 0) as duration,
-                COALESCE(average_chars, 0) as average_chars
-         FROM contacts_filtered"
+        "SELECT c.name, c.email, c.sent, c.received,
+                COALESCE(c.duration, 0) as duration,
+                COALESCE(c.average_chars, 0) as average_chars
+         FROM contacts_filtered f
+         JOIN contacts c ON c.id = f.contact_id"
     )?;
 
     let contacts = stmt.query_map([], |row| {
@@ -298,7 +299,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output_dir = if args.len() > 2 {
         &args[2]
     } else {
-        "data"
+        "data/rankings"
     };
 
     // Create output directory if it doesn't exist
