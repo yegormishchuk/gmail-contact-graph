@@ -1,19 +1,16 @@
 # Gmail Contact Graph Webapp - Makefile
 # =====================================
 
-# User email for the webapp's "you" node. Normally read from the project-root
-# .env by packages/server/src/config.ts. Set it here only to override that for
-# a single run: make run USER_EMAIL=you@example.com
-USER_EMAIL ?=
-ifneq ($(strip $(USER_EMAIL)),)
-export USER_EMAIL
-endif
+# Configuration (USER_EMAIL, PORT, CONTACTS_DB_FILE, ...) is read from the
+# project-root .env by packages/server/src/config.ts. Variables set on the make
+# command line are exported to the recipes automatically, so
+# `make run USER_EMAIL=you@example.com` overrides .env for a single run.
 
 # ============================================
 # Main targets
 # ============================================
 
-.PHONY: all setup install build run dev clean help
+.PHONY: all setup install build run dev dev-server dev-client clean help
 
 all: setup
 
@@ -61,7 +58,6 @@ clean:
 	rm -rf webapp/node_modules
 	rm -rf webapp/packages/*/node_modules
 	rm -rf webapp/packages/*/dist
-	rm -f webapp/package-lock.json
 
 # ============================================
 # Help
@@ -84,8 +80,8 @@ help:
 	@echo "  Clean:"
 	@echo "    make clean          - Remove node_modules and build files"
 	@echo ""
-	@echo "  Variables (set in Makefile or override on command line):"
-	@echo "    USER_EMAIL          - Override the ../.env value for this run"
+	@echo "  Variables (set in ../.env, or override on the command line):"
+	@echo "    USER_EMAIL          - Your Gmail address (the \"you\" node)"
 	@echo "    CONTACTS_DB_FILE    - Path to contacts.db"
 	@echo "    MAILS_DB_FILE       - Path to mails.db"
 	@echo "    PORT                - Server port (default: 5000)"

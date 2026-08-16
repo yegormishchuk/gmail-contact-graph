@@ -18,13 +18,12 @@ CONTACTS_DB = $(DATA_DIR)/contacts.db
 # User email (required for fill-db). Set on the command line or in $(ENV_FILE).
 USER_EMAIL ?=
 
-# Detect OS for executable extension and commands
+# Executable extension. Recipes assume a POSIX shell (Git Bash / msys2 on
+# Windows), which is what GNU make uses whenever sh is on PATH.
 ifeq ($(OS),Windows_NT)
     EXE = .exe
-    MKDIR = if not exist "$(DATA_DIR)" mkdir "$(DATA_DIR)"
 else
     EXE =
-    MKDIR = mkdir -p $(DATA_DIR)
 endif
 
 # Binaries
@@ -35,7 +34,7 @@ GENERATE_RANKINGS = $(TOOLS_DIR)/target/release/generate_rankings$(EXE)
 # Main targets
 # ============================================
 
-.PHONY: all build build-parser build-tools clean help
+.PHONY: all build build-parser build-tools help
 
 all: build
 
@@ -68,7 +67,7 @@ endif
 	@echo "Using email: $(USER_EMAIL)"
 	@echo "Reading mbox: $(MBOX_PATH)"
 	@echo "Output dir: $(DATA_DIR)"
-	@$(MKDIR)
+	@mkdir -p "$(DATA_DIR)"
 	$(FILL_DB) "$(MBOX_PATH)" "$(USER_EMAIL)" "$(CONTACTS_DB)"
 
 rankings: build-tools
@@ -82,6 +81,8 @@ process-all: fill-db rankings
 # ============================================
 # Clean targets
 # ============================================
+
+.PHONY: clean clean-data clean-db clean-all
 
 clean:
 	@echo "Cleaning build artifacts..."
