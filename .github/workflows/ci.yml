@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    name: rust (${{ matrix.crate }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Report every crate's failures, not just the first to fail.
+      fail-fast: false
+      matrix:
+        # These are three independent crates, not a Cargo workspace —
+        # each needs its own cargo invocation and its own cache.
+        crate:
+          - gmail-mbox-parser
+          - gmail-mbox-parser/tools
+          - calendar-parser
+    defaults:
+      run:
+        working-directory: ${{ matrix.crate }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # rusqlite's `bundled` feature compiles SQLite from C source:
+      # minutes when cold, seconds when cached.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.crate }}
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+  webapp:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gmail-contact-graph/webapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: gmail-contact-graph/webapp/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # `build` runs tsc in every package, so this is also the typecheck.
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
