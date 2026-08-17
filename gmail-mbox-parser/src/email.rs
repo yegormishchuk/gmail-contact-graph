@@ -13,12 +13,12 @@ pub fn parse_email_date(line: &str) -> Option<i64> {
 
     // Try common variations
     let formats = [
-        "%a, %d %b %Y %H:%M:%S %z",      // Mon, 25 Dec 2023 10:30:00 +0000
-        "%d %b %Y %H:%M:%S %z",           // 25 Dec 2023 10:30:00 +0000
-        "%a, %d %b %Y %H:%M:%S",          // Mon, 25 Dec 2023 10:30:00
-        "%d %b %Y %H:%M:%S",              // 25 Dec 2023 10:30:00
-        "%Y-%m-%d %H:%M:%S %z",           // 2023-12-25 10:30:00 +0000
-        "%Y-%m-%d %H:%M:%S",              // 2023-12-25 10:30:00
+        "%a, %d %b %Y %H:%M:%S %z", // Mon, 25 Dec 2023 10:30:00 +0000
+        "%d %b %Y %H:%M:%S %z",     // 25 Dec 2023 10:30:00 +0000
+        "%a, %d %b %Y %H:%M:%S",    // Mon, 25 Dec 2023 10:30:00
+        "%d %b %Y %H:%M:%S",        // 25 Dec 2023 10:30:00
+        "%Y-%m-%d %H:%M:%S %z",     // 2023-12-25 10:30:00 +0000
+        "%Y-%m-%d %H:%M:%S",        // 2023-12-25 10:30:00
     ];
 
     // Clean up date string - remove timezone name in parentheses like "(PST)"

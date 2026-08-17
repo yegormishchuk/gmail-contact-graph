@@ -97,8 +97,8 @@ export function loadCalendarStats(): CalendarStats {
   if (!hasCalendarTables(db)) return empty;
 
   // Totals: events count + average duration over events with both timestamps
-  let totalMeetings = 0;
-  let avgDuration = 0;
+  let totalMeetings: number;
+  let avgDuration: number;
   {
     const stmt = db.prepare(`
       SELECT COUNT(*) AS n,
@@ -114,7 +114,7 @@ export function loadCalendarStats(): CalendarStats {
   }
 
   // Unique attendees
-  let uniqueAttendees = 0;
+  let uniqueAttendees: number;
   {
     const stmt = db.prepare(`SELECT COUNT(*) AS n FROM event_attendees`);
     stmt.step();

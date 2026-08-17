@@ -95,7 +95,7 @@ export function Controls() {
   };
 
   const handleResetZoom = () => {
-    (window as any).resetGraphZoom?.();
+    window.resetGraphZoom?.();
   };
 
   return (

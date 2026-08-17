@@ -9,10 +9,17 @@
     "dev:server": "npm -w @gmail-graph/server run dev",
     "dev:client": "npm -w @gmail-graph/client run dev",
     "build": "npm -w @gmail-graph/shared run build && npm -w @gmail-graph/server run build && npm -w @gmail-graph/client run build",
-    "start": "npm -w @gmail-graph/server run start"
+    "start": "npm -w @gmail-graph/server run start",
+    "test": "npm -w @gmail-graph/server run test",
+    "lint": "eslint packages"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "concurrently": "^8.2.2",
-    "typescript": "^5.9.3"
+    "eslint": "^10.8.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0"
   }
 }

@@ -1,11 +1,6 @@
 import type { ContactFiltered, RankingInfo } from '@gmail-graph/shared';
 import { config } from '../config.js';
 
-interface RankingConfig {
-  name: string;
-  coefficient: number;
-}
-
 // Assigns ordinal ranks to contacts by a given metric (descending).
 // Contacts with equal values get the same rank; the next distinct value
 // skips ranks accordingly (standard competition ranking: 1,1,3,4,...).

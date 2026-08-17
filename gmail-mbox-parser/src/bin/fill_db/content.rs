@@ -23,7 +23,7 @@ pub fn extract_text_content(
     let ct = if content_type.is_empty() {
         "text/plain"
     } else {
-        content_type.as_ref()
+        content_type
     };
 
     if ct.starts_with("multipart/") {
@@ -70,7 +70,10 @@ fn extract_from_multipart(body: &[u8], boundary: &str, depth: usize) -> String {
     for part in &parts {
         let (part_headers, part_body) = split_part_headers(part);
         let (ct, sub_boundary, cs) = parse_content_type(
-            part_headers.get("content-type").map(|s| s.as_str()).unwrap_or(""),
+            part_headers
+                .get("content-type")
+                .map(|s| s.as_str())
+                .unwrap_or(""),
         );
         let te = part_headers
             .get("content-transfer-encoding")

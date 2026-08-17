@@ -159,7 +159,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         const sorted = [...members].sort((a, b) => b.compositeScore - a.compositeScore);
         const maxScore = sorted[0]?.compositeScore || 1;
         let ringR = graphConfig.centerNodeRadius + INNER_GAP;
-        let rem = sorted.slice();
+        const rem = sorted.slice();
         let lastNodeR = graphConfig.minNodeRadius;
         while (rem.length > 0) {
           const nodeR = getNodeRadius(rem[0], maxScore);
@@ -305,7 +305,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           // Pre-position contacts in concentric rings (sized to the expanded radius)
           const nodePositions = new Map<string, { x: number; y: number }>();
           let ringR = graphConfig.centerNodeRadius + INNER_GAP;
-          let ringRemaining = sorted.slice();
+          const ringRemaining = sorted.slice();
 
           while (ringRemaining.length > 0) {
             const nodeR = getNodeRadius(ringRemaining[0], maxGroupScore);
@@ -1122,14 +1122,6 @@ function drawRope(
     .delay(linkData.length * 55 + 120)
     .ease(d3.easeCubicOut)
     .style('opacity', '1');
-}
-
-function shadeColor(hex: string, amount: number): string {
-  const num = parseInt(hex.slice(1), 16);
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount));
-  const b = Math.min(255, Math.max(0, (num & 0xff) + amount));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
 function blendColors(colors: string[]): string {

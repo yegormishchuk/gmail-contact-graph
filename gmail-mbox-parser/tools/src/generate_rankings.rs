@@ -48,21 +48,22 @@ fn load_contacts(db_path: &str) -> Result<Vec<Contact>> {
                 COALESCE(c.duration, 0) as duration,
                 COALESCE(c.average_chars, 0) as average_chars
          FROM contacts_filtered f
-         JOIN contacts c ON c.id = f.contact_id"
+         JOIN contacts c ON c.id = f.contact_id",
     )?;
 
-    let contacts = stmt.query_map([], |row| {
-        Ok(Contact {
-            name: row.get(0)?,
-            email: row.get(1)?,
-            sent: row.get(2)?,
-            received: row.get(3)?,
-            duration: row.get(4)?,
-            average_chars: row.get(5)?,
-        })
-    })?
-    .filter_map(|r| r.ok())
-    .collect();
+    let contacts = stmt
+        .query_map([], |row| {
+            Ok(Contact {
+                name: row.get(0)?,
+                email: row.get(1)?,
+                sent: row.get(2)?,
+                received: row.get(3)?,
+                duration: row.get(4)?,
+                average_chars: row.get(5)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
 
     Ok(contacts)
 }
@@ -239,11 +240,22 @@ fn write_composite_ranking(
     writeln!(writer, "# Composite Contact Ranking")?;
     writeln!(writer, "# Rankings used:")?;
     for config in ranking_configs {
-        writeln!(writer, "#   - {} (coefficient: {})", config.name, config.coefficient)?;
+        writeln!(
+            writer,
+            "#   - {} (coefficient: {})",
+            config.name, config.coefficient
+        )?;
     }
     writeln!(writer, "#")?;
-    writeln!(writer, "# Score formula: sum of (n - rank + 1) * coefficient for each ranking")?;
-    writeln!(writer, "# where n = total number of contacts ({})", composite.len())?;
+    writeln!(
+        writer,
+        "# Score formula: sum of (n - rank + 1) * coefficient for each ranking"
+    )?;
+    writeln!(
+        writer,
+        "# where n = total number of contacts ({})",
+        composite.len()
+    )?;
     writeln!(writer, "#")?;
     writeln!(writer)?;
 

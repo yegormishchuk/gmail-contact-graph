@@ -27,13 +27,21 @@ pub fn flush_header(name: &str, value: &str, msg: &mut EmailMessage) {
             let decoded = decode_mime_header(value);
             let recipients = parse_all_recipients(&decoded);
             // parse_all_recipients returns (name, email), but we store (email, name)
-            msg.to.extend(recipients.into_iter().map(|(name, email)| (email.to_lowercase(), name)));
+            msg.to.extend(
+                recipients
+                    .into_iter()
+                    .map(|(name, email)| (email.to_lowercase(), name)),
+            );
         }
         "cc" => {
             let decoded = decode_mime_header(value);
             let recipients = parse_all_recipients(&decoded);
             // parse_all_recipients returns (name, email), but we store (email, name)
-            msg.to.extend(recipients.into_iter().map(|(name, email)| (email.to_lowercase(), name)));
+            msg.to.extend(
+                recipients
+                    .into_iter()
+                    .map(|(name, email)| (email.to_lowercase(), name)),
+            );
         }
         "subject" => {
             msg.subject = decode_mime_header(value).trim().to_string();

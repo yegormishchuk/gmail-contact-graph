@@ -1,5 +1,5 @@
-use chrono::{Datelike, Duration, NaiveDateTime, TimeZone, Utc, Weekday};
 use chrono::Timelike;
+use chrono::{Datelike, Duration, NaiveDateTime, TimeZone, Utc, Weekday};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Freq {
@@ -34,7 +34,9 @@ pub fn parse_rule(rrule: &str) -> Result<Rule, ParseRuleError> {
     let mut count: Option<u32> = None;
 
     for part in rrule.split(';') {
-        let Some(eq) = part.find('=') else { continue; };
+        let Some(eq) = part.find('=') else {
+            continue;
+        };
         let key = &part[..eq];
         let val = &part[eq + 1..];
         match key {
@@ -56,8 +58,8 @@ pub fn parse_rule(rrule: &str) -> Result<Rule, ParseRuleError> {
             }
             "UNTIL" => until = parse_ics_date(val),
             "COUNT" => count = val.parse().ok(),
-            "BYSETPOS" | "BYWEEKNO" | "BYMONTHDAY" | "BYYEARDAY"
-            | "BYMONTH" | "BYHOUR" | "BYMINUTE" | "BYSECOND" => {
+            "BYSETPOS" | "BYWEEKNO" | "BYMONTHDAY" | "BYYEARDAY" | "BYMONTH" | "BYHOUR"
+            | "BYMINUTE" | "BYSECOND" => {
                 return Err(ParseRuleError::UnsupportedKey(key.to_string()));
             }
             _ => {}
@@ -65,7 +67,13 @@ pub fn parse_rule(rrule: &str) -> Result<Rule, ParseRuleError> {
     }
 
     let freq = freq.ok_or(ParseRuleError::MissingFreq)?;
-    Ok(Rule { freq, interval, by_day, until, count })
+    Ok(Rule {
+        freq,
+        interval,
+        by_day,
+        until,
+        count,
+    })
 }
 
 fn parse_weekday(s: &str) -> Option<Weekday> {
@@ -101,9 +109,15 @@ pub fn expand(rule: &Rule, dtstart: i64, cutoff: i64, safety_cap: usize) -> Vec<
             let mut t = ts_to_dt(dtstart);
             while t.and_utc().timestamp() <= stop_ts {
                 out.push(t.and_utc().timestamp());
-                if let Some(c) = count_limit { if out.len() >= c { break; } }
-                if out.len() >= safety_cap { break; }
-                t = t + step;
+                if let Some(c) = count_limit {
+                    if out.len() >= c {
+                        break;
+                    }
+                }
+                if out.len() >= safety_cap {
+                    break;
+                }
+                t += step;
             }
         }
         Freq::Weekly => {
@@ -122,24 +136,43 @@ pub fn expand(rule: &Rule, dtstart: i64, cutoff: i64, safety_cap: usize) -> Vec<
             let mut t = t0;
             loop {
                 let ts = t.and_utc().timestamp();
-                if ts > stop_ts { break; }
-                let weeks_since = (iso_week_index(t) - start_week).max(0);
-                if weeks_since % rule.interval as i64 == 0 && allowed.contains(&t.weekday()) && ts >= dtstart {
-                    out.push(ts);
-                    if let Some(c) = count_limit { if out.len() >= c { break; } }
-                    if out.len() >= safety_cap { break; }
+                if ts > stop_ts {
+                    break;
                 }
-                t = t + Duration::days(1);
+                let weeks_since = (iso_week_index(t) - start_week).max(0);
+                if weeks_since % rule.interval as i64 == 0
+                    && allowed.contains(&t.weekday())
+                    && ts >= dtstart
+                {
+                    out.push(ts);
+                    if let Some(c) = count_limit {
+                        if out.len() >= c {
+                            break;
+                        }
+                    }
+                    if out.len() >= safety_cap {
+                        break;
+                    }
+                }
+                t += Duration::days(1);
             }
         }
         Freq::Monthly => {
             let mut t = ts_to_dt(dtstart);
             loop {
                 let ts = t.and_utc().timestamp();
-                if ts > stop_ts { break; }
+                if ts > stop_ts {
+                    break;
+                }
                 out.push(ts);
-                if let Some(c) = count_limit { if out.len() >= c { break; } }
-                if out.len() >= safety_cap { break; }
+                if let Some(c) = count_limit {
+                    if out.len() >= c {
+                        break;
+                    }
+                }
+                if out.len() >= safety_cap {
+                    break;
+                }
                 t = add_months(t, rule.interval as i64);
             }
         }
@@ -173,7 +206,11 @@ fn add_months(t: NaiveDateTime, months: i64) -> NaiveDateTime {
 
 fn days_in_month(year: i32, month: u32) -> u32 {
     use chrono::NaiveDate;
-    let (ny, nm) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    let (ny, nm) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
     let first_next = NaiveDate::from_ymd_opt(ny, nm, 1).unwrap();
     let last_this = first_next.pred_opt().unwrap();
     last_this.day()

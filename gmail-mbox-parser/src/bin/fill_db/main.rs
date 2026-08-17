@@ -105,7 +105,11 @@ async fn main() {
 // Phase 1: Fill mails table
 // ---------------------------------------------------------------------------
 
-fn fill_mails_db(mbox_path: &str, user_email: &str, db_path: &str) -> HashMap<String, ContactStats> {
+fn fill_mails_db(
+    mbox_path: &str,
+    user_email: &str,
+    db_path: &str,
+) -> HashMap<String, ContactStats> {
     let conn = Connection::open(db_path).expect("failed to open database");
     db::setup_mails_db(&conn);
 
@@ -167,14 +171,18 @@ fn fill_mails_db(mbox_path: &str, user_email: &str, db_path: &str) -> HashMap<St
             ParseState::Body => {
                 if line.starts_with("From ") {
                     // New message — finalize current
-                    let result = db::insert_message(&mut stmt, &msg, user_email, &mut contact_stats);
+                    let result =
+                        db::insert_message(&mut stmt, &msg, user_email, &mut contact_stats);
                     row_count += result.0;
                     if result.1 {
                         skipped_count += 1;
                     }
                     msg_count += 1;
-                    if msg_count % 5000 == 0 {
-                        eprintln!("[progress] {} messages, {} rows, {} skipped", msg_count, row_count, skipped_count);
+                    if msg_count.is_multiple_of(5000) {
+                        eprintln!(
+                            "[progress] {} messages, {} rows, {} skipped",
+                            msg_count, row_count, skipped_count
+                        );
                     }
                     msg = EmailMessage::default();
                     header_name.clear();
@@ -202,7 +210,10 @@ fn fill_mails_db(mbox_path: &str, user_email: &str, db_path: &str) -> HashMap<St
     drop(stmt);
     conn.execute_batch("COMMIT").unwrap();
 
-    eprintln!("Mails DB: {} messages, {} rows inserted, {} skipped.", msg_count, row_count, skipped_count);
+    eprintln!(
+        "Mails DB: {} messages, {} rows inserted, {} skipped.",
+        msg_count, row_count, skipped_count
+    );
 
     contact_stats
 }
@@ -232,13 +243,18 @@ fn fill_contacts_db(contact_stats: &HashMap<String, ContactStats>, db_path: &str
         }
 
         // Calculate sent_per_month and received_per_month
-        let (sent_per_month, received_per_month) = match (stats.first_timestamp, stats.last_timestamp) {
-            (Some(first), Some(last)) => (
-                Some(parsing::calculate_emails_per_month(first, last, stats.sent)),
-                Some(parsing::calculate_emails_per_month(first, last, stats.received)),
-            ),
-            _ => (None, None),
-        };
+        let (sent_per_month, received_per_month) =
+            match (stats.first_timestamp, stats.last_timestamp) {
+                (Some(first), Some(last)) => (
+                    Some(parsing::calculate_emails_per_month(first, last, stats.sent)),
+                    Some(parsing::calculate_emails_per_month(
+                        first,
+                        last,
+                        stats.received,
+                    )),
+                ),
+                _ => (None, None),
+            };
 
         // Calculate average_chars
         let average_chars = if stats.email_count > 0 {
@@ -335,7 +351,12 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
 
         total += 1;
 
-        if is_spam_contact(&candidate.email, &candidate.name, candidate.received, candidate.sent) {
+        if is_spam_contact(
+            &candidate.email,
+            &candidate.name,
+            candidate.received,
+            candidate.sent,
+        ) {
             continue;
         }
 
@@ -427,9 +448,7 @@ async fn fill_filtered_with_ai(db_path: &str, candidates: Vec<ContactCandidate>)
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
 
     let mut insert_stmt = conn
-        .prepare(
-            "INSERT INTO contacts_filtered (contact_id, not_clear) VALUES (?1, ?2)",
-        )
+        .prepare("INSERT INTO contacts_filtered (contact_id, not_clear) VALUES (?1, ?2)")
         .unwrap();
 
     let mut human_count = 0u64;
@@ -495,7 +514,10 @@ fn fallback_fill_filtered(db_path: &str, candidates: &[ContactCandidate]) {
     drop(insert_stmt);
     conn.execute_batch("COMMIT").unwrap();
 
-    eprintln!("Fallback: {} contacts added to filtered (all with not_clear=1)", count);
+    eprintln!(
+        "Fallback: {} contacts added to filtered (all with not_clear=1)",
+        count
+    );
 }
 #[cfg(test)]
 mod tests {

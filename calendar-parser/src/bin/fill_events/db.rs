@@ -256,9 +256,14 @@ pub fn insert_event(
     today_cutoff: i64,
     safety_cap: usize,
 ) -> InsertCounts {
-    let mut counts = InsertCounts { masters: 0, occurrences: 0, skipped_unsupported: 0 };
+    let mut counts = InsertCounts {
+        masters: 0,
+        occurrences: 0,
+        skipped_unsupported: 0,
+    };
 
-    let attendees_json = serde_json::to_string(&event.attendees).unwrap_or_else(|_| "[]".to_string());
+    let attendees_json =
+        serde_json::to_string(&event.attendees).unwrap_or_else(|_| "[]".to_string());
     let is_recurring = !event.rrule.is_empty();
 
     // Non-recurring events must have a dtstart within [cutoff_min, today_cutoff].
@@ -300,7 +305,9 @@ pub fn insert_event(
         return counts;
     }
 
-    let Some(dtstart) = event.dtstart else { return counts; };
+    let Some(dtstart) = event.dtstart else {
+        return counts;
+    };
     let duration = event.dtend.unwrap_or(dtstart) - dtstart;
 
     let rule = match parse_rule(&event.rrule) {
@@ -314,7 +321,10 @@ pub fn insert_event(
 
     let occs = expand(&rule, dtstart, today_cutoff, safety_cap);
     if occs.len() == safety_cap {
-        eprintln!("[warn] RRULE for uid={} hit safety cap of {}", event.uid, safety_cap);
+        eprintln!(
+            "[warn] RRULE for uid={} hit safety cap of {}",
+            event.uid, safety_cap
+        );
     }
 
     for (idx, occ_start) in occs.iter().enumerate() {
@@ -374,11 +384,13 @@ mod tests {
         let conn = open_in_memory();
         let mut stmt = conn.prepare(INSERT_SQL).unwrap();
 
-        let mut e = CalendarEvent::default();
-        e.uid = "abc".into();
-        e.summary = "Hi".into();
-        e.dtstart = Some(1000);
-        e.dtend = Some(2000);
+        let mut e = CalendarEvent {
+            uid: "abc".into(),
+            summary: "Hi".into(),
+            dtstart: Some(1000),
+            dtend: Some(2000),
+            ..Default::default()
+        };
         e.attendees.push(Attendee {
             email: "x@y.com".into(),
             name: "X".into(),
@@ -391,12 +403,18 @@ mod tests {
 
         drop(stmt);
         let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM events WHERE uid='abc'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM events WHERE uid='abc'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(n, 1);
 
         let json: String = conn
-            .query_row("SELECT attendees_json FROM events WHERE uid='abc'", [], |r| r.get(0))
+            .query_row(
+                "SELECT attendees_json FROM events WHERE uid='abc'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert!(json.contains("x@y.com"));
     }
@@ -406,12 +424,14 @@ mod tests {
         let conn = open_in_memory();
         let mut stmt = conn.prepare(INSERT_SQL).unwrap();
 
-        let mut e = CalendarEvent::default();
-        e.uid = "rec".into();
-        e.summary = "weekly".into();
-        e.dtstart = Some(1704110400); // Mon 2024-01-01 12:00 UTC
-        e.dtend = Some(1704114000);   // +1h
-        e.rrule = "FREQ=WEEKLY;BYDAY=MO;COUNT=3".into();
+        let e = CalendarEvent {
+            uid: "rec".into(),
+            summary: "weekly".into(),
+            dtstart: Some(1704110400), // Mon 2024-01-01 12:00 UTC
+            dtend: Some(1704114000),   // +1h
+            rrule: "FREQ=WEEKLY;BYDAY=MO;COUNT=3".into(),
+            ..Default::default()
+        };
 
         let counts = insert_event(&mut stmt, &e, 0, 9999999999, 1000);
         assert_eq!(counts.masters, 1);
@@ -419,7 +439,9 @@ mod tests {
 
         drop(stmt);
         let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM events WHERE uid='rec'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM events WHERE uid='rec'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(n, 4); // 1 master + 3 occurrences
 
@@ -442,28 +464,52 @@ mod tests {
         let mut stmt = conn.prepare(INSERT_SQL).unwrap();
 
         // Event 1: webapp user organizes; alice accepts, bob declines.
-        let mut e1 = CalendarEvent::default();
-        e1.uid = "e1".into();
-        e1.organizer_email = "me@x.com".into();
-        e1.dtstart = Some(1000);
-        e1.dtend = Some(4600); // 3600s
-        e1.attendees = vec![
-            Attendee { email: "me@x.com".into(), partstat: "ACCEPTED".into(), ..Default::default() },
-            Attendee { email: "alice@x.com".into(), partstat: "ACCEPTED".into(), ..Default::default() },
-            Attendee { email: "bob@x.com".into(), partstat: "DECLINED".into(), ..Default::default() },
-        ];
+        let e1 = CalendarEvent {
+            uid: "e1".into(),
+            organizer_email: "me@x.com".into(),
+            dtstart: Some(1000),
+            dtend: Some(4600), // 3600s
+            attendees: vec![
+                Attendee {
+                    email: "me@x.com".into(),
+                    partstat: "ACCEPTED".into(),
+                    ..Default::default()
+                },
+                Attendee {
+                    email: "alice@x.com".into(),
+                    partstat: "ACCEPTED".into(),
+                    ..Default::default()
+                },
+                Attendee {
+                    email: "bob@x.com".into(),
+                    partstat: "DECLINED".into(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
         insert_event(&mut stmt, &e1, 0, 9_999_999_999, 1000);
 
         // Event 2: alice organizes; webapp user declined.
-        let mut e2 = CalendarEvent::default();
-        e2.uid = "e2".into();
-        e2.organizer_email = "alice@x.com".into();
-        e2.dtstart = Some(2000);
-        e2.dtend = Some(3800); // 1800s
-        e2.attendees = vec![
-            Attendee { email: "alice@x.com".into(), partstat: "ACCEPTED".into(), ..Default::default() },
-            Attendee { email: "me@x.com".into(), partstat: "DECLINED".into(), ..Default::default() },
-        ];
+        let e2 = CalendarEvent {
+            uid: "e2".into(),
+            organizer_email: "alice@x.com".into(),
+            dtstart: Some(2000),
+            dtend: Some(3800), // 1800s
+            attendees: vec![
+                Attendee {
+                    email: "alice@x.com".into(),
+                    partstat: "ACCEPTED".into(),
+                    ..Default::default()
+                },
+                Attendee {
+                    email: "me@x.com".into(),
+                    partstat: "DECLINED".into(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
         insert_event(&mut stmt, &e2, 0, 9_999_999_999, 1000);
 
         drop(stmt);
@@ -502,8 +548,8 @@ mod tests {
         assert_eq!(alice_avg_att, Some((3.0 + 2.0) / 2.0));
 
         // Bob: only e1, declined.
-        let (bob_org, bob_inv, bob_acc, bob_dec, bob_rate): (i64, i64, i64, i64, Option<f64>) = conn
-            .query_row(
+        let (bob_org, bob_inv, bob_acc, bob_dec, bob_rate): (i64, i64, i64, i64, Option<f64>) =
+            conn.query_row(
                 "SELECT organized_events_count, invited_events_count, accepted_count, \
                  declined_count, acceptance_rate FROM event_attendees WHERE email='bob@x.com'",
                 [],
@@ -522,10 +568,12 @@ mod tests {
         let conn = open_in_memory();
         let mut stmt = conn.prepare(INSERT_SQL).unwrap();
 
-        let mut e = CalendarEvent::default();
-        e.uid = "yearly".into();
-        e.dtstart = Some(1000);
-        e.rrule = "FREQ=YEARLY".into();
+        let e = CalendarEvent {
+            uid: "yearly".into(),
+            dtstart: Some(1000),
+            rrule: "FREQ=YEARLY".into(),
+            ..Default::default()
+        };
 
         let counts = insert_event(&mut stmt, &e, 0, 9999999999, 1000);
         assert_eq!(counts.masters, 1);

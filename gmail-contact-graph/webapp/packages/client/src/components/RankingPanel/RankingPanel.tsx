@@ -161,9 +161,7 @@ export function RankingPanel() {
   };
 
   const handleContactClick = (contact: GraphNode, e: React.MouseEvent) => {
-    const focusGraphNode = (window as any).focusGraphNode as
-      | ((email: string, onFound: (pos: { x: number; y: number }) => void, onNotFound?: () => void) => void)
-      | undefined;
+    const focusGraphNode = window.focusGraphNode;
 
     if (focusGraphNode) {
       focusGraphNode(
@@ -181,9 +179,7 @@ export function RankingPanel() {
   };
 
   const handleGroupClick = (group: GroupRankItem, e: React.MouseEvent) => {
-    const focusGroupFn = (window as any).focusGroup as
-      | ((label: string, onFound: (pos: { x: number; y: number }) => void, onNotFound?: () => void) => void)
-      | undefined;
+    const focusGroupFn = window.focusGroup;
 
     const data: GroupHoverData = {
       label: group.label,
