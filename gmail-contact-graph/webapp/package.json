@@ -9,7 +9,8 @@
     "dev:server": "npm -w @gmail-graph/server run dev",
     "dev:client": "npm -w @gmail-graph/client run dev",
     "build": "npm -w @gmail-graph/shared run build && npm -w @gmail-graph/server run build && npm -w @gmail-graph/client run build",
-    "start": "npm -w @gmail-graph/server run start"
+    "start": "npm -w @gmail-graph/server run start",
+    "test": "npm -w @gmail-graph/server run test"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
