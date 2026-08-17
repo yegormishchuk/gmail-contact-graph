@@ -396,7 +396,7 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let events: Vec<CalendarEvent> = extract_events(lines.into_iter(), "test.ics");
+        let events: Vec<CalendarEvent> = extract_events(lines, "test.ics");
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].uid, "abc@example.com");
         assert_eq!(events[0].summary, "First");
@@ -411,7 +411,7 @@ mod tests {
             .into_iter()
             .map(String::from)
             .collect();
-        let events = extract_events(lines.into_iter(), "test.ics");
+        let events = extract_events(lines, "test.ics");
         assert!(events.is_empty());
     }
 }

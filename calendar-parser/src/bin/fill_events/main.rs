@@ -79,6 +79,11 @@ async fn main() {
             }
         };
         let reader = BufReader::new(file);
+        // Intentionally skip unreadable/non-UTF-8 lines and keep parsing the rest of the
+        // file, mirroring the warn-and-continue behavior used for files that fail to open
+        // above. A stuck/erroring reader is not a realistic risk for a local file that just
+        // opened successfully.
+        #[allow(clippy::lines_filter_map_ok)]
         let raw_lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
         let unfolded = unfold_lines(raw_lines);
 
@@ -250,7 +255,7 @@ mod tests {
         let file = std::env::temp_dir().join("fill_events_expand_passthrough.ics");
         fs::write(&file, "").unwrap();
         let s = file.to_str().unwrap().to_string();
-        let out = expand_inputs(&[s.clone()]);
+        let out = expand_inputs(std::slice::from_ref(&s));
         assert_eq!(out, vec![s]);
         fs::remove_file(&file).unwrap();
     }

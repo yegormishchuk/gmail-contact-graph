@@ -8,7 +8,7 @@ fn matches_patterns(local_part: &str, patterns: &[&str]) -> bool {
         if p.contains(['-', '_', '.']) {
             local_part.contains(p)
         } else {
-            tokens.iter().any(|t| *t == *p)
+            tokens.contains(p)
         }
     })
 }

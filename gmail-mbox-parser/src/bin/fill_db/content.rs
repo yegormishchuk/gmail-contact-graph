@@ -23,7 +23,7 @@ pub fn extract_text_content(
     let ct = if content_type.is_empty() {
         "text/plain"
     } else {
-        content_type.as_ref()
+        content_type
     };
 
     if ct.starts_with("multipart/") {

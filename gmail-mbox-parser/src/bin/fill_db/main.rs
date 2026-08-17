@@ -178,7 +178,7 @@ fn fill_mails_db(
                         skipped_count += 1;
                     }
                     msg_count += 1;
-                    if msg_count % 5000 == 0 {
+                    if msg_count.is_multiple_of(5000) {
                         eprintln!(
                             "[progress] {} messages, {} rows, {} skipped",
                             msg_count, row_count, skipped_count

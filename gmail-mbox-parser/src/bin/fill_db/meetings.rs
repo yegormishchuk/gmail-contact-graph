@@ -1,4 +1,4 @@
-/// Meeting detection patterns for Google Meet, Calendar, and scheduling services
+//! Meeting detection patterns for Google Meet, Calendar, and scheduling services
 
 /// List of scheduling service domain patterns
 const SCHEDULING_SERVICES: &[&str] = &[

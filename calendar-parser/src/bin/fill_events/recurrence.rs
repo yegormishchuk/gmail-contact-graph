@@ -117,7 +117,7 @@ pub fn expand(rule: &Rule, dtstart: i64, cutoff: i64, safety_cap: usize) -> Vec<
                 if out.len() >= safety_cap {
                     break;
                 }
-                t = t + step;
+                t += step;
             }
         }
         Freq::Weekly => {
@@ -154,7 +154,7 @@ pub fn expand(rule: &Rule, dtstart: i64, cutoff: i64, safety_cap: usize) -> Vec<
                         break;
                     }
                 }
-                t = t + Duration::days(1);
+                t += Duration::days(1);
             }
         }
         Freq::Monthly => {

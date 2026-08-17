@@ -74,7 +74,7 @@ pub enum ContactClassification {
 }
 
 impl ContactClassification {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_response(s: &str) -> Self {
         for ch in s.chars() {
             match ch {
                 '0' => return Self::NotHuman,
@@ -462,7 +462,7 @@ Contacts:
     where
         F: Fn(usize, usize, usize) + Send + Sync,
     {
-        let total_batches = (contacts.len() + batch_size - 1) / batch_size;
+        let total_batches = contacts.len().div_ceil(batch_size);
         let batches: Vec<Vec<ContactForVerification>> =
             contacts.chunks(batch_size).map(|c| c.to_vec()).collect();
 
