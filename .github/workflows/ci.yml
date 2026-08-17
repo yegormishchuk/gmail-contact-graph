@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   rust:
     name: rust (${{ matrix.crate }})
@@ -33,7 +36,11 @@ jobs:
       # minutes when cold, seconds when cached.
       - uses: Swatinem/rust-cache@v2
         with:
+          # Per-crate cache key to avoid cross-crate cache pollution.
+          key: ${{ matrix.crate }}
           workspaces: ${{ matrix.crate }}
+          # Save cache even on failure for faster iteration on red builds.
+          cache-on-failure: true
 
       - name: Check formatting
         run: cargo fmt --check
