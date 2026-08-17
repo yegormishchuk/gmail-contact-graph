@@ -85,9 +85,9 @@ export function Graph() {
   });
 
   React.useEffect(() => {
-    (window as any).resetGraphZoom = resetZoom;
-    (window as any).focusGraphNode = focusNode;
-    (window as any).focusGroup = focusGroup;
+    window.resetGraphZoom = resetZoom;
+    window.focusGraphNode = focusNode;
+    window.focusGroup = focusGroup;
   }, [resetZoom, focusNode, focusGroup]);
 
   return (
