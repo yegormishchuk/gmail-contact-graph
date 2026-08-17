@@ -256,9 +256,14 @@ pub fn insert_event(
     today_cutoff: i64,
     safety_cap: usize,
 ) -> InsertCounts {
-    let mut counts = InsertCounts { masters: 0, occurrences: 0, skipped_unsupported: 0 };
+    let mut counts = InsertCounts {
+        masters: 0,
+        occurrences: 0,
+        skipped_unsupported: 0,
+    };
 
-    let attendees_json = serde_json::to_string(&event.attendees).unwrap_or_else(|_| "[]".to_string());
+    let attendees_json =
+        serde_json::to_string(&event.attendees).unwrap_or_else(|_| "[]".to_string());
     let is_recurring = !event.rrule.is_empty();
 
     // Non-recurring events must have a dtstart within [cutoff_min, today_cutoff].
@@ -300,7 +305,9 @@ pub fn insert_event(
         return counts;
     }
 
-    let Some(dtstart) = event.dtstart else { return counts; };
+    let Some(dtstart) = event.dtstart else {
+        return counts;
+    };
     let duration = event.dtend.unwrap_or(dtstart) - dtstart;
 
     let rule = match parse_rule(&event.rrule) {
@@ -314,7 +321,10 @@ pub fn insert_event(
 
     let occs = expand(&rule, dtstart, today_cutoff, safety_cap);
     if occs.len() == safety_cap {
-        eprintln!("[warn] RRULE for uid={} hit safety cap of {}", event.uid, safety_cap);
+        eprintln!(
+            "[warn] RRULE for uid={} hit safety cap of {}",
+            event.uid, safety_cap
+        );
     }
 
     for (idx, occ_start) in occs.iter().enumerate() {
@@ -391,12 +401,18 @@ mod tests {
 
         drop(stmt);
         let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM events WHERE uid='abc'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM events WHERE uid='abc'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(n, 1);
 
         let json: String = conn
-            .query_row("SELECT attendees_json FROM events WHERE uid='abc'", [], |r| r.get(0))
+            .query_row(
+                "SELECT attendees_json FROM events WHERE uid='abc'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert!(json.contains("x@y.com"));
     }
@@ -410,7 +426,7 @@ mod tests {
         e.uid = "rec".into();
         e.summary = "weekly".into();
         e.dtstart = Some(1704110400); // Mon 2024-01-01 12:00 UTC
-        e.dtend = Some(1704114000);   // +1h
+        e.dtend = Some(1704114000); // +1h
         e.rrule = "FREQ=WEEKLY;BYDAY=MO;COUNT=3".into();
 
         let counts = insert_event(&mut stmt, &e, 0, 9999999999, 1000);
@@ -419,7 +435,9 @@ mod tests {
 
         drop(stmt);
         let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM events WHERE uid='rec'", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM events WHERE uid='rec'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(n, 4); // 1 master + 3 occurrences
 
@@ -448,9 +466,21 @@ mod tests {
         e1.dtstart = Some(1000);
         e1.dtend = Some(4600); // 3600s
         e1.attendees = vec![
-            Attendee { email: "me@x.com".into(), partstat: "ACCEPTED".into(), ..Default::default() },
-            Attendee { email: "alice@x.com".into(), partstat: "ACCEPTED".into(), ..Default::default() },
-            Attendee { email: "bob@x.com".into(), partstat: "DECLINED".into(), ..Default::default() },
+            Attendee {
+                email: "me@x.com".into(),
+                partstat: "ACCEPTED".into(),
+                ..Default::default()
+            },
+            Attendee {
+                email: "alice@x.com".into(),
+                partstat: "ACCEPTED".into(),
+                ..Default::default()
+            },
+            Attendee {
+                email: "bob@x.com".into(),
+                partstat: "DECLINED".into(),
+                ..Default::default()
+            },
         ];
         insert_event(&mut stmt, &e1, 0, 9_999_999_999, 1000);
 
@@ -461,8 +491,16 @@ mod tests {
         e2.dtstart = Some(2000);
         e2.dtend = Some(3800); // 1800s
         e2.attendees = vec![
-            Attendee { email: "alice@x.com".into(), partstat: "ACCEPTED".into(), ..Default::default() },
-            Attendee { email: "me@x.com".into(), partstat: "DECLINED".into(), ..Default::default() },
+            Attendee {
+                email: "alice@x.com".into(),
+                partstat: "ACCEPTED".into(),
+                ..Default::default()
+            },
+            Attendee {
+                email: "me@x.com".into(),
+                partstat: "DECLINED".into(),
+                ..Default::default()
+            },
         ];
         insert_event(&mut stmt, &e2, 0, 9_999_999_999, 1000);
 
@@ -502,8 +540,8 @@ mod tests {
         assert_eq!(alice_avg_att, Some((3.0 + 2.0) / 2.0));
 
         // Bob: only e1, declined.
-        let (bob_org, bob_inv, bob_acc, bob_dec, bob_rate): (i64, i64, i64, i64, Option<f64>) = conn
-            .query_row(
+        let (bob_org, bob_inv, bob_acc, bob_dec, bob_rate): (i64, i64, i64, i64, Option<f64>) =
+            conn.query_row(
                 "SELECT organized_events_count, invited_events_count, accepted_count, \
                  declined_count, acceptance_rate FROM event_attendees WHERE email='bob@x.com'",
                 [],

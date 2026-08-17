@@ -64,7 +64,11 @@ async fn main() {
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
     let mut stmt = conn.prepare(INSERT_SQL).unwrap();
 
-    let mut totals = InsertCounts { masters: 0, occurrences: 0, skipped_unsupported: 0 };
+    let mut totals = InsertCounts {
+        masters: 0,
+        occurrences: 0,
+        skipped_unsupported: 0,
+    };
 
     for path in &ics_files {
         let file = match File::open(path) {

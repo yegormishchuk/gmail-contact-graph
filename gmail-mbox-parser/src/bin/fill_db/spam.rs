@@ -171,7 +171,9 @@ fn is_blocked_domain(domain: &str) -> bool {
         "getrevue.co",
     ];
 
-    blocked_domains.iter().any(|d| domain == *d || domain.ends_with(&format!(".{}", d)))
+    blocked_domains
+        .iter()
+        .any(|d| domain == *d || domain.ends_with(&format!(".{}", d)))
 }
 
 /// Suspicious name patterns (all caps, excessive punctuation, empty)
@@ -184,12 +186,18 @@ fn is_suspicious_name(name: &str) -> bool {
     }
 
     // All uppercase (more than 3 chars to avoid initials like "CEO")
-    if trimmed.len() > 3 && trimmed == trimmed.to_uppercase() && trimmed.chars().any(|c| c.is_alphabetic()) {
+    if trimmed.len() > 3
+        && trimmed == trimmed.to_uppercase()
+        && trimmed.chars().any(|c| c.is_alphabetic())
+    {
         return true;
     }
 
     // Excessive punctuation or special characters
-    let special_count = trimmed.chars().filter(|c| !c.is_alphanumeric() && !c.is_whitespace()).count();
+    let special_count = trimmed
+        .chars()
+        .filter(|c| !c.is_alphanumeric() && !c.is_whitespace())
+        .count();
     let alpha_count = trimmed.chars().filter(|c| c.is_alphabetic()).count();
 
     if alpha_count > 0 && special_count as f64 / alpha_count as f64 > 0.5 {

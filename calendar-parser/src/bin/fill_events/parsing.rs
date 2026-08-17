@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 use crate::models::{Attendee, CalendarEvent, ParseState};
+use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
+use std::collections::HashMap;
 
 /// Take an iterator of raw lines and return logical lines with continuations folded in.
 pub fn unfold_lines<I: IntoIterator<Item = String>>(lines: I) -> Vec<String> {
@@ -79,10 +79,22 @@ pub fn unescape_text(s: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.peek() {
-                Some('n') | Some('N') => { out.push('\n'); chars.next(); }
-                Some(',') => { out.push(','); chars.next(); }
-                Some(';') => { out.push(';'); chars.next(); }
-                Some('\\') => { out.push('\\'); chars.next(); }
+                Some('n') | Some('N') => {
+                    out.push('\n');
+                    chars.next();
+                }
+                Some(',') => {
+                    out.push(',');
+                    chars.next();
+                }
+                Some(';') => {
+                    out.push(';');
+                    chars.next();
+                }
+                Some('\\') => {
+                    out.push('\\');
+                    chars.next();
+                }
                 _ => out.push('\\'),
             }
         } else {
@@ -116,7 +128,9 @@ pub fn build_attendee(params: &HashMap<String, String>, value: &str) -> Attendee
 
 /// Apply a single ICS property to a CalendarEvent.
 pub fn apply_property(line: &str, event: &mut CalendarEvent) {
-    let Some((name, params, value)) = split_property(line) else { return; };
+    let Some((name, params, value)) = split_property(line) else {
+        return;
+    };
     match name.as_str() {
         "UID" => event.uid = value,
         "SUMMARY" => event.summary = unescape_text(&value),
@@ -224,8 +238,7 @@ mod tests {
 
     #[test]
     fn split_property_handles_quoted_param_with_colon() {
-        let (name, params, value) =
-            split_property("X-FOO;CN=\"a:b\":value").unwrap();
+        let (name, params, value) = split_property("X-FOO;CN=\"a:b\":value").unwrap();
         assert_eq!(name, "X-FOO");
         assert_eq!(params.get("CN"), Some(&"a:b".to_string()));
         assert_eq!(value, "value");
@@ -339,10 +352,7 @@ mod tests {
             "ATTENDEE;CN=Foo;ROLE=REQ-PARTICIPANT:mailto:Foo@X.com",
             &mut e,
         );
-        apply_property(
-            "ATTENDEE;CN=Bar:mailto:bar@x.com",
-            &mut e,
-        );
+        apply_property("ATTENDEE;CN=Bar:mailto:bar@x.com", &mut e);
         assert_eq!(e.attendees.len(), 2);
         assert_eq!(e.attendees[0].email, "foo@x.com");
         assert_eq!(e.attendees[0].name, "Foo");
@@ -386,8 +396,7 @@ mod tests {
         .map(String::from)
         .collect();
 
-        let events: Vec<CalendarEvent> =
-            extract_events(lines.into_iter(), "test.ics");
+        let events: Vec<CalendarEvent> = extract_events(lines.into_iter(), "test.ics");
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].uid, "abc@example.com");
         assert_eq!(events[0].summary, "First");

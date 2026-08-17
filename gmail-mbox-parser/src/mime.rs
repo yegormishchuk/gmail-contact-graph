@@ -88,9 +88,7 @@ pub fn decode_mime_header(text: &str) -> String {
 /// Decode base64 data.
 pub fn base64_decode(data: &str) -> Option<Vec<u8>> {
     use base64::Engine;
-    base64::engine::general_purpose::STANDARD
-        .decode(data)
-        .ok()
+    base64::engine::general_purpose::STANDARD.decode(data).ok()
 }
 
 /// Decode quoted-printable data (for MIME headers, _ = space).

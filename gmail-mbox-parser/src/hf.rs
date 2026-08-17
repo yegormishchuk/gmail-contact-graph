@@ -34,8 +34,8 @@ impl HFConfig {
         let api_key =
             std::env::var("HF_API_KEY").map_err(|_| "HF_API_KEY environment variable not set")?;
 
-        let model =
-            std::env::var("HF_MODEL").unwrap_or_else(|_| "meta-llama/Llama-3.1-8B-Instruct".to_string());
+        let model = std::env::var("HF_MODEL")
+            .unwrap_or_else(|_| "meta-llama/Llama-3.1-8B-Instruct".to_string());
 
         let timeout_secs = std::env::var("HF_TIMEOUT")
             .ok()

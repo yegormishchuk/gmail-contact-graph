@@ -110,21 +110,42 @@ mod tests {
 
     #[test]
     fn test_google_meet_detection() {
-        assert!(contains_meeting_content("", "Join at https://meet.google.com/abc-defg-hij"));
-        assert!(contains_meeting_content("Meet link: meet.google.com/xyz", ""));
+        assert!(contains_meeting_content(
+            "",
+            "Join at https://meet.google.com/abc-defg-hij"
+        ));
+        assert!(contains_meeting_content(
+            "Meet link: meet.google.com/xyz",
+            ""
+        ));
     }
 
     #[test]
     fn test_calendly_detection() {
-        assert!(contains_meeting_content("", "Book a time: https://calendly.com/username"));
-        assert!(contains_meeting_content("", "Your booking with John is confirmed at calendly.com/john"));
+        assert!(contains_meeting_content(
+            "",
+            "Book a time: https://calendly.com/username"
+        ));
+        assert!(contains_meeting_content(
+            "",
+            "Your booking with John is confirmed at calendly.com/john"
+        ));
     }
 
     #[test]
     fn test_google_calendar_detection() {
-        assert!(contains_meeting_content("Invitation from Google Calendar", ""));
-        assert!(contains_meeting_content("", "You have been invited to the following event"));
-        assert!(contains_meeting_content("", "BEGIN:VCALENDAR\nBEGIN:VEVENT"));
+        assert!(contains_meeting_content(
+            "Invitation from Google Calendar",
+            ""
+        ));
+        assert!(contains_meeting_content(
+            "",
+            "You have been invited to the following event"
+        ));
+        assert!(contains_meeting_content(
+            "",
+            "BEGIN:VCALENDAR\nBEGIN:VEVENT"
+        ));
     }
 
     #[test]
@@ -135,7 +156,13 @@ mod tests {
 
     #[test]
     fn test_no_meeting() {
-        assert!(!contains_meeting_content("Hello there", "Just a regular email about work"));
-        assert!(!contains_meeting_content("Re: Project update", "Here's the latest status."));
+        assert!(!contains_meeting_content(
+            "Hello there",
+            "Just a regular email about work"
+        ));
+        assert!(!contains_meeting_content(
+            "Re: Project update",
+            "Here's the latest status."
+        ));
     }
 }
