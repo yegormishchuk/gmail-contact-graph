@@ -1,5 +1,7 @@
 # Gmail Contact Graph
 
+[![CI](https://github.com/yegormishchuk/gmail-contact-graph/actions/workflows/ci.yml/badge.svg)](https://github.com/yegormishchuk/gmail-contact-graph/actions/workflows/ci.yml)
+
 Visualize your Gmail and Google Calendar communication network as an interactive graph. Parse your Gmail and Calendar exports, extract contacts and co-attendees, and explore them through a D3.js force-directed web interface.
 
 ## Privacy
