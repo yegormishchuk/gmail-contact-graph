@@ -3,6 +3,7 @@ name = "gmail-mbox-parser"
 version = "0.1.0"
 edition = "2021"
 description = "Gmail MBOX parser with contact extraction and AI verification"
+license = "Apache-2.0"
 
 [lib]
 name = "gmail_mbox_parser"

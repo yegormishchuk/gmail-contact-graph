@@ -3,6 +3,7 @@ name = "calendar-parser"
 version = "0.1.0"
 edition = "2021"
 description = "Google Calendar .ics parser → SQLite events table"
+license = "Apache-2.0"
 
 [dependencies]
 rusqlite = { version = "0.32", features = ["bundled"] }
