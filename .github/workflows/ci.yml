@@ -10,18 +10,23 @@ permissions:
 
 jobs:
   rust:
-    name: rust (${{ matrix.crate }})
-    runs-on: ubuntu-latest
+    name: rust (${{ matrix.crate }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
-      # Report every crate's failures, not just the first to fail.
+      # Report every combination's failures, not just the first to fail.
       fail-fast: false
       matrix:
         # These are three independent crates, not a Cargo workspace —
         # each needs its own cargo invocation and its own cache.
-        crate:
-          - gmail-mbox-parser
-          - gmail-mbox-parser/tools
-          - calendar-parser
+        # fill_db does the path handling, mbox I/O and charset decoding, so
+        # only it is worth the cost of a full three-OS sweep; the other two
+        # stay on Linux.
+        include:
+          - { crate: gmail-mbox-parser, os: ubuntu-latest }
+          - { crate: gmail-mbox-parser, os: macos-latest }
+          - { crate: gmail-mbox-parser, os: windows-latest }
+          - { crate: gmail-mbox-parser/tools, os: ubuntu-latest }
+          - { crate: calendar-parser, os: ubuntu-latest }
     defaults:
       run:
         working-directory: ${{ matrix.crate }}
@@ -36,8 +41,8 @@ jobs:
       # minutes when cold, seconds when cached.
       - uses: Swatinem/rust-cache@v2
         with:
-          # Per-crate cache key to avoid cross-crate cache pollution.
-          key: ${{ matrix.crate }}
+          # Per-crate/per-OS cache key to avoid cross-crate cache pollution.
+          key: ${{ matrix.crate }}-${{ matrix.os }}
           workspaces: ${{ matrix.crate }}
           # Save cache even on failure for faster iteration on red builds.
           cache-on-failure: true
