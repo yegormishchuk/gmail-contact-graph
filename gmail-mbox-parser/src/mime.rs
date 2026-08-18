@@ -178,3 +178,165 @@ pub fn decode_charset(bytes: &[u8], charset: &str) -> String {
     let (decoded, _, _) = encoding.decode(bytes);
     decoded.into_owned()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // "Привет" and "Тест" pre-encoded in the charsets used below, so the test
+    // source itself stays ASCII-safe regardless of how it is checked out.
+    const PRIVET_UTF8_B64: &str = "0J/RgNC40LLQtdGC";
+    const TEST_UTF8_B64: &str = "0KLQtdGB0YI=";
+    const PRIVET_CP1251: &[u8] = &[207, 240, 232, 226, 229, 242];
+    const PRIVET_KOI8R: &[u8] = &[240, 210, 201, 215, 197, 212];
+
+    // -----------------------------------------------------------------------
+    // decode_mime_header
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn decodes_a_base64_encoded_word() {
+        let header = format!("=?UTF-8?B?{}?=", PRIVET_UTF8_B64);
+        assert_eq!(decode_mime_header(&header), "Привет");
+    }
+
+    #[test]
+    fn decodes_a_quoted_printable_encoded_word_with_underscores_as_spaces() {
+        assert_eq!(decode_mime_header("=?UTF-8?Q?Hello_World?="), "Hello World");
+    }
+
+    #[test]
+    fn decodes_quoted_printable_hex_escapes() {
+        assert_eq!(decode_mime_header("=?UTF-8?Q?caf=C3=A9?="), "café");
+    }
+
+    #[test]
+    fn lowercase_encoding_letters_are_accepted() {
+        // RFC 2047 says the encoding token is case-insensitive.
+        let header = format!("=?utf-8?b?{}?=", PRIVET_UTF8_B64);
+        assert_eq!(decode_mime_header(&header), "Привет");
+    }
+
+    #[test]
+    fn plain_text_passes_through_untouched() {
+        assert_eq!(decode_mime_header("Just a subject"), "Just a subject");
+    }
+
+    #[test]
+    fn text_around_an_encoded_word_is_preserved() {
+        let header = format!("Re: =?UTF-8?B?{}?= (fwd)", PRIVET_UTF8_B64);
+        assert_eq!(decode_mime_header(&header), "Re: Привет (fwd)");
+    }
+
+    #[test]
+    fn whitespace_between_adjacent_encoded_words_is_dropped() {
+        // RFC 2047: the separator between two encoded words is not part of the
+        // text, so the halves join directly.
+        let header = format!(
+            "=?UTF-8?B?{}?= =?UTF-8?B?{}?=",
+            PRIVET_UTF8_B64, TEST_UTF8_B64
+        );
+        assert_eq!(decode_mime_header(&header), "ПриветТест");
+    }
+
+    #[test]
+    fn a_truncated_encoded_word_is_returned_verbatim() {
+        // No closing "?=" — must not panic, and must not swallow the text.
+        let truncated = "=?UTF-8?B?0J/RgNC4";
+        assert_eq!(decode_mime_header(truncated), truncated);
+    }
+
+    #[test]
+    fn a_lone_question_mark_prefix_is_returned_verbatim() {
+        assert_eq!(decode_mime_header("=?UTF-8"), "=?UTF-8");
+    }
+
+    #[test]
+    fn invalid_base64_payload_keeps_the_original_word() {
+        // Only correct because this is the *first* encoded word — see the two
+        // ignored tests below for what happens once `remaining` has advanced.
+        assert_eq!(decode_mime_header("=?UTF-8?B?!!!?="), "=?UTF-8?B?!!!?=");
+    }
+
+    #[ignore = "known bug: the keep-original branch indexes `text` with an \
+                offset into `remaining` (mime.rs:74), emitting a slice of an \
+                earlier encoded word instead of this one"]
+    #[test]
+    fn an_undecodable_word_after_a_decodable_one_is_kept_verbatim() {
+        assert_eq!(
+            decode_mime_header("=?UTF-8?B?SGVsbG8=?= =?UTF-8?X?abc?="),
+            "Hello =?UTF-8?X?abc?="
+        );
+        // Actual today: "Hello?UTF-8?B?SGVsbG"
+    }
+
+    #[ignore = "known bug: same mis-indexing panics when the stale offset \
+                lands inside a multi-byte character (mime.rs:74)"]
+    #[test]
+    fn a_multibyte_separator_before_an_undecodable_word_does_not_panic() {
+        let input = "=?UTF-8?Q?a?=€€€€€=?UTF-8?X?b?=";
+        assert_eq!(decode_mime_header(input), "a€€€€€=?UTF-8?X?b?=");
+        // Actual today: panics with "byte index 15 is not a char boundary".
+    }
+
+    // -----------------------------------------------------------------------
+    // decode_charset
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn decodes_windows_1251_cyrillic() {
+        assert_eq!(decode_charset(PRIVET_CP1251, "windows-1251"), "Привет");
+    }
+
+    #[test]
+    fn decodes_koi8_r_cyrillic() {
+        assert_eq!(decode_charset(PRIVET_KOI8R, "koi8-r"), "Привет");
+    }
+
+    #[test]
+    fn charset_names_are_case_insensitive() {
+        assert_eq!(decode_charset(PRIVET_CP1251, "Windows-1251"), "Привет");
+    }
+
+    #[test]
+    fn an_unknown_charset_falls_back_to_utf8() {
+        assert_eq!(decode_charset("Привет".as_bytes(), "x-made-up"), "Привет");
+    }
+
+    // -----------------------------------------------------------------------
+    // body_quoted_printable_decode
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn body_qp_removes_soft_line_breaks() {
+        assert_eq!(body_quoted_printable_decode(b"one=\ntwo"), b"onetwo");
+        assert_eq!(body_quoted_printable_decode(b"one=\r\ntwo"), b"onetwo");
+    }
+
+    #[test]
+    fn body_qp_decodes_hex_escapes() {
+        assert_eq!(body_quoted_printable_decode(b"=41=42"), b"AB");
+    }
+
+    #[test]
+    fn body_qp_keeps_underscores_literal() {
+        // This is the difference from header QP, where '_' means space.
+        assert_eq!(body_quoted_printable_decode(b"a_b"), b"a_b");
+    }
+
+    #[test]
+    fn body_qp_keeps_malformed_escapes_as_is() {
+        assert_eq!(body_quoted_printable_decode(b"=ZZ"), b"=ZZ");
+        assert_eq!(body_quoted_printable_decode(b"trailing="), b"trailing=");
+    }
+
+    // -----------------------------------------------------------------------
+    // base64_decode
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn base64_rejects_invalid_input() {
+        assert_eq!(base64_decode("SGVsbG8="), Some(b"Hello".to_vec()));
+        assert_eq!(base64_decode("!!!not base64!!!"), None);
+    }
+}

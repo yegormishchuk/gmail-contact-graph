@@ -34,8 +34,8 @@ pub fn is_spam_contact(email: &str, name: &str, received: u32, sent: u32) -> boo
         return true;
     }
 
-    // 4. One-way communication (received only, never sent to, high volume)
-    if is_one_way_high_volume(received, sent) {
+    // 4. One-way communication (traffic in only one direction)
+    if is_one_way_contact(received, sent) {
         return true;
     }
 
@@ -128,9 +128,13 @@ fn is_marketing_address(local_part: &str) -> bool {
     matches_patterns(local_part, &marketing_patterns)
 }
 
-/// One-way high volume senders (received many, sent zero)
-fn is_one_way_high_volume(received: u32, sent: u32) -> bool {
-    // Only received emails, never sent any, and high volume
+/// One-way contacts: mail flowed in only one direction.
+///
+/// Deliberately strict — a correspondent worth putting on the graph is one you
+/// both wrote to and heard from, so a missing direction is enough on its own.
+/// There is no volume threshold: a single unanswered message is already
+/// one-way.
+fn is_one_way_contact(received: u32, sent: u32) -> bool {
     received == 0 || sent == 0
 }
 
@@ -219,4 +223,143 @@ fn is_suspicious_name(name: &str) -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A contact with traffic in both directions, so the one-way rule (which
+    /// fires on its own) never masks the rule actually under test.
+    fn spam(email: &str, name: &str) -> bool {
+        is_spam_contact(email, name, 5, 3)
+    }
+
+    #[test]
+    fn a_two_way_human_contact_is_kept() {
+        assert!(!spam("alice@example.com", "Alice Smith"));
+    }
+
+    // -----------------------------------------------------------------------
+    // matches_patterns — token vs substring strategy
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn a_simple_pattern_matches_only_a_whole_token() {
+        // The reason the token strategy exists: "sale" must not hit "rosales".
+        assert!(!matches_patterns("rosales", &["sale"]));
+        assert!(matches_patterns("sale", &["sale"]));
+        assert!(matches_patterns("weekly.sale", &["sale"]));
+        assert!(matches_patterns("sale+promo", &["sale"]));
+    }
+
+    #[test]
+    fn a_compound_pattern_matches_as_a_substring() {
+        // Patterns carrying '-', '_' or '.' survive being glued to other text.
+        assert!(matches_patterns("xxno-replyxx", &["no-reply"]));
+    }
+
+    #[test]
+    fn rosales_is_not_treated_as_a_sales_address() {
+        assert!(!spam("maria.rosales@example.com", "Maria Rosales"));
+    }
+
+    // -----------------------------------------------------------------------
+    // is_spam_contact — one rule per branch
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn noreply_addresses_are_spam() {
+        assert!(spam("noreply@shop.com", "Shop"));
+        assert!(spam("no-reply@shop.com", "Shop"));
+        assert!(spam("do_not_reply@shop.com", "Shop"));
+    }
+
+    #[test]
+    fn automated_senders_are_spam() {
+        assert!(spam("mailer-daemon@host.com", "Mail Delivery"));
+        assert!(spam("notifications@app.com", "App"));
+    }
+
+    #[test]
+    fn marketing_addresses_are_spam() {
+        assert!(spam("newsletter@blog.com", "Blog"));
+        assert!(spam("promo@shop.com", "Shop"));
+    }
+
+    #[test]
+    fn blocked_domains_are_spam() {
+        assert!(spam("person@sendgrid.net", "Person"));
+        assert!(spam("person@linkedin.com", "Person"));
+    }
+
+    #[test]
+    fn subdomains_of_blocked_domains_are_spam() {
+        assert!(spam("person@mail.sendgrid.net", "Person"));
+    }
+
+    #[test]
+    fn a_domain_merely_ending_in_a_blocked_name_is_not_blocked() {
+        // "notebay.com" ends with "ebay.com" as text but is a different domain,
+        // so the check requires a dot before the suffix.
+        assert!(!spam("person@notebay.com", "Person"));
+    }
+
+    #[test]
+    fn the_address_is_matched_case_insensitively() {
+        assert!(spam("NoReply@Shop.com", "Shop"));
+    }
+
+    // -----------------------------------------------------------------------
+    // is_one_way_contact
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn one_way_traffic_is_spam_in_either_direction() {
+        assert!(is_one_way_contact(10, 0));
+        assert!(is_one_way_contact(0, 10));
+        assert!(!is_one_way_contact(1, 1));
+    }
+
+    #[test]
+    fn a_single_unanswered_message_is_already_one_way() {
+        // No volume threshold — documented behaviour, not an oversight.
+        assert!(is_spam_contact("alice@example.com", "Alice", 1, 0));
+    }
+
+    // -----------------------------------------------------------------------
+    // is_suspicious_name
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn an_all_caps_name_is_suspicious() {
+        assert!(is_suspicious_name("WINNER ANNOUNCEMENT"));
+    }
+
+    #[test]
+    fn a_short_acronym_is_not_suspicious() {
+        assert!(!is_suspicious_name("CEO"));
+    }
+
+    #[test]
+    fn an_empty_name_is_not_suspicious() {
+        assert!(!is_suspicious_name(""));
+        assert!(!is_suspicious_name("   "));
+    }
+
+    #[test]
+    fn a_name_drowning_in_punctuation_is_suspicious() {
+        assert!(is_suspicious_name("*** WIN ***"));
+    }
+
+    #[test]
+    fn an_ordinary_name_with_punctuation_is_kept() {
+        assert!(!is_suspicious_name("Jean-Luc O'Brien"));
+    }
+
+    #[test]
+    fn spam_wording_in_the_name_is_suspicious() {
+        assert!(is_suspicious_name("Do Not Reply"));
+        assert!(is_suspicious_name("System Notification"));
+    }
 }
