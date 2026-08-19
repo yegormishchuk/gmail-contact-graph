@@ -181,8 +181,7 @@ data/
 ├── Calendar/    # calendar exports: *.ics
 ├── Email/       # mail exports: *.mbox
 ├── rankings/    # generated *_ranking.txt files
-├── contacts.db  # shared database, written by both parsers
-└── mails.db     # email metadata
+└── contacts.db  # shared database, written by both parsers
 ```
 
 Inputs go in `Calendar/` and `Email/`; everything else is generated.
@@ -191,8 +190,7 @@ Inputs go in `Calendar/` and `Email/`; everything else is generated.
 
 | File | Description |
 |---|---|
-| `contacts.db` | Extracted contacts with spam filtering, plus `events` and `event_attendees` if calendar parser is run |
-| `mails.db` | Parsed email metadata |
+| `contacts.db` | Extracted contacts with spam filtering, the `mails` table of email metadata, plus `events` and `event_attendees` if calendar parser is run |
 | `rankings/sent_ranking.txt` | Contacts ranked by emails sent |
 | `rankings/received_ranking.txt` | Contacts ranked by emails received |
 | `rankings/sent_per_month_ranking.txt` | Sent emails normalized by relationship duration |
@@ -206,7 +204,7 @@ Inputs go in `Calendar/` and `Email/`; everything else is generated.
 | Mode | Source | What it shows |
 |---|---|---|
 | Overall | Gmail + Calendar | Top contacts ranked by combined (Borda-style) score across both sources |
-| Gmail | `mails.db` | Email-only contact graph, ranked by composite email score |
+| Gmail | `mails` + `contacts` | Email-only contact graph, ranked by composite email score |
 | Calendar | `events` + `event_attendees` | Co-attendees from your calendar, ranked by shared meetings |
 | Event Groups | `event_attendees` | Mini-star clusters per recurring event / event group |
 | Domains | derived | Contacts grouped by email domain |

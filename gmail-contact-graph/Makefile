@@ -83,7 +83,6 @@ help:
 	@echo "  Variables (set in ../.env, or override on the command line):"
 	@echo "    USER_EMAIL          - Your Gmail address (the \"you\" node)"
 	@echo "    CONTACTS_DB_FILE    - Path to contacts.db"
-	@echo "    MAILS_DB_FILE       - Path to mails.db"
 	@echo "    PORT                - Server port (default: 5000)"
 	@echo ""
 	@echo "  Example (override email):"

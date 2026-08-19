@@ -94,9 +94,8 @@ clean-data:
 	rm -f $(RANKINGS_DIR)/*_ranking.txt
 
 clean-db:
-	@echo "Removing databases..."
+	@echo "Removing database..."
 	rm -f $(DATA_DIR)/contacts.db
-	rm -f $(DATA_DIR)/mails.db
 
 clean-all: clean clean-data clean-db
 
