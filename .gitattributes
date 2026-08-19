@@ -1,0 +1,4 @@
+# Test fixtures are byte-exact inputs: never rewrite their line endings, or the
+# same file parses differently on Windows than it does on Linux and macOS.
+*.mbox -text
+*.ics  -text

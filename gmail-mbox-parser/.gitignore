@@ -7,6 +7,11 @@
 *.db
 *.mbox
 
+# ...except the synthetic test fixture. The blanket *.mbox rule above exists so
+# a real Takeout export can never be committed by accident; this one holds
+# invented correspondents only, and the end-to-end test cannot run without it.
+!tests/fixtures/*.mbox
+
 # Environment
 .env
 

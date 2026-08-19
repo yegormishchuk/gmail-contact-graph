@@ -1,0 +1,193 @@
+From alice@example.com Mon Jan 01 10:00:00 2024
+Delivered-To: you@example.com
+From: Alice Smith <alice@example.com>
+To: you@example.com
+Subject: Project kickoff
+Date: Mon, 1 Jan 2024 10:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Hi, shall we start on Monday?
+
+From you@example.com Tue Jan 02 09:00:00 2024
+From: you@example.com
+To: Alice Smith <alice@example.com>
+Subject: Re: Project kickoff
+Date: Tue, 2 Jan 2024 09:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Yes. Call here: https://us02web.zoom.us/j/1234567890
+
+From bob@example.com Wed Jan 03 11:15:00 2024
+Delivered-To: you@example.com
+From: Bob Jones <bob@example.com>
+To: you@example.com
+Subject: =?UTF-8?B?0J/RgNC40LLQtdGC?=
+Date: Wed, 3 Jan 2024 11:15:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Base64 encoded subject above.
+
+From you@example.com Thu Jan 04 08:30:00 2024
+From: you@example.com
+To: Bob Jones <bob@example.com>
+Cc: Carol White <carol@example.org>
+Subject: =?UTF-8?Q?Weekly_report?=
+Date: Thu, 4 Jan 2024 08:30:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Quoted-printable subject above; Carol is on Cc.
+
+From carol@example.org Fri Jan 05 14:00:00 2024
+Delivered-To: you@example.com
+From: Carol White <carol@example.org>
+To: you@example.com
+Subject: Re: Weekly report
+Date: Fri, 5 Jan 2024 14:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Got it, thanks.
+
+From noreply@shop.example Sat Jan 06 12:00:00 2024
+Delivered-To: you@example.com
+From: Shop <noreply@shop.example>
+To: you@example.com
+Subject: Your order shipped
+Date: Sat, 6 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Automated notification.
+
+From bounce@sendgrid.net Sun Jan 07 12:00:00 2024
+Delivered-To: you@example.com
+From: Newsletter <weekly@sendgrid.net>
+To: you@example.com
+Subject: This week in tech
+Date: Sun, 7 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Sent through a blocked ESP domain.
+
+From winner@example.net Mon Jan 08 12:00:00 2024
+Delivered-To: you@example.com
+From: "CONGRATULATIONS WINNER" <winner@example.net>
+To: you@example.com
+Subject: You have won
+Date: Mon, 8 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+All-caps display name.
+
+From dave@example.com Tue Jan 09 12:00:00 2024
+Delivered-To: you@example.com
+From: Dave Brown <dave@example.com>
+To: you@example.com
+Subject: One-way message
+Date: Tue, 9 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Dave writes but never gets a reply, so he is a one-way contact.
+
+From erin@example.com Wed Jan 10 12:00:00 2024
+Delivered-To: you@example.com
+From: Erin Green <erin@example.com>
+To: you@example.com
+Date: Wed, 10 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+This message has no Subject header at all.
+
+From erin@example.com Thu Jan 11 12:00:00 2024
+From: you@example.com
+To: Erin Green <erin@example.com>
+Subject: Re:
+Date: not a parseable date at all
+Content-Type: text/plain; charset=UTF-8
+
+The Date header above cannot be parsed, so this message has no timestamp.
+
+From frank@example.com Fri Jan 12 12:00:00 2024
+Delivered-To: you@example.com
+From: Frank Black <frank@example.com>
+To: you@example.com
+Subject: Soft line breaks
+Date: Fri, 12 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+This line is split with a soft break =
+and continues here. A literal equals sign: =3D done.
+
+From you@example.com Sat Jan 13 12:00:00 2024
+From: you@example.com
+To: Frank Black <frank@example.com>
+Subject: Re: Soft line breaks
+Date: Sat, 13 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Reply so Frank counts as a two-way contact.
+
+From grace@example.com Sun Jan 14 12:00:00 2024
+Delivered-To: you@example.com
+From: Grace Hall <grace@example.com>
+To: you@example.com
+Subject: Cyrillic body
+Date: Sun, 14 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=windows-1251
+Content-Transfer-Encoding: base64
+
+z/Do4uXyLCD98u4g8uXx8iDiIOru5Ojw7uLq5SB3aW5kb3dzLTEyNTEu
+
+From you@example.com Mon Jan 15 12:00:00 2024
+From: you@example.com
+To: Grace Hall <grace@example.com>
+Subject: Re: Cyrillic body
+Date: Mon, 15 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Reply so Grace counts as a two-way contact.
+
+From john@example.com Tue Jan 16 12:00:00 2024
+Delivered-To: you@example.com
+From: "Smith, John" <john@example.com>
+To: you@example.com
+Subject: Comma in the display name
+Date: Tue, 16 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+The display name holds a comma, which the recipient splitter treats as a
+separator. See the ignored test in src/email.rs.
+
+From you@example.com Wed Jan 17 12:00:00 2024
+From: you@example.com
+To: "Smith, John" <john@example.com>
+Subject: Re: Comma in the display name
+Date: Wed, 17 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Reply so John counts as a two-way contact.
+
+From alice@example.com Thu Jan 18 12:00:00 2024
+Delivered-To: you@example.com
+From: Alice Smith <alice@example.com>
+To: you@example.com
+Subject: Quoting an older mail
+Date: Thu, 18 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Mail transports escape a body line that would look like a separator:
+
+>From my earlier note, the deadline stands.
+
+This message must stay whole rather than splitting in two.
+
+From heidi@example.com Fri Jan 19 12:00:00 2024
+Delivered-To: you@example.com
+From: Heidi Long <heidi@example.com>,
+ Ivan Petrov <ivan@example.com>
+To: you@example.com,
+ Judy Nash <judy@example.org>
+Subject: Folded headers
+Date: Fri, 19 Jan 2024 12:00:00 +0000
+Content-Type: text/plain; charset=UTF-8
+
+Both From and To are folded across continuation lines.
