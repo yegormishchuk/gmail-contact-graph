@@ -40,6 +40,10 @@ impl Run {
 /// That matters beyond tidiness — an `HF_API_KEY` picked up from there would
 /// send contact names and addresses to Hugging Face during a test run.
 fn run_fill_db(case: &str) -> Run {
+    run_fill_db_into(case, "contacts.db")
+}
+
+fn run_fill_db_into(case: &str, db_relative: &str) -> Run {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -49,7 +53,7 @@ fn run_fill_db(case: &str) -> Run {
     let dir = std::env::temp_dir().join(format!("fill_db_e2e_{}_{}", case, std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("failed to create temp dir");
-    let db = dir.join("contacts.db");
+    let db = dir.join(db_relative);
 
     let output = Command::new(env!("CARGO_BIN_EXE_fill_db"))
         .current_dir(&dir)
@@ -98,6 +102,16 @@ fn writes_every_table_into_a_single_database_file() {
             "table {table} is missing"
         );
     }
+}
+
+#[test]
+fn creates_a_missing_output_directory() {
+    // The Makefile used to do this with `mkdir -p`, which fails under cmd.exe —
+    // the shell GNU make falls back to on Windows when no sh is on PATH. The
+    // binary now creates the directory itself, so it works from any shell and
+    // when invoked directly.
+    let run = run_fill_db_into("mkdir", "nested/output/contacts.db");
+    assert_eq!(run.count("SELECT COUNT(*) FROM contacts"), 12);
 }
 
 #[test]

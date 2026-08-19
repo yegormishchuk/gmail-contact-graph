@@ -53,9 +53,11 @@ cd ../gmail-contact-graph && make setup && make run
 The result is a graph of seven contacts. Note that this writes over
 `data/contacts.db`, so run it before parsing your real export rather than after.
 
-Keep `HF_API_KEY` blank for this run. With a key set, the classifier is asked to
-judge addresses like `alice@example.com`, decides they are automated, and drops
-most of them — leaving a graph of one or two nodes.
+Leave the `HF_API_KEY` line in `.env` empty for this run. With a key set, the
+classifier is asked to judge addresses like `alice@example.com`, concludes they
+are automated, and drops six of the seven — leaving a graph of a single node.
+Clearing the variable in your shell will not help: the parsers read `.env`
+directly, so the value there wins.
 
 The same fixture drives the end-to-end test (`cargo test --test e2e`), so it
 stays in working order.
