@@ -6,12 +6,16 @@ pub fn decode_mime_header(text: &str) -> String {
 
     while let Some(start) = remaining.find("=?") {
         let between = &remaining[..start];
-        // RFC 2047: whitespace between adjacent encoded words is ignored
-        if last_was_encoded && between.chars().all(|c| c == ' ' || c == '\t') {
-            // skip whitespace between encoded words
+        // RFC 2047: whitespace between two adjacent encoded words is a
+        // separator, not text. It only earns that treatment if what follows
+        // really is an encoded word, so hold it back until this one is known
+        // to decode; every path that gives up on the word emits it first.
+        let pending = if last_was_encoded && between.chars().all(|c| c == ' ' || c == '\t') {
+            between
         } else {
             result.push_str(between);
-        }
+            ""
+        };
         remaining = &remaining[start..];
 
         // Parse =?charset?encoding?data?= by finding delimiters sequentially
@@ -21,6 +25,7 @@ pub fn decode_mime_header(text: &str) -> String {
         let charset_end = match inner.find('?') {
             Some(pos) => pos,
             None => {
+                result.push_str(pending);
                 result.push_str("=?");
                 remaining = &remaining[2..];
                 last_was_encoded = false;
@@ -34,6 +39,7 @@ pub fn decode_mime_header(text: &str) -> String {
         let encoding_end = match after_charset.find('?') {
             Some(pos) => pos,
             None => {
+                result.push_str(pending);
                 result.push_str("=?");
                 remaining = &remaining[2..];
                 last_was_encoded = false;
@@ -47,6 +53,7 @@ pub fn decode_mime_header(text: &str) -> String {
         let data_end = match data_start.find("?=") {
             Some(pos) => pos,
             None => {
+                result.push_str(pending);
                 result.push_str(remaining);
                 remaining = "";
                 last_was_encoded = false;
@@ -55,8 +62,12 @@ pub fn decode_mime_header(text: &str) -> String {
         };
         let data = &data_start[..data_end];
 
-        // Advance past the entire encoded word
+        // Advance past the entire encoded word. Capture it first: `remaining`
+        // already starts at this word's "=?", so the slice below is the word
+        // itself — whereas `start` is an offset into `remaining`, and using it
+        // to index `text` would read from wherever the previous word ended.
         let total_len = 2 + charset_end + 1 + encoding_end + 1 + data_end + 2;
+        let raw_word = &remaining[..total_len];
         remaining = &remaining[total_len..];
 
         let encoding_upper = encoding.to_uppercase();
@@ -70,8 +81,10 @@ pub fn decode_mime_header(text: &str) -> String {
             result.push_str(&decode_charset(&bytes, charset));
             last_was_encoded = true;
         } else {
-            // Could not decode, keep original
-            result.push_str(&text[start..start + total_len]);
+            // Not a decodable encoded word after all — it and the whitespace
+            // in front of it are ordinary text.
+            result.push_str(pending);
+            result.push_str(raw_word);
             last_was_encoded = false;
         }
     }
@@ -258,25 +271,39 @@ mod tests {
         assert_eq!(decode_mime_header("=?UTF-8?B?!!!?="), "=?UTF-8?B?!!!?=");
     }
 
-    #[ignore = "known bug: the keep-original branch indexes `text` with an \
-                offset into `remaining` (mime.rs:74), emitting a slice of an \
-                earlier encoded word instead of this one"]
     #[test]
     fn an_undecodable_word_after_a_decodable_one_is_kept_verbatim() {
         assert_eq!(
             decode_mime_header("=?UTF-8?B?SGVsbG8=?= =?UTF-8?X?abc?="),
             "Hello =?UTF-8?X?abc?="
         );
-        // Actual today: "Hello?UTF-8?B?SGVsbG"
     }
 
-    #[ignore = "known bug: same mis-indexing panics when the stale offset \
-                lands inside a multi-byte character (mime.rs:74)"]
     #[test]
     fn a_multibyte_separator_before_an_undecodable_word_does_not_panic() {
+        // Regression: the keep-original branch used to index `text` with an
+        // offset into `remaining`, which panicked once the stale offset landed
+        // inside a multi-byte character.
         let input = "=?UTF-8?Q?a?=€€€€€=?UTF-8?X?b?=";
         assert_eq!(decode_mime_header(input), "a€€€€€=?UTF-8?X?b?=");
-        // Actual today: panics with "byte index 15 is not a char boundary".
+    }
+
+    #[test]
+    fn the_separator_survives_a_malformed_word_too() {
+        // The "=?" here never completes into an encoded word, so the space
+        // before it is text and must not be eaten as a separator.
+        assert_eq!(
+            decode_mime_header("=?UTF-8?B?SGVsbG8=?= =?nonsense"),
+            "Hello =?nonsense"
+        );
+    }
+
+    #[test]
+    fn several_undecodable_words_in_a_row_are_each_kept() {
+        assert_eq!(
+            decode_mime_header("=?UTF-8?X?one?= mid =?UTF-8?Y?two?="),
+            "=?UTF-8?X?one?= mid =?UTF-8?Y?two?="
+        );
     }
 
     // -----------------------------------------------------------------------
