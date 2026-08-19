@@ -29,10 +29,19 @@ pub struct HFConfig {
 }
 
 impl HFConfig {
-    /// Create config from environment variables
+    /// Create config from environment variables.
+    ///
+    /// A blank `HF_API_KEY` counts as absent, which is what `.env.example` and
+    /// the README both promise: leaving the key empty must skip verification
+    /// entirely rather than authenticate with nothing and be turned away. The
+    /// distinction matters because `dotenvy` defines the variable whenever the
+    /// line exists in `.env`, so an empty value is the normal way to say "off".
     pub fn from_env() -> Result<Self, String> {
-        let api_key =
-            std::env::var("HF_API_KEY").map_err(|_| "HF_API_KEY environment variable not set")?;
+        let api_key = std::env::var("HF_API_KEY")
+            .ok()
+            .map(|key| key.trim().to_string())
+            .filter(|key| !key.is_empty())
+            .ok_or("HF_API_KEY is empty or not set")?;
 
         let model = std::env::var("HF_MODEL")
             .unwrap_or_else(|_| "meta-llama/Llama-3.1-8B-Instruct".to_string());
@@ -483,5 +492,39 @@ Contacts:
 
         let all_batch_results = join_all(futures).await;
         all_batch_results.into_iter().flatten().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// All cases live in one test: `HF_API_KEY` is process-global state, and
+    /// separate test functions would race each other under the default
+    /// parallel runner.
+    #[test]
+    fn a_blank_api_key_disables_verification() {
+        let original = std::env::var("HF_API_KEY").ok();
+
+        std::env::remove_var("HF_API_KEY");
+        assert!(HFConfig::from_env().is_err(), "unset key must disable AI");
+
+        std::env::set_var("HF_API_KEY", "");
+        assert!(HFConfig::from_env().is_err(), "empty key must disable AI");
+
+        std::env::set_var("HF_API_KEY", "   ");
+        assert!(
+            HFConfig::from_env().is_err(),
+            "whitespace-only key must disable AI"
+        );
+
+        std::env::set_var("HF_API_KEY", "  hf_token  ");
+        let config = HFConfig::from_env().expect("a real key must enable AI");
+        assert_eq!(config.api_key, "hf_token", "the key must be trimmed");
+
+        match original {
+            Some(value) => std::env::set_var("HF_API_KEY", value),
+            None => std::env::remove_var("HF_API_KEY"),
+        }
     }
 }

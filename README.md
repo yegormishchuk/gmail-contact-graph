@@ -37,6 +37,29 @@ cd ../gmail-contact-graph && make setup && make run
 
 Open [http://localhost:5000](http://localhost:5000).
 
+## Try it without your own mail
+
+A Takeout export takes hours to arrive. To see the graph before then, build the
+databases from the synthetic mbox that ships with the parser — nineteen
+invented messages between made-up addresses, no personal data involved:
+
+```bash
+cd gmail-mbox-parser
+make process-all USER_EMAIL=you@example.com \
+                 MBOX_DIR=tests/fixtures MBOX_FILE=sample.mbox
+cd ../gmail-contact-graph && make setup && make run
+```
+
+The result is a graph of seven contacts. Note that this writes over
+`data/contacts.db`, so run it before parsing your real export rather than after.
+
+Keep `HF_API_KEY` blank for this run. With a key set, the classifier is asked to
+judge addresses like `alice@example.com`, decides they are automated, and drops
+most of them — leaving a graph of one or two nodes.
+
+The same fixture drives the end-to-end test (`cargo test --test e2e`), so it
+stays in working order.
+
 ## Step-by-step setup
 
 ### 1. Download your Google data
