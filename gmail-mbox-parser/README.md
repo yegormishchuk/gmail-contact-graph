@@ -43,8 +43,7 @@ data/
 ├── Calendar/    # .ics input for the sibling calendar-parser
 ├── Email/       # .mbox input          — MBOX_DIR
 ├── rankings/    # *_ranking.txt output — RANKINGS_DIR
-├── contacts.db
-└── mails.db
+└── contacts.db
 ```
 
 `MBOX_DIR` and `RANKINGS_DIR` can be overridden independently of `DATA_DIR`.
@@ -61,20 +60,17 @@ make fill-db MBOX_FILE=data.mbox
 
 ## Output
 
-The parser creates two SQLite databases in `DATA_DIR`, and `make rankings`
+The parser creates one SQLite database in `DATA_DIR`, and `make rankings`
 writes the `*_ranking.txt` files into `RANKINGS_DIR`:
 
-- `contacts.db` - Contact information with filtering tables (and `events` / `event_attendees` once the sibling [calendar-parser](../calendar-parser) is run)
-- `mails.db` - Parsed email metadata
+- `contacts.db` - Every table the webapp reads (and `events` / `event_attendees` once the sibling [calendar-parser](../calendar-parser) is run)
 
 ### Database schema
 
 **contacts.db:**
+- `mails` - Per-recipient email metadata (subject, date, sender, recipient, content)
 - `contacts` - All extracted contacts with their metrics (sent, received, duration, average_chars, meetings, not_spam)
 - `contacts_filtered` - Contacts that passed spam filtering: a join table referencing `contacts(id)`, plus a `not_clear` flag
-
-**mails.db:**
-- Email metadata (subject, date, recipients, etc.)
 
 ## Companion: calendar-parser
 

@@ -15,7 +15,7 @@ Interactive web visualization of your Gmail communication network. Explore conta
 ## Prerequisites
 
 - Node.js 18+
-- `contacts.db` and `mails.db` from [gmail-mbox-parser](../gmail-mbox-parser)
+- `contacts.db` from [gmail-mbox-parser](../gmail-mbox-parser)
 - (Optional) `events` / `event_attendees` tables populated by [calendar-parser](../calendar-parser) — enables the Calendar, Overall, and Event Groups views
 
 Setup and the full parse-then-visualize pipeline are documented in the
@@ -32,10 +32,10 @@ USER_EMAIL=your.email@gmail.com   # "you" node in the graph
 USER_NAME=Your Name               # display name (optional; defaults to local-part of USER_EMAIL)
 ```
 
-Database paths default to `../data/contacts.db` and `../data/mails.db`;
-override with `CONTACTS_DB_FILE` / `MAILS_DB_FILE` if needed. Calendar data
-(`events`, `event_attendees`) is read from the same `contacts.db`. Server port
-defaults to `5000`; override with `PORT`.
+The database path defaults to `../data/contacts.db`; override it with
+`CONTACTS_DB_FILE`. That one file holds every table the server reads — `mails`,
+`contacts`, `contacts_filtered`, and the calendar's `events` and
+`event_attendees`. Server port defaults to `5000`; override with `PORT`.
 
 ## API Endpoints
 

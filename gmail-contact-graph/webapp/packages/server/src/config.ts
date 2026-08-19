@@ -31,9 +31,9 @@ if (fs.existsSync(ENV_FILE)) {
 }
 
 export const config = {
-  // Database files - check data folder first, then project root
+  // The parsers write every table — contacts, mails, events, event_attendees —
+  // into this one file.
   CONTACTS_DB_FILE: process.env.CONTACTS_DB_FILE || path.join(DATA_DIR, 'contacts.db'),
-  DEFAULT_DB_FILE: process.env.MAILS_DB_FILE || path.join(DATA_DIR, 'mails.db'),
 
   MY_EMAIL: (process.env.USER_EMAIL || '').toLowerCase(),
   MY_NAME: process.env.USER_NAME || (process.env.USER_EMAIL || '').split('@')[0] || 'Me',
