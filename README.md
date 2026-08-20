@@ -46,12 +46,17 @@ invented messages between made-up addresses, no personal data involved:
 ```bash
 cd gmail-mbox-parser
 make process-all USER_EMAIL=you@example.com \
-                 MBOX_DIR=tests/fixtures MBOX_FILE=sample.mbox
-cd ../gmail-contact-graph && make setup && make run
+                 MBOX_DIR=tests/fixtures MBOX_FILE=sample.mbox \
+                 DATA_DIR=../data/demo
+
+cd ../gmail-contact-graph
+make setup
+make run CONTACTS_DB_FILE=../data/demo/contacts.db
 ```
 
-The result is a graph of seven contacts. Note that this writes over
-`data/contacts.db`, so run it before parsing your real export rather than after.
+The result is a graph of seven contacts. Everything lands in `data/demo/`, so a
+real `data/contacts.db` you have already built is left alone — drop the whole
+directory when you are done.
 
 Leave the `HF_API_KEY` line in `.env` empty for this run. With a key set, the
 classifier is asked to judge addresses like `alice@example.com`, concludes they
