@@ -48,6 +48,20 @@ export const config = {
   // Server
   PORT: parseInt(process.env.PORT || '5000', 10),
 
+  // Loopback by default. The database behind this server is your whole mailbox,
+  // so binding 0.0.0.0 would hand it to everyone on the same network — set HOST
+  // explicitly (e.g. in a container) if you really want that.
+  HOST: process.env.HOST || '127.0.0.1',
+
+  // The client is served from this same origin in production and reaches the
+  // API through the Vite proxy in development, so no CORS headers are needed.
+  // Sending them anyway would let any page open in your browser read the graph
+  // off localhost. Set ALLOWED_ORIGINS only for a deliberate cross-origin setup.
+  ALLOWED_ORIGINS: (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
+
   // Ranking coefficients
   RANKING_CONFIGS: [
     { name: 'sent', coefficient: 1.0 },
