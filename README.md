@@ -7,9 +7,10 @@ Visualize your Gmail and Google Calendar communication network as an interactive
 ## Privacy
 
 Everything runs on your machine. The parsers read your local Takeout export and
-write SQLite files into `data/`; the webapp serves them from localhost. Nothing
-is uploaded, and `data/` is gitignored so your mail can't be committed by
-accident.
+write SQLite files into `data/`; the webapp server binds to `127.0.0.1` only, so
+it is reachable from your own machine and not from the rest of your network.
+Nothing is uploaded, and `data/` is gitignored so your mail can't be committed
+by accident.
 
 The one exception is opt-in. If you set `HF_API_KEY`, contact **names and email
 addresses** — never subjects or message bodies — are sent to the Hugging Face
@@ -18,8 +19,10 @@ project makes no outbound network requests at all.
 
 ## Dependencies
 
-- **Rust 1.70+** — for the mbox and calendar parsers
-- **Node.js 18+** — for the webapp
+- **Rust 1.87+** — for the mbox and calendar parsers; declared as
+  `rust-version` in each `Cargo.toml`, so an older toolchain fails with a clear
+  message instead of a confusing compile error
+- **Node.js 20.19+** — for the webapp (CI builds on Node 24)
 - **GNU Make** — optional; every step below also lists the plain `cargo` / `npm`
   commands under a "Without `make`" toggle
 
@@ -58,11 +61,11 @@ The result is a graph of seven contacts. Everything lands in `data/demo/`, so a
 real `data/contacts.db` you have already built is left alone — drop the whole
 directory when you are done.
 
-Leave the `HF_API_KEY` line in `.env` empty for this run. With a key set, the
-classifier is asked to judge addresses like `alice@example.com`, concludes they
-are automated, and drops six of the seven — leaving a graph of a single node.
-Clearing the variable in your shell will not help: the parsers read `.env`
-directly, so the value there wins.
+Leave the `HF_API_KEY` line in `.env` empty for this run — the fixture's
+invented addresses are exactly the kind of input the classifier judges
+unpredictably, and the counts above assume it is switched off. Clearing the
+variable in your shell will not help: the parsers read `.env` directly, so the
+value there wins.
 
 The same fixture drives the end-to-end test (`cargo test --test e2e`), so it
 stays in working order.
@@ -103,15 +106,24 @@ A single project-root `.env` feeds all three components: both Rust parsers read
 it, and so does the webapp server. Setting `USER_EMAIL` here means you can drop
 the `USER_EMAIL=...` argument from every `make` command below.
 
-**Optional: AI-powered spam filtering via Hugging Face.** With `HF_API_KEY` set,
-the mbox parser additionally verifies borderline contacts against a hosted LLM.
-Set it **now** — it takes effect during step 4, and enabling it later means
-re-parsing the whole mbox.
+**Optional: AI-powered spam filtering via Hugging Face — beta.** With
+`HF_API_KEY` set, the mbox parser additionally verifies borderline contacts
+against a hosted LLM. Set it **now** — it takes effect during step 4, and
+enabling it later means re-parsing the whole mbox.
 
 ```env
 HF_API_KEY=your_huggingface_api_key
 HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
+HF_BATCH_SIZE=50
+HF_TIMEOUT=120
 ```
+
+> **Beta.** This step is not deterministic. Which contacts survive depends
+> entirely on the model you point `HF_MODEL` at, and the same model can return
+> different verdicts on different runs — hosted models are also updated and
+> retired without notice. Treat the result as a suggestion, not a stable
+> classification; the webapp's manual review lets you correct it. Everything
+> else in the pipeline is deterministic and unaffected by this setting.
 
 ### 4. Parse the mbox and generate databases + rankings
 
@@ -247,12 +259,12 @@ Inputs go in `Calendar/` and `Email/`; everything else is generated.
 | `gmail-mbox-parser/` | `make fill-db` | Parse mbox only |
 | `gmail-mbox-parser/` | `make rankings` | Generate rankings only |
 | `calendar-parser/`   | `make fill-events` | Parse `.ics` files into `events` / `event_attendees` |
-
-All commands read `USER_EMAIL` from the project-root `.env` (step 3); pass
-`USER_EMAIL=...` on the command line to override it for a single run.
 | `gmail-contact-graph/` | `make setup` | Install deps + build |
 | `gmail-contact-graph/` | `make run` | Start production server (port 5000) |
 | `gmail-contact-graph/` | `make dev` | Start dev servers (API:5000, Client:3000) |
+
+All commands read `USER_EMAIL` from the project-root `.env` (step 3); pass
+`USER_EMAIL=...` on the command line to override it for a single run.
 
 ## License
 
