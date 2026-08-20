@@ -4,6 +4,9 @@
 
 Visualize your Gmail and Google Calendar communication network as an interactive graph. Parse your Gmail and Calendar exports, extract contacts and co-attendees, and explore them through a D3.js force-directed web interface.
 
+**[See it running →](https://yegormishchuk.dev/blog/gmail_project)** — a write-up
+about the project, with a video walkthrough of the graph.
+
 ## Privacy
 
 Everything runs on your machine. The parsers read your local Takeout export and
