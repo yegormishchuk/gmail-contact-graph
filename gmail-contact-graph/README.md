@@ -14,7 +14,7 @@ Interactive web visualization of your Gmail communication network. Explore conta
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20.19+ (CI builds on Node 24)
 - `contacts.db` from [gmail-mbox-parser](../gmail-mbox-parser)
 - (Optional) `events` / `event_attendees` tables populated by [calendar-parser](../calendar-parser) — enables the Calendar, Overall, and Event Groups views
 
@@ -37,6 +37,11 @@ The database path defaults to `../data/contacts.db`; override it with
 `contacts`, `contacts_filtered`, and the calendar's `events` and
 `event_attendees`. Server port defaults to `5000`; override with `PORT`.
 
+The server binds to `127.0.0.1` and only accepts browser requests from its own
+origin, so the graph is not exposed to the rest of your network. Set `HOST` to
+override the bind address (for example inside a container) and
+`ALLOWED_ORIGINS` to a comma-separated list if you do.
+
 ## API Endpoints
 
 | Endpoint | Method | Description |
@@ -51,6 +56,7 @@ The database path defaults to `../data/contacts.db`; override it with
 | `/api/calendar-graph` | GET | Calendar co-attendee graph |
 | `/api/calendar-stats` | GET | Calendar summary stats |
 | `/api/event-groups` | GET | Recurring-event / event-group clusters |
+| `/api/health` | GET | Liveness probe (`{ status: 'ok' }`) |
 | `/api/contacts/mark-clear` | POST | Mark contact as human |
 | `/api/contacts/mark-not-human` | POST | Remove contact |
 | `/api/contacts/restore` | POST | Restore a previously removed contact |

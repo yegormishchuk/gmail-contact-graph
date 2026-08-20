@@ -51,10 +51,11 @@ impl HFConfig {
             .and_then(|s| s.parse().ok())
             .unwrap_or(120);
 
+        // Keep this in step with `.env.example`, which ships HF_BATCH_SIZE=50.
         let batch_size = std::env::var("HF_BATCH_SIZE")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or(250);
+            .unwrap_or(50);
 
         Ok(Self {
             api_key,

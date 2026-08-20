@@ -19,7 +19,9 @@ async function startServer() {
   console.log('Database initialized');
 
   const app = express();
-  app.use(cors());
+  if (config.ALLOWED_ORIGINS.length > 0) {
+    app.use(cors({ origin: config.ALLOWED_ORIGINS }));
+  }
   app.use(express.json());
 
   // API routes
@@ -43,8 +45,8 @@ async function startServer() {
     });
   }
 
-  app.listen(config.PORT, () => {
-    console.log(`Server running on http://localhost:${config.PORT}`);
+  app.listen(config.PORT, config.HOST, () => {
+    console.log(`Server running on http://${config.HOST}:${config.PORT}`);
   });
 }
 

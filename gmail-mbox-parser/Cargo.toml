@@ -2,6 +2,10 @@
 name = "gmail-mbox-parser"
 version = "0.1.0"
 edition = "2021"
+# 1.83 comes from the committed Cargo.lock (icu_* 2.1, pulled in through
+# reqwest -> url -> idna); 1.87 comes from our own use of `is_multiple_of` in
+# fill_db. `cargo clippy` enforces this via the incompatible_msrv lint.
+rust-version = "1.87"
 description = "Gmail MBOX parser with contact extraction and AI verification"
 license = "Apache-2.0"
 
