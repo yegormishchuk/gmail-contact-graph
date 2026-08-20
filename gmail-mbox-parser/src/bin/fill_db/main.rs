@@ -78,6 +78,19 @@ async fn main() {
     eprintln!("user_email: {}", user_email);
     eprintln!("       db: {}", db_path);
 
+    // Create the output directory if it is missing. Doing it here rather than
+    // in the Makefile keeps the parser usable from any shell: `mkdir -p` is a
+    // POSIX-ism that fails under cmd.exe, which is what GNU make falls back to
+    // on Windows when no `sh` is on PATH.
+    if let Some(parent) = std::path::Path::new(db_path).parent() {
+        if !parent.as_os_str().is_empty() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                eprintln!("failed to create output directory {:?}: {}", parent, e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     // Phase 1: Fill mails table
     let contact_stats = fill_mails_db(mbox_path, &user_email, db_path);
 

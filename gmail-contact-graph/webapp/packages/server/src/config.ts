@@ -33,7 +33,14 @@ if (fs.existsSync(ENV_FILE)) {
 export const config = {
   // The parsers write every table — contacts, mails, events, event_attendees —
   // into this one file.
-  CONTACTS_DB_FILE: process.env.CONTACTS_DB_FILE || path.join(DATA_DIR, 'contacts.db'),
+  //
+  // A relative CONTACTS_DB_FILE is resolved against the gmail-contact-graph
+  // directory, which is where `make run` is invoked from. Leaving it to the
+  // process working directory would resolve it against packages/server, since
+  // that is where npm runs the start script.
+  CONTACTS_DB_FILE: process.env.CONTACTS_DB_FILE
+    ? path.resolve(PROJECT_ROOT, process.env.CONTACTS_DB_FILE)
+    : path.join(DATA_DIR, 'contacts.db'),
 
   MY_EMAIL: (process.env.USER_EMAIL || '').toLowerCase(),
   MY_NAME: process.env.USER_NAME || (process.env.USER_EMAIL || '').split('@')[0] || 'Me',
