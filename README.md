@@ -269,6 +269,51 @@ Inputs go in `Calendar/` and `Email/`; everything else is generated.
 All commands read `USER_EMAIL` from the project-root `.env` (step 3); pass
 `USER_EMAIL=...` on the command line to override it for a single run.
 
+## Contributing
+
+Pull requests are welcome. A few things specific to this repository:
+
+**You do not need a mailbox of your own.** The parser ships with a synthetic
+19-message mbox in `gmail-mbox-parser/tests/fixtures/`, and `cargo test --test e2e`
+runs the entire pipeline against it. To see the result in the browser instead,
+follow [Try it without your own mail](#try-it-without-your-own-mail).
+
+**Never commit a real export.** `*.mbox` is gitignored so that a Takeout file
+cannot be added by accident. The fixtures directory is the single exception,
+and every address in it is invented.
+
+**Run what CI runs, before pushing.** In each of the three crates:
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings   # warnings fail the build
+cargo test
+```
+
+and for the webapp, from `gmail-contact-graph/webapp`:
+
+```bash
+npm run lint && npm run build && npm test
+```
+
+**`main` is protected.** Push a branch and open a pull request: direct pushes
+are rejected, and all six CI jobs must pass before a merge is possible. No
+review approval is required.
+
+**Commit messages** follow [Conventional Commits](https://www.conventionalcommits.org/):
+`feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`, optionally scoped as
+`fix(server): ...`.
+
+**Looking for somewhere to start?** The two address-parsing defects under Known
+limitations in [CHANGELOG.md](CHANGELOG.md) each have a failing test waiting in
+`gmail-mbox-parser/src/email.rs` — remove the `#[ignore]` and make it pass.
+
+## Contact
+
+- Bugs and ideas — [open an issue](https://github.com/yegormishchuk/gmail-contact-graph/issues)
+- Write-up and demo video — [yegormishchuk.dev](https://yegormishchuk.dev/blog/gmail_project)
+- Elsewhere — [LinkedIn](https://www.linkedin.com/in/yegor-mishchuk/)
+
 ## License
 
 Copyright 2026 Yegor Mishchuk
