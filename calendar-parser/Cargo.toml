@@ -2,6 +2,9 @@
 name = "calendar-parser"
 version = "0.1.0"
 edition = "2021"
+# This crate's own dependency graph only needs 1.71, but it is documented and
+# tested as one pipeline with gmail-mbox-parser, so it declares the same floor.
+rust-version = "1.87"
 description = "Google Calendar .ics parser → SQLite events table"
 license = "Apache-2.0"
 
