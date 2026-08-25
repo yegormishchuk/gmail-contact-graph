@@ -1,0 +1,88 @@
+# Two ways to run this stack.
+#
+#   ./docker/pipeline.sh          -- parse everything, then serve (the usual one)
+#   docker compose up -d webapp   -- serve an already-parsed database
+#
+# The pipeline is a script rather than a single `docker compose up` because the
+# webapp must be STOPPED while the database is rebuilt and started afterwards:
+# it holds the whole database in memory and writes it back wholesale on any
+# exclude-contact action (server/src/db/index.ts:30-34), so a webapp left
+# running across a parse silently overwrites the fresh data with its snapshot.
+#
+# The parse services sit behind a profile rather than depends_on/required:false
+# -- `required: false` means "do not fail if absent", not "never start".
+# Running them by hand means naming them explicitly:
+#
+#   docker compose stop webapp
+#   docker compose --profile parse up --abort-on-container-failure parser calendar
+#   docker compose up -d webapp
+#
+# `--profile parse up` WITHOUT service names would also start the webapp (it is
+# in the default profile), which is exactly the situation above.
+# --abort-on-container-failure matters too: without it `up` exits 0 even when a
+# one-shot service failed.
+
+services:
+  parser:
+    profiles: ["parse"]
+    build:
+      context: .
+      dockerfile: docker/parsers.Dockerfile
+    image: gmail-contact-graph/parsers
+    command: ["mail"]
+    restart: "no"
+    env_file:
+      - path: .env
+        required: false
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+
+  calendar:
+    profiles: ["parse"]
+    build:
+      context: .
+      dockerfile: docker/parsers.Dockerfile
+    image: gmail-contact-graph/parsers
+    command: ["calendar"]
+    restart: "no"
+    # Both write the same SQLite file, so they must not run concurrently.
+    depends_on:
+      parser:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+
+  webapp:
+    build:
+      context: .
+      dockerfile: docker/webapp.Dockerfile
+    image: gmail-contact-graph/webapp
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # config.ts defaults to 127.0.0.1, which would be unreachable from
+      # outside the container. The published port below is still loopback-only
+      # on the host, so the mailbox is not exposed to the network.
+      HOST: "0.0.0.0"
+    # Interpolated from the root .env by compose itself (a different mechanism
+    # from env_file, which only reaches inside the container). Keeps the
+    # published port in sync with the PORT the server actually binds.
+    ports:
+      - "127.0.0.1:${PORT:-5000}:${PORT:-5000}"
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      # Read-write on purpose: the exclude-contact endpoints write contacts.db.
+      - ${DATA_DIR:-./data}:/app/data
+    healthcheck:
+      # node:22-bookworm-slim has neither curl nor wget; Node 22 has fetch.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||5000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
