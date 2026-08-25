@@ -1,0 +1,12 @@
+# BuildKit reads <dockerfile-path>.dockerignore in preference to the root
+# .dockerignore, so this list is exhaustive on its own: exclude everything,
+# then re-include only what the Rust build actually needs.
+*
+!gmail-mbox-parser
+!calendar-parser
+!docker/parse-entrypoint.sh
+gmail-mbox-parser/target
+gmail-mbox-parser/tools/target
+gmail-mbox-parser/data
+calendar-parser/target
+**/.git
