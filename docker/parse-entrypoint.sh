@@ -75,6 +75,17 @@ case "${1:-}" in
 
   calendar)
     [ -f "$DB_PATH" ] || die "$DB_PATH does not exist. Run the mail parser first."
+
+    # The calendar step is optional (README: "5. (Optional) Parse calendar
+    # events"), so an empty or absent Calendar directory is a skip, not a
+    # failure. fill_events itself exits 1 in that case, which would abort the
+    # whole pipeline for everyone who never exported a calendar.
+    if [ -d "$ICS_FILES" ] && [ -z "$(find "$ICS_FILES" -maxdepth 1 -iname '*.ics' -print -quit)" ]; then
+        echo "No .ics files in $ICS_FILES -- skipping the calendar step."
+        echo "Export Google Calendar into that directory to enable the calendar views."
+        exit 0
+    fi
+
     echo "Filling events from $ICS_FILES -> $DB_PATH"
     # fill_events accepts a directory, unlike fill_db.
     fill_events "$ICS_FILES" --db "$DB_PATH" --user-email "$USER_EMAIL"

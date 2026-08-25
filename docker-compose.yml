@@ -34,6 +34,18 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      # Passthrough so `MBOX_FILE=x ./docker/pipeline.sh` works from the shell.
+      # env_file only reaches inside the container; host environment does not,
+      # so without these two lines a shell override is silently ignored.
+      # Compose interpolates the right-hand side from the shell first and from
+      # .env second, and an empty value is indistinguishable from unset to the
+      # entrypoint's ${VAR:-default}. DATA_DIR is deliberately NOT passed
+      # through: it selects the host directory to mount, and inside the
+      # container the data always lives at /app/data.
+      MBOX_FILE: "${MBOX_FILE:-}"
+      FORCE_REPARSE: "${FORCE_REPARSE:-}"
+      USER_EMAIL: "${USER_EMAIL:-}"
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ${DATA_DIR:-./data}:/app/data
@@ -53,6 +65,10 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      # See the parser service: host environment does not reach containers on
+      # its own, and the Makefiles accept USER_EMAIL on the command line.
+      USER_EMAIL: "${USER_EMAIL:-}"
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ${DATA_DIR:-./data}:/app/data
@@ -70,6 +86,7 @@ services:
       # outside the container. The published port below is still loopback-only
       # on the host, so the mailbox is not exposed to the network.
       HOST: "0.0.0.0"
+      USER_EMAIL: "${USER_EMAIL:-}"
     # Interpolated from the root .env by compose itself (a different mechanism
     # from env_file, which only reaches inside the container). Keeps the
     # published port in sync with the PORT the server actually binds.
