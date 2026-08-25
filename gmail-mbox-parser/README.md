@@ -103,3 +103,16 @@ make clean-data     Remove generated ranking files
 make clean-db       Remove databases
 make help           Show all commands
 ```
+
+## In Docker
+
+`make fill-db` and `make rankings` together are what the `parser` service runs:
+
+```bash
+docker compose --profile parse up --abort-on-container-failure parser
+```
+
+`docker/parse-entrypoint.sh` deliberately mirrors this Makefile's variable names
+and defaults (`DATA_DIR`, `MBOX_DIR`, `MBOX_FILE`, `RANKINGS_DIR`, `DB_PATH`,
+`USER_EMAIL`) — change a default here and change it there too. See
+[Run with Docker](../README.md#run-with-docker) for the full workflow.

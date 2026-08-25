@@ -183,6 +183,162 @@ make run
 
 Open [http://localhost:5000](http://localhost:5000).
 
+## Run with Docker
+
+No Rust, no Node, no `make` — just Docker (with Compose v2.24+). The native
+workflow above stays the primary, fully supported path; this is an alternative.
+
+**1. Configure.**
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and set `USER_EMAIL`.
+
+**2. Put your exports in place.**
+
+```
+data/Email/data.mbox        <- your Gmail .mbox export
+data/Calendar/*.ics         <- your Google Calendar exports
+```
+
+A differently named export? Either rename it to `data.mbox` or set
+`MBOX_FILE=my_export.mbox` in `.env`. One file per run — see [Why only one mbox
+at a time](#why-only-one-mbox-at-a-time).
+
+**3. Run everything.**
+
+```bash
+./docker/pipeline.sh
+```
+
+That parses your mail, generates the rankings, imports the calendar, and starts
+the webapp on [http://127.0.0.1:5000](http://127.0.0.1:5000). The first run
+builds the images, which takes several minutes — the parsers compile SQLite from
+source. Later runs reuse the cache.
+
+Want to see it work in a few seconds first? Point it at the synthetic fixture:
+
+```bash
+cp gmail-mbox-parser/tests/fixtures/sample.mbox data/Email/
+```
+
+```bash
+USER_EMAIL=you@example.com MBOX_FILE=sample.mbox DATA_DIR=./data/demo ./docker/pipeline.sh
+```
+
+That builds a seven-contact graph in `data/demo/`, leaving any real
+`data/contacts.db` alone — drop the directory when you are done. `USER_EMAIL`
+matters here: the fixture's invented addresses only resolve into a graph when
+you are `you@example.com`, and leave `HF_API_KEY` empty as the native demo
+above explains.
+
+### Day to day
+
+Once the database exists, you only need the webapp:
+
+```bash
+docker compose up -d webapp     # start
+docker compose stop webapp      # stop
+docker compose logs -f webapp   # follow the logs
+```
+
+Re-run `./docker/pipeline.sh` after a fresh Takeout export. If nothing changed
+it says so and skips the slow part; `FORCE_REPARSE=1 ./docker/pipeline.sh`
+re-parses anyway.
+
+### The one rule: don't parse while the webapp is running
+
+The webapp loads the whole database into memory at startup, and every time you
+exclude a contact it writes that in-memory copy back over the file. A webapp
+that started *before* a parse will therefore overwrite the freshly parsed
+database with its stale copy — silently, at the moment you next click something.
+
+`./docker/pipeline.sh` handles this: it stops the webapp first and starts it
+again afterwards. Run the parser by hand while the webapp is up and it refuses:
+
+```
+ERROR: the webapp container is running and would overwrite this parse.
+Stop it first:  docker compose stop webapp
+```
+
+For the same reason, a webapp already running when you re-parse keeps serving
+the old graph until `docker compose restart webapp` — the database is read once,
+at startup.
+
+### Running the steps by hand
+
+`./docker/pipeline.sh` is exactly these three commands:
+
+```bash
+docker compose stop webapp
+```
+
+```bash
+docker compose --profile parse up --abort-on-container-failure parser calendar
+```
+
+```bash
+docker compose up -d webapp
+```
+
+Naming `parser calendar` explicitly is deliberate: `docker compose --profile
+parse up` without service names would also start the webapp, which is the
+situation the rule above warns about. To re-import only the calendar, run the
+same three commands with `calendar` alone in the middle one.
+
+### Why only one mbox at a time
+
+The parser rebuilds the `mails` table from scratch on every run, so pointing it
+at several `.mbox` files would leave you with only the last one's data. It reads
+exactly one file — `MBOX_FILE`, default `data.mbox`. If it is missing, the error
+lists what is actually in `data/Email/`.
+
+### Docker settings
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `USER_EMAIL` | — | Required. Your address; the "you" node. |
+| `MBOX_FILE` | `data.mbox` | Which file in `data/Email/` to parse. |
+| `PORT` | `5000` | Host and container port, kept in sync automatically. |
+| `DATA_DIR` | `./data` | Where the exports and database live. |
+| `FORCE_REPARSE` | `0` | `1` re-parses even when nothing changed. |
+| `HF_API_KEY` | empty | Optional AI spam filtering (non-deterministic). |
+
+The port is published on `127.0.0.1` only, so the container is no more exposed
+than the native server is.
+
+**Linux and macOS — file ownership.** Containers run as UID 1000 by default, so
+files the parser writes may not belong to you. `UID`/`GID` are shell variables
+rather than environment variables, so Compose cannot see them unless you say so:
+
+```bash
+echo "UID=$(id -u)" >> .env && echo "GID=$(id -g)" >> .env
+```
+
+Ignored on Windows.
+
+**Windows — keep the repo inside WSL2.** `data/` runs to a couple of gigabytes,
+and Docker Desktop reaches Windows paths (`C:\...`) through a translation layer
+that makes large sequential reads and SQLite noticeably slower. Clone into the
+WSL2 filesystem (`\\wsl$\...`) rather than working under `/mnt/c/...`.
+
+**When something is wrong.**
+
+```bash
+docker compose ps -a                  # what ran, and did it exit 0
+docker compose logs parser            # why the parse failed
+docker compose --profile parse down   # stop and remove everything
+```
+
+Use `--profile parse` on `down` as well: a plain `docker compose down` only
+touches the default profile, so stopped parser containers stay listed in
+`docker compose ps -a`.
+
+No calendar export? The calendar step reports that it found no `.ics` files and
+exits successfully — the mail graph does not depend on it.
+
 ## Try it without your own mail
 
 A Takeout export takes hours to arrive. To see the graph before then, build the

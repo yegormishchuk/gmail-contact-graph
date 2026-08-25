@@ -74,3 +74,21 @@ make dev-client     Start React client only
 make clean          Remove node_modules and build output
 make help           Show all commands
 ```
+
+## In Docker
+
+`make run` is what the `webapp` service does:
+
+```bash
+docker compose up -d webapp
+```
+
+Served on <http://127.0.0.1:5000> as usual. Inside the container `HOST` is set
+to `0.0.0.0` — it has to be, or the server would be unreachable from outside the
+container — but the port is published on `127.0.0.1` only, so the webapp is no
+more exposed than it is natively.
+
+The database must already exist; the container refuses to start otherwise and
+points you at the parsers. It is read once at startup, so after a re-parse run
+`docker compose restart webapp`. See
+[Run with Docker](../README.md#run-with-docker).
