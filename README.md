@@ -218,6 +218,11 @@ the webapp on [http://127.0.0.1:5000](http://127.0.0.1:5000). The first run
 builds the images, which takes several minutes — the parsers compile SQLite from
 source. Later runs reuse the cache.
 
+On Windows the script needs a POSIX shell, so run it from **Git Bash** rather
+than PowerShell (`sh` is not on PowerShell's PATH). From PowerShell, run the
+three commands it wraps instead — see
+[Running the steps by hand](#running-the-steps-by-hand).
+
 Want to see it work in a few seconds first? Point it at the synthetic fixture:
 
 ```bash
