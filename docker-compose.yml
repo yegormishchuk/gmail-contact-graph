@@ -98,7 +98,11 @@ services:
       - ${DATA_DIR:-./data}:/app/data
     healthcheck:
       # node:22-bookworm-slim has neither curl nor wget; Node 22 has fetch.
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||5000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      #
+      # /api/contacts, not /api/health: the latter answers 200 without touching
+      # a single table, so a database left half-built by a failed parse still
+      # reports healthy while every real endpoint returns 500.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||5000)+'/api/contacts').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5

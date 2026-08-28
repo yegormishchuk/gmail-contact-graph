@@ -226,7 +226,7 @@ three commands it wraps instead — see
 Want to see it work in a few seconds first? Point it at the synthetic fixture:
 
 ```bash
-cp gmail-mbox-parser/tests/fixtures/sample.mbox data/Email/
+mkdir -p data/demo/Email && cp gmail-mbox-parser/tests/fixtures/sample.mbox data/demo/Email/
 ```
 
 ```bash
@@ -234,10 +234,12 @@ USER_EMAIL=you@example.com MBOX_FILE=sample.mbox DATA_DIR=./data/demo ./docker/p
 ```
 
 That builds a seven-contact graph in `data/demo/`, leaving any real
-`data/contacts.db` alone — drop the directory when you are done. `USER_EMAIL`
-matters here: the fixture's invented addresses only resolve into a graph when
-you are `you@example.com`, and leave `HF_API_KEY` empty as the native demo
-above explains.
+`data/contacts.db` alone — drop the directory when you are done. The fixture
+goes under `data/demo/Email/` rather than `data/Email/` because `DATA_DIR` is
+what gets mounted: the parser always reads `$DATA_DIR/Email/$MBOX_FILE`.
+`USER_EMAIL` matters here: the fixture's invented addresses only resolve into a
+graph when you are `you@example.com`, and leave `HF_API_KEY` empty as the
+native demo above explains.
 
 ### Day to day
 

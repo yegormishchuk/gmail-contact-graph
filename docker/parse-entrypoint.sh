@@ -61,6 +61,14 @@ case "${1:-}" in
         exit 0
     fi
 
+    # Drop the stamp BEFORE the first destructive step. fill_db starts with
+    # DROP TABLE IF EXISTS mails (fill_db/db.rs:23), so from here on the
+    # database on disk is incomplete until the run finishes. A stamp left in
+    # place would survive a failure and -- if it happened to match this same
+    # signature from an earlier successful run -- make the next run report
+    # "up to date" and start the webapp on a half-built database.
+    rm -f "$STAMP"
+
     echo "Parsing $MBOX_PATH as $USER_EMAIL -> $DB_PATH"
     fill_db "$MBOX_PATH" "$USER_EMAIL" "$DB_PATH"
     echo "Generating rankings -> $RANKINGS_DIR"
@@ -80,7 +88,10 @@ case "${1:-}" in
     # events"), so an empty or absent Calendar directory is a skip, not a
     # failure. fill_events itself exits 1 in that case, which would abort the
     # whole pipeline for everyone who never exported a calendar.
-    if [ -d "$ICS_FILES" ] && [ -z "$(find "$ICS_FILES" -maxdepth 1 -iname '*.ics' -print -quit)" ]; then
+    # Absent counts as empty: a fresh DATA_DIR has no Calendar directory at
+    # all, and requiring -d here made that case fall through to fill_events,
+    # which exits 1 and aborts the pipeline before the webapp ever starts.
+    if [ ! -d "$ICS_FILES" ] || [ -z "$(find "$ICS_FILES" -maxdepth 1 -iname '*.ics' -print -quit)" ]; then
         echo "No .ics files in $ICS_FILES -- skipping the calendar step."
         echo "Export Google Calendar into that directory to enable the calendar views."
         exit 0
