@@ -22,12 +22,21 @@ if [ ! -f "$DB_FILE" ]; then
 fi
 
 cleanup() { rm -f "$LOCK"; }
+# EXIT, not just the end of the script: under `set -e` a server that dies with
+# a non-zero status aborts the script at the `wait` below, and a cleanup call
+# placed after it would never run. The lock left behind then makes every later
+# parse refuse with "the webapp container is running" when nothing is.
+trap cleanup EXIT
+# cleanup again here rather than relying on the EXIT trap: whether a shell runs
+# its EXIT trap on the way out of a signal handler varies between shells, and
+# rm -f twice costs nothing.
 trap 'cleanup; [ -n "${pid:-}" ] && kill -TERM "$pid" 2>/dev/null; exit 0' TERM INT
 
 echo "$$" > "$LOCK"
 node dist/index.js &
 pid=$!
-wait "$pid"
-status=$?
-cleanup
+# `|| status=$?` keeps `set -e` from swallowing the exit status here; the EXIT
+# trap releases the lock either way.
+status=0
+wait "$pid" || status=$?
 exit "$status"

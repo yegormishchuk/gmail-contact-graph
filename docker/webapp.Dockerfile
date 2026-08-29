@@ -31,6 +31,12 @@ RUN npm ci --omit=dev
 
 FROM node:22-bookworm-slim AS runtime
 
+# Nothing in this codebase branches on NODE_ENV, but Express does: without it
+# the app runs in development mode, which serves full stack traces on errors
+# and skips the view/etag caching. Only in this stage -- the build stages need
+# the dev dependencies that `npm ci` would otherwise skip.
+ENV NODE_ENV=production
+
 # The directory layout is load-bearing: config.ts derives PROJECT_ROOT by
 # walking four levels up from packages/server/dist and then resolves DATA_DIR
 # as ../data -- i.e. /app/data. Do not flatten this tree.

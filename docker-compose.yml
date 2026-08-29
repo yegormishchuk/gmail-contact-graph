@@ -40,12 +40,17 @@ services:
       # so without these two lines a shell override is silently ignored.
       # Compose interpolates the right-hand side from the shell first and from
       # .env second, and an empty value is indistinguishable from unset to the
-      # entrypoint's ${VAR:-default}. DATA_DIR is deliberately NOT passed
-      # through: it selects the host directory to mount, and inside the
-      # container the data always lives at /app/data.
+      # entrypoint's ${VAR:-default}.
       MBOX_FILE: "${MBOX_FILE:-}"
       FORCE_REPARSE: "${FORCE_REPARSE:-}"
       USER_EMAIL: "${USER_EMAIL:-}"
+      # Pinned, NOT passed through. DATA_DIR selects the HOST directory to
+      # mount (see volumes below); inside the container the data always lives
+      # at /app/data. It has to be pinned rather than simply left out: a
+      # DATA_DIR in .env reaches the container through env_file, and the
+      # entrypoint would then look for the data at a host path that does not
+      # exist here -- "ERROR: ./data/demo is not mounted" on a correct mount.
+      DATA_DIR: /app/data
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ${DATA_DIR:-./data}:/app/data
@@ -69,6 +74,8 @@ services:
       # See the parser service: host environment does not reach containers on
       # its own, and the Makefiles accept USER_EMAIL on the command line.
       USER_EMAIL: "${USER_EMAIL:-}"
+      # Pinned for the same reason as the parser service.
+      DATA_DIR: /app/data
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ${DATA_DIR:-./data}:/app/data
@@ -87,6 +94,20 @@ services:
       # on the host, so the mailbox is not exposed to the network.
       HOST: "0.0.0.0"
       USER_EMAIL: "${USER_EMAIL:-}"
+      # Same passthrough reason as the parser service: env_file reaches inside
+      # the container but the host shell does not, while the `ports` mapping
+      # below is interpolated from the shell first. Without this line
+      # `PORT=5055 docker compose up -d webapp` publishes 5055 while the server
+      # still binds 5000, and the healthcheck -- which defaults to 5000 too --
+      # reports healthy about a port nothing can reach.
+      # Empty is safe: config.ts reads `process.env.PORT || '5000'`.
+      PORT: "${PORT:-}"
+      # Pinned for the same reason as the parser service: a DATA_DIR in .env
+      # would otherwise reach the entrypoint, which would look for contacts.db
+      # under a host path and report it missing on a perfectly good mount.
+      # config.ts derives its own path from the directory layout and ignores
+      # this variable; the entrypoint's lock file does not.
+      DATA_DIR: /app/data
     # Interpolated from the root .env by compose itself (a different mechanism
     # from env_file, which only reaches inside the container). Keeps the
     # published port in sync with the PORT the server actually binds.

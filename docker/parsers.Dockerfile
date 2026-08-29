@@ -83,4 +83,12 @@ RUN chmod +x /usr/local/bin/parse-entrypoint.sh
 # mount .env at /app -- it would become a second, higher-precedence source.
 WORKDIR /app/run
 
+# Numeric, not a named user: debian:bookworm-slim has no account at 1000, and
+# the id is what matters -- it matches the compose `user:` default, so a plain
+# `docker run` of this image behaves like the compose services rather than
+# writing into the mounted data directory as root. Compose still overrides it
+# with UID/GID from .env where those are set.
+RUN chown 1000:1000 /app/run
+USER 1000:1000
+
 ENTRYPOINT ["/usr/local/bin/parse-entrypoint.sh"]

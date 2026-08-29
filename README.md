@@ -185,7 +185,8 @@ Open [http://localhost:5000](http://localhost:5000).
 
 ## Run with Docker
 
-No Rust, no Node, no `make` — just Docker (with Compose v2.24+). The native
+No Rust, no Node, no `make` — just Docker (with Compose v2.27+, which is where
+`up --abort-on-container-failure` arrived). The native
 workflow above stays the primary, fully supported path; this is an alternative.
 
 **1. Configure.**
@@ -233,6 +234,18 @@ mkdir -p data/demo/Email && cp gmail-mbox-parser/tests/fixtures/sample.mbox data
 USER_EMAIL=you@example.com MBOX_FILE=sample.mbox DATA_DIR=./data/demo ./docker/pipeline.sh
 ```
 
+Both of those are Git Bash lines too, for the same reason as the script itself.
+The PowerShell equivalent — the `VAR=value cmd` prefix has no PowerShell form,
+so the settings go in the environment first:
+
+```powershell
+New-Item -ItemType Directory -Force data/demo/Email
+Copy-Item gmail-mbox-parser/tests/fixtures/sample.mbox data/demo/Email/
+$env:USER_EMAIL = "you@example.com"; $env:MBOX_FILE = "sample.mbox"; $env:DATA_DIR = "./data/demo"
+docker compose --profile parse up --abort-on-container-failure parser calendar
+docker compose up -d webapp
+```
+
 That builds a seven-contact graph in `data/demo/`, leaving any real
 `data/contacts.db` alone — drop the directory when you are done. The fixture
 goes under `data/demo/Email/` rather than `data/Email/` because `DATA_DIR` is
@@ -254,6 +267,15 @@ docker compose logs -f webapp   # follow the logs
 Re-run `./docker/pipeline.sh` after a fresh Takeout export. If nothing changed
 it says so and skips the slow part; `FORCE_REPARSE=1 ./docker/pipeline.sh`
 re-parses anyway.
+
+After a `git pull` or an edit to the parser or webapp sources, rebuild the
+images — `docker compose up` reuses whatever image is already there and will
+otherwise keep running the old code without saying so:
+
+```bash
+docker compose --profile parse build   # both images
+docker compose up -d --build webapp    # or just the webapp, rebuilt in place
+```
 
 ### The one rule: don't parse while the webapp is running
 
@@ -293,7 +315,10 @@ docker compose up -d webapp
 Naming `parser calendar` explicitly is deliberate: `docker compose --profile
 parse up` without service names would also start the webapp, which is the
 situation the rule above warns about. To re-import only the calendar, run the
-same three commands with `calendar` alone in the middle one.
+same three commands with `calendar` alone in the middle one — the mail parser
+still starts, because the calendar step depends on it having completed, but it
+finds the database up to date and exits immediately. Don't combine that with
+`FORCE_REPARSE=1`, which re-parses the whole mbox as well.
 
 ### Why only one mbox at a time
 
