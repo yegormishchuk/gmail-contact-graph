@@ -1,0 +1,13 @@
+# Keeps the build context small. data/ alone is ~2.7 GB and the three Rust
+# target/ directories add another ~2.2 GB.
+#
+# Note: docker/parsers.Dockerfile.dockerignore and
+# docker/webapp.Dockerfile.dockerignore take precedence over this file for
+# their respective builds; this one is the fallback for any other build.
+data/
+**/target/
+**/node_modules/
+**/dist/
+.git/
+.env
+*.mbox

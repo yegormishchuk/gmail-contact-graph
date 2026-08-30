@@ -2,3 +2,12 @@
 # same file parses differently on Windows than it does on Linux and macOS.
 *.mbox -text
 *.ics  -text
+
+# Container files must keep LF regardless of the checkout platform. A CRLF
+# shebang makes the kernel look for an interpreter literally named "/bin/sh\r"
+# and the container dies with an unhelpful "no such file or directory".
+*.sh              text eol=lf
+*.Dockerfile      text eol=lf
+docker-compose.yml text eol=lf
+.dockerignore     text eol=lf
+*.dockerignore    text eol=lf

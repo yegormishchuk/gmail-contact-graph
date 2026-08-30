@@ -1,0 +1,9 @@
+# See docker/parsers.Dockerfile.dockerignore — this file fully replaces the
+# root .dockerignore for the webapp build, so it must be self-contained.
+*
+!gmail-contact-graph/webapp
+!docker/webapp-entrypoint.sh
+gmail-contact-graph/webapp/node_modules
+gmail-contact-graph/webapp/packages/*/node_modules
+gmail-contact-graph/webapp/packages/*/dist
+**/.git
