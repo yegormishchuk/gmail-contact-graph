@@ -82,3 +82,114 @@ jobs:
 
       - name: Test
         run: npm test
+
+  docker:
+    name: docker (build + smoke)
+    runs-on: ubuntu-latest
+    env:
+      # The compose services mount ${DATA_DIR} from the host. The real one is
+      # data/, which is gitignored and holds a real mailbox; CI gets its own
+      # throwaway directory built from the committed fixture below.
+      DATA_DIR: ./ci-data
+      # you@example.com is the recipient every message in sample.mbox is
+      # addressed to -- with any other value fill_db finds no contacts and the
+      # smoke check below passes on an empty database.
+      USER_EMAIL: you@example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Built here rather than by `compose up --build` so the layers survive
+      # between runs: compose has no access to the GitHub Actions cache, and a
+      # cold parsers build compiles SQLite from C source plus three release
+      # profiles with lto=true. `load: true` puts the image in the local daemon
+      # under the same tag compose expects, so `up --no-build` finds it.
+      - name: Build the parsers image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/parsers.Dockerfile
+          tags: gmail-contact-graph/parsers
+          load: true
+          cache-from: type=gha,scope=parsers
+          cache-to: type=gha,scope=parsers,mode=max
+
+      - name: Build the webapp image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/webapp.Dockerfile
+          tags: gmail-contact-graph/webapp
+          load: true
+          cache-from: type=gha,scope=webapp
+          cache-to: type=gha,scope=webapp,mode=max
+
+      - name: Validate the compose file
+        run: docker compose config -q
+
+      # The entrypoint expects $DATA_DIR/Email/$MBOX_FILE, defaulting to
+      # data.mbox. Ownership matters: the compose services default to
+      # user 1000:1000 (the runner is 1001), and the parser has to write
+      # contacts.db, rankings/ and .parse-stamp into this directory.
+      - name: Stage the fixture data directory
+        run: |
+          mkdir -p ci-data/Email
+          cp gmail-mbox-parser/tests/fixtures/sample.mbox ci-data/Email/data.mbox
+          sudo chown -R 1000:1000 ci-data
+
+      # No calendar service here: it needs .ics files, and none are committed.
+      # --abort-on-container-failure because plain `up` on a one-shot service
+      # exits 0 even when the container failed.
+      - name: Parse the fixture mailbox
+        run: docker compose --profile parse up --no-build --abort-on-container-failure parser
+
+      - name: Check the parser output
+        run: |
+          test -f ci-data/contacts.db
+          # generate_rankings writes seven files; if it silently produced none
+          # the pipeline still "succeeded" but the webapp has no rankings.
+          ls -1 ci-data/rankings/*_ranking.txt | wc -l | grep -qx 7
+          test -f ci-data/.parse-stamp
+
+      # The stamp is what keeps a no-op start cheap; a second run must skip.
+      - name: Re-run the parser (idempotency stamp)
+        run: |
+          docker compose --profile parse up --no-build --abort-on-container-failure parser 2>&1 | tee parse.log
+          grep -q "skipping" parse.log
+
+      - name: Start the webapp
+        run: docker compose up -d --no-build webapp
+
+      # The compose healthcheck hits /api/contacts, so "healthy" already means
+      # the database is readable -- but wait for it explicitly to get a clean
+      # failure instead of a curl connection refused.
+      - name: Wait for the webapp to report healthy
+        run: |
+          cid=$(docker compose ps -q webapp)
+          for _ in $(seq 60); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' "$cid")
+            case "$status" in
+              healthy)   echo "healthy"; exit 0 ;;
+              unhealthy) echo "container is unhealthy" >&2; exit 1 ;;
+            esac
+            sleep 2
+          done
+          echo "timed out waiting for health (last status: $status)" >&2
+          exit 1
+
+      # A 200 is not enough: an empty array means fill_db parsed nothing and
+      # every check above would still be green.
+      - name: Smoke-test the API
+        run: |
+          curl -fsS "http://127.0.0.1:5000/api/contacts" -o contacts.json
+          test "$(jq 'length' contacts.json)" -gt 0
+          jq -e 'map(select(.email == "alice@example.com")) | length == 1' contacts.json
+
+      - name: Container logs
+        if: failure()
+        run: docker compose --profile parse logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose --profile parse down -v --remove-orphans

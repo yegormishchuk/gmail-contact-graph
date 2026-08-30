@@ -48,3 +48,7 @@ scripts/
 .superpowers/
 docs/
 CLAUDE.md
+# Throwaway data directory used by the docker CI smoke job.
+ci-data/
+parse.log
+contacts.json
