@@ -9,6 +9,60 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-31
+
+Adds a containerised route through the whole pipeline: with Docker installed,
+an mbox export becomes a served graph in one command, and no Rust or Node
+toolchain has to be present on the host.
+
+### Added
+
+#### Docker
+
+- Two multi-stage images — a parsers image carrying `fill_db`,
+  `generate_rankings` and `fill_events`, and a webapp image carrying the built
+  Express server and client — plus a `docker-compose.yml` that mounts a host
+  data directory into both and puts the parse behind a `parse` profile, so
+  `docker compose up` serves an existing database without re-parsing.
+- `docker/pipeline.sh` runs the whole thing end to end: parse, rankings,
+  calendar, then the webapp on port 5000. `MBOX_FILE`, `USER_EMAIL` and
+  `FORCE_REPARSE` pass through from the shell, matching what the Makefiles
+  already accepted.
+- The parse is idempotent through a `.parse-stamp` recording the inputs it ran
+  against, and the stamp is cleared before `fill_db` drops the mails table, so
+  a failed parse never leaves a broken database looking current. A lock file
+  held by the webapp container keeps a parse from running against a database
+  being served, and is released on a crash as well as a clean exit.
+- The calendar step is genuinely optional: a missing or empty `Calendar`
+  directory is skipped rather than failing the run.
+- The webapp healthcheck queries `/api/contacts`, which touches a table, rather
+  than a status endpoint that answers 200 over a broken database.
+
+#### Tooling
+
+- CI builds both images on every push and pull request and smoke-tests the
+  parse-then-serve path against the committed `sample.mbox` fixture, asserting
+  on the contact list the API returns rather than on status codes alone, and
+  running the parser twice to prove the stamp skip still works.
+
+#### Documentation
+
+- A Docker chapter in the README covering the fixture demo, a real export,
+  rebuilds after a pull, and the Git Bash requirement for `pipeline.sh` on
+  Windows.
+- Quick start now leads with the Google Takeout request, since the export can
+  take hours to arrive, and points at the bundled fixture for anyone who does
+  not want to wait. Dependencies get a collapsible per-platform install guide,
+  including the `pkg-config` and `libssl-dev` that `openssl-sys` needs on Linux.
+- Contributing guidance — no direct pushes to main, Clippy with `-D warnings`,
+  Conventional Commits, never commit a real export — plus contact channels and
+  a link to the project write-up and its video walkthrough.
+
+### Changed
+
+- The three npm packages and three Rust crates now declare 0.2.0, tracking the
+  release tag.
+
 ## [0.1.0] - 2026-08-20
 
 First release: the pipeline runs end to end on a clean machine, from a Google
@@ -83,5 +137,6 @@ Takeout export to an interactive graph in the browser.
   Everything else in the pipeline is deterministic.
 - Requires Rust 1.87+ and Node.js 20.19+ (or 22+).
 
-[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.1.0
