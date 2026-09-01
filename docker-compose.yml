@@ -24,6 +24,7 @@
 
 services:
   parser:
+    network_mode: bridge
     profiles: ["parse"]
     build:
       context: .
@@ -57,6 +58,7 @@ services:
 
   calendar:
     profiles: ["parse"]
+    network_mode: bridge
     build:
       context: .
       dockerfile: docker/parsers.Dockerfile
@@ -81,6 +83,7 @@ services:
       - ${DATA_DIR:-./data}:/app/data
 
   webapp:
+    network_mode: bridge
     build:
       context: .
       dockerfile: docker/webapp.Dockerfile
