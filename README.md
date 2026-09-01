@@ -273,6 +273,47 @@ what gets mounted: the parser always reads `$DATA_DIR/Email/$MBOX_FILE`.
 graph when you are `you@example.com`, and leave `HF_API_KEY` empty as the
 native demo above explains.
 
+**Already running the stack on your real mail?** Those commands would stop
+nothing, but they *would* re-create the `webapp` container against the fixture:
+Compose keys containers by project name, and the project is the directory name
+in both cases. Give the fixture run its own project and its own port and the
+two live side by side:
+
+```bash
+mkdir -p data/fixture/Email && cp gmail-mbox-parser/tests/fixtures/sample.mbox data/fixture/Email/
+export USER_EMAIL=you@example.com MBOX_FILE=sample.mbox DATA_DIR=./data/fixture PORT=5055
+docker compose -p gcg-fixture --profile parse up --no-build --abort-on-container-failure parser
+docker compose -p gcg-fixture up -d --no-build webapp
+```
+
+```powershell
+New-Item -ItemType Directory -Force data/fixture/Email
+Copy-Item gmail-mbox-parser/tests/fixtures/sample.mbox data/fixture/Email/
+$env:USER_EMAIL = "you@example.com"; $env:MBOX_FILE = "sample.mbox"; $env:DATA_DIR = "./data/fixture"; $env:PORT = "5055"
+docker compose -p gcg-fixture --profile parse up --no-build --abort-on-container-failure parser
+docker compose -p gcg-fixture up -d --no-build webapp
+```
+
+The fixture graph is then on <http://127.0.0.1:5055> and your real one keeps
+5000. Two details make that work: separate `DATA_DIR` values mean the parse
+never touches the real `contacts.db` (so "don't parse while the webapp is
+running" is not violated — a *different* database is being rebuilt), and
+separate `PORT` values keep the published ports from colliding. `--no-build`
+reuses the images you already built; drop it on a first run.
+
+`-p gcg-fixture` has to be repeated on every command that belongs to this run,
+`down` included — leave it off and Compose looks in the default project, finds
+nothing, and cheerfully reports success. Clean up with:
+
+```bash
+docker compose -p gcg-fixture --profile parse down -v
+rm -rf data/fixture
+```
+
+No `calendar` service in the commands above: no `.ics` files ship with the
+repo, so it would exit successfully having found nothing. Add it back —
+`parser calendar` — if you copy a real export into `data/fixture/Calendar/`.
+
 ### Day to day
 
 Once the database exists, you only need the webapp:
