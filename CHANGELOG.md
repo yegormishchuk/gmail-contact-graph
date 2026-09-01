@@ -9,6 +9,11 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-01
+
+A documentation release: the Docker chapter now teaches one route instead of
+two.
+
 ### Removed
 
 - `docker/pipeline.sh`. It only wrapped three `docker compose` commands, and
@@ -147,6 +152,7 @@ Takeout export to an interactive graph in the browser.
   Everything else in the pipeline is deterministic.
 - Requires Rust 1.87+ and Node.js 20.19+ (or 22+).
 
-[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.1
 [0.2.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.1.0
