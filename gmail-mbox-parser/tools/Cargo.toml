@@ -1,6 +1,6 @@
 [package]
 name = "ranking_tools"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 # Only needs 1.65 on its own, but `make process-all` builds it alongside
 # fill_db, so it declares the same floor as the parser it ships with.

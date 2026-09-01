@@ -1,6 +1,6 @@
 [package]
 name = "gmail-mbox-parser"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 # 1.83 comes from the committed Cargo.lock (icu_* 2.1, pulled in through
 # reqwest -> url -> idna); 1.87 comes from our own use of `is_multiple_of` in

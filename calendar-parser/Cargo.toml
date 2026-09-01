@@ -1,6 +1,6 @@
 [package]
 name = "calendar-parser"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 # This crate's own dependency graph only needs 1.71, but it is documented and
 # tested as one pipeline with gmail-mbox-parser, so it declares the same floor.
