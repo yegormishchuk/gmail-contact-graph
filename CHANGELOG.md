@@ -9,6 +9,16 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+### Removed
+
+- `docker/pipeline.sh`. It only wrapped three `docker compose` commands, and
+  being a POSIX script it needed Git Bash on Windows, so the README had to
+  document both routes anyway. The Docker chapter now leads with the three
+  commands themselves, which run unchanged in PowerShell, Git Bash and a Unix
+  shell. Nothing else changes: the parse is still idempotent through
+  `.parse-stamp`, and the webapp lock still refuses a parse against a served
+  database.
+
 ## [0.2.0] - 2026-08-31
 
 Adds a containerised route through the whole pipeline: with Docker installed,
