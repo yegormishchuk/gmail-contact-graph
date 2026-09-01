@@ -16,8 +16,7 @@ fi
 DB_FILE="${CONTACTS_DB_FILE:-$DATA_DIR/contacts.db}"
 if [ ! -f "$DB_FILE" ]; then
     echo "ERROR: $DB_FILE not found. Run the parsers first:" >&2
-    echo "  ./docker/pipeline.sh" >&2
-    echo "or: docker compose --profile parse up --abort-on-container-failure parser calendar" >&2
+    echo "  docker compose --profile parse up --abort-on-container-failure parser calendar" >&2
     exit 1
 fi
 

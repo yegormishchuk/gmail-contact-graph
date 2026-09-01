@@ -1,21 +1,21 @@
 # Two ways to run this stack.
 #
-#   ./docker/pipeline.sh          -- parse everything, then serve (the usual one)
 #   docker compose up -d webapp   -- serve an already-parsed database
-#
-# The pipeline is a script rather than a single `docker compose up` because the
-# webapp must be STOPPED while the database is rebuilt and started afterwards:
-# it holds the whole database in memory and writes it back wholesale on any
-# exclude-contact action (server/src/db/index.ts:30-34), so a webapp left
-# running across a parse silently overwrites the fresh data with its snapshot.
-#
-# The parse services sit behind a profile rather than depends_on/required:false
-# -- `required: false` means "do not fail if absent", not "never start".
-# Running them by hand means naming them explicitly:
 #
 #   docker compose stop webapp
 #   docker compose --profile parse up --abort-on-container-failure parser calendar
-#   docker compose up -d webapp
+#   docker compose up -d webapp    -- parse everything, then serve
+#
+# The parse is three commands rather than a single `docker compose up` because
+# the webapp must be STOPPED while the database is rebuilt and started
+# afterwards: it holds the whole database in memory and writes it back
+# wholesale on any exclude-contact action (server/src/db/index.ts:30-34), so a
+# webapp left running across a parse silently overwrites the fresh data with
+# its snapshot.
+#
+# The parse services sit behind a profile rather than depends_on/required:false
+# -- `required: false` means "do not fail if absent", not "never start".
+# Running them means naming them explicitly.
 #
 # `--profile parse up` WITHOUT service names would also start the webapp (it is
 # in the default profile), which is exactly the situation above.
@@ -35,7 +35,7 @@ services:
       - path: .env
         required: false
     environment:
-      # Passthrough so `MBOX_FILE=x ./docker/pipeline.sh` works from the shell.
+      # Passthrough so `MBOX_FILE=x docker compose ...` works from the shell.
       # env_file only reaches inside the container; host environment does not,
       # so without these two lines a shell override is silently ignored.
       # Compose interpolates the right-hand side from the shell first and from

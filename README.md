@@ -208,10 +208,18 @@ A differently named export? Either rename it to `data.mbox` or set
 `MBOX_FILE=my_export.mbox` in `.env`. One file per run — see [Why only one mbox
 at a time](#why-only-one-mbox-at-a-time).
 
-**3. Run everything.**
+**3. Run everything.** Three commands, in this order:
 
 ```bash
-./docker/pipeline.sh
+docker compose stop webapp
+```
+
+```bash
+docker compose --profile parse up --abort-on-container-failure parser calendar
+```
+
+```bash
+docker compose up -d webapp
 ```
 
 That parses your mail, generates the rankings, imports the calendar, and starts
@@ -219,24 +227,35 @@ the webapp on [http://127.0.0.1:5000](http://127.0.0.1:5000). The first run
 builds the images, which takes several minutes — the parsers compile SQLite from
 source. Later runs reuse the cache.
 
-On Windows the script needs a POSIX shell, so run it from **Git Bash** rather
-than PowerShell (`sh` is not on PowerShell's PATH). From PowerShell, run the
-three commands it wraps instead — see
-[Running the steps by hand](#running-the-steps-by-hand).
+None of the three steps is cosmetic. The webapp is stopped first because it must
+not run while the database is rebuilt — see [The one rule](#the-one-rule-dont-parse-while-the-webapp-is-running).
+Naming `parser calendar` explicitly matters as well: `docker compose --profile
+parse up` without service names would also start the webapp, which is exactly
+the situation that rule warns about. And `--abort-on-container-failure` is what
+makes `up` exit non-zero when a one-shot service fails; without it a failed
+parse looks like a successful run.
 
-Want to see it work in a few seconds first? Point it at the synthetic fixture:
+To re-import only the calendar, run the same three commands with `calendar`
+alone in the middle one — the mail parser still starts, because the calendar
+step depends on it having completed, but it finds the database up to date and
+exits immediately. Don't combine that with `FORCE_REPARSE=1`, which re-parses
+the whole mbox as well.
+
+These are plain `docker compose` commands, so they work as written in Git Bash,
+PowerShell and a Linux or macOS shell alike.
+
+Want to see it work in a few seconds first? Point the stack at the synthetic
+fixture:
 
 ```bash
 mkdir -p data/demo/Email && cp gmail-mbox-parser/tests/fixtures/sample.mbox data/demo/Email/
+export USER_EMAIL=you@example.com MBOX_FILE=sample.mbox DATA_DIR=./data/demo
+docker compose --profile parse up --abort-on-container-failure parser calendar
+docker compose up -d webapp
 ```
 
-```bash
-USER_EMAIL=you@example.com MBOX_FILE=sample.mbox DATA_DIR=./data/demo ./docker/pipeline.sh
-```
-
-Both of those are Git Bash lines too, for the same reason as the script itself.
 The PowerShell equivalent — the `VAR=value cmd` prefix has no PowerShell form,
-so the settings go in the environment first:
+so the settings go into the environment first:
 
 ```powershell
 New-Item -ItemType Directory -Force data/demo/Email
@@ -264,9 +283,9 @@ docker compose stop webapp      # stop
 docker compose logs -f webapp   # follow the logs
 ```
 
-Re-run `./docker/pipeline.sh` after a fresh Takeout export. If nothing changed
-it says so and skips the slow part; `FORCE_REPARSE=1 ./docker/pipeline.sh`
-re-parses anyway.
+Run the three commands again after a fresh Takeout export. If nothing changed
+the parser says so and skips the slow part; `FORCE_REPARSE=1` in the
+environment re-parses anyway.
 
 After a `git pull` or an edit to the parser or webapp sources, rebuild the
 images — `docker compose up` reuses whatever image is already there and will
@@ -284,8 +303,8 @@ exclude a contact it writes that in-memory copy back over the file. A webapp
 that started *before* a parse will therefore overwrite the freshly parsed
 database with its stale copy — silently, at the moment you next click something.
 
-`./docker/pipeline.sh` handles this: it stops the webapp first and starts it
-again afterwards. Run the parser by hand while the webapp is up and it refuses:
+That is why `docker compose stop webapp` comes first. Run the parser by hand
+while the webapp is up and it refuses:
 
 ```
 ERROR: the webapp container is running and would overwrite this parse.
@@ -295,30 +314,6 @@ Stop it first:  docker compose stop webapp
 For the same reason, a webapp already running when you re-parse keeps serving
 the old graph until `docker compose restart webapp` — the database is read once,
 at startup.
-
-### Running the steps by hand
-
-`./docker/pipeline.sh` is exactly these three commands:
-
-```bash
-docker compose stop webapp
-```
-
-```bash
-docker compose --profile parse up --abort-on-container-failure parser calendar
-```
-
-```bash
-docker compose up -d webapp
-```
-
-Naming `parser calendar` explicitly is deliberate: `docker compose --profile
-parse up` without service names would also start the webapp, which is the
-situation the rule above warns about. To re-import only the calendar, run the
-same three commands with `calendar` alone in the middle one — the mail parser
-still starts, because the calendar step depends on it having completed, but it
-finds the database up to date and exits immediately. Don't combine that with
-`FORCE_REPARSE=1`, which re-parses the whole mbox as well.
 
 ### Why only one mbox at a time
 
