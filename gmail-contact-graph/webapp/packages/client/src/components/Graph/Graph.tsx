@@ -78,6 +78,7 @@ export function Graph() {
     messageGroups: state.messageGroups,
     eventGroups: state.eventGroups,
     selectedNode: state.selectedNode,
+    isolatedGroupId: state.isolatedGroupId,
     limit: state.filters.limit,
     onNodeClick: handleNodeClick,
     onGroupHover: handleGroupHover,

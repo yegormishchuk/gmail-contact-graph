@@ -4,11 +4,11 @@ import type { GraphData, GraphNode, DomainGroups, MessageGroups, EventGroups } f
 import { graphConfig } from '../utils/graphConfig';
 import { getNodeRadius } from '../utils/filterData';
 import type { GroupHoverData } from '../utils/groupTypes';
+import { getSelectedGroups, MIN_GROUP_SIZE, type FilterType } from '../utils/selectedGroups';
 export type { GroupHoverData };
 
-const MIN_MSG_GROUP_SIZE = 3;
+const MIN_MSG_GROUP_SIZE = MIN_GROUP_SIZE;
 const ROPE_MAX_SIZE = 8;
-const MAX_EVENT_GROUPS = 8;
 
 interface RopeLink {
   source: GraphNode;
@@ -22,7 +22,9 @@ interface UseD3SimulationOptions {
   messageGroups: MessageGroups | null;
   eventGroups: EventGroups | null;
   selectedNode: GraphNode | null;
-  filterType: 'overall' | 'gmail' | 'calendar' | 'messageGroups' | 'organizations' | 'eventGroups';
+  /** When set, only this group's connections are drawn (see utils/selectedGroups). */
+  isolatedGroupId: string | null;
+  filterType: FilterType;
   limit: number;
   onNodeClick: (node: GraphNode, position: { x: number; y: number }) => void;
   onGroupHover?: (data: GroupHoverData | null, position?: { x: number; y: number }) => void;
@@ -817,118 +819,66 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
     const selectedEmail = options.selectedNode.email.toLowerCase();
 
-    // Calendar view: instead of drawing a web of ropes, colour each co-attendee's
-    // circle border by the event group it belongs to — like the Gmail org-border
-    // highlight (e.g. nd.edu in yellow), but with a distinct colour per event group.
-    // A shared attendee takes the first (largest) group's colour, so colours never
-    // blend into gray.
-    if (options.filterType === 'calendar') {
-      const selectedEventGroups = Object.entries(options.eventGroups?.groups ?? {})
-        .filter(([_, emails]) =>
-          emails.map(e => e.toLowerCase()).includes(selectedEmail) &&
-          emails.length >= MIN_MSG_GROUP_SIZE
-        )
-        .sort(([, a], [, b]) => b.length - a.length)
-        .slice(0, MAX_EVENT_GROUPS);
+    // The panel and the graph read the same list, so a row the user clicks maps
+    // to exactly the connection drawn for it.
+    const allGroups = getSelectedGroups({
+      email: selectedEmail,
+      domains: options.domains,
+      messageGroups: options.messageGroups,
+      eventGroups: options.eventGroups,
+      filterType: options.filterType,
+    });
 
-      const allVisibleMemberEmails = new Set<string>();
-      const borderColors = new Map<string, string[]>();
-
-      selectedEventGroups.forEach(([_, emails], groupIdx) => {
-        const groupColor = graphConfig.groupColors[groupIdx % graphConfig.groupColors.length];
-        emails
-          .map(e => e.toLowerCase())
-          .filter(e => nodeMap.has(e))
-          .forEach(e => {
-            allVisibleMemberEmails.add(e);
-            if (!borderColors.has(e)) borderColors.set(e, [groupColor]); // first group wins — single colour, no blend
-          });
-      });
-
-      highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, borderColors, selectedEmail);
-      return;
-    }
-
-    const emailDomain = selectedEmail.split('@')[1];
-    const domainUsers = options.domains?.domain_groups?.[emailDomain] ?? [];
-
-    // Message groups: only those containing selected node with >= MIN_MSG_GROUP_SIZE members
-    const selectedMsgGroups = Object.entries(options.messageGroups?.groups ?? {})
-      .filter(([_, emails]) =>
-        emails.map(e => e.toLowerCase()).includes(selectedEmail) &&
-        emails.length >= MIN_MSG_GROUP_SIZE
-      )
-      .sort(([, a], [, b]) => b.length - a.length);
+    // Isolating narrows the list to one group; colours are already baked in, so
+    // the survivor keeps the colour it had among all of them.
+    const isolated = options.isolatedGroupId
+      ? allGroups.find(g => g.id === options.isolatedGroupId)
+      : undefined;
+    const groups = isolated ? [isolated] : allGroups;
 
     // Track visible group members for dimming logic
     const allVisibleMemberEmails = new Set<string>();
     // Large group border colors: email → array of colors to apply
     const largeBorderColors = new Map<string, string[]>();
 
-    // --- Domain group ---
-    if (domainUsers.length >= 2) {
-      const memberEmails = domainUsers.map(u => u.email.toLowerCase());
-      memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
-
-      if (domainUsers.length <= ROPE_MAX_SIZE) {
-        drawRope(domainLinksGroupRef.current, memberEmails, nodeMap, graphConfig.domainColor, `@${emailDomain}`);
-      } else {
-        memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
-          const prev = largeBorderColors.get(email) ?? [];
-          largeBorderColors.set(email, [...prev, graphConfig.domainColor]);
+    // Calendar view: instead of drawing a web of ropes, colour each co-attendee's
+    // circle border by the event group it belongs to — like the Gmail org-border
+    // highlight (e.g. nd.edu in yellow), but with a distinct colour per event group.
+    // A shared attendee takes the first (largest) group's colour, so colours never
+    // blend into gray.
+    if (options.filterType === 'calendar') {
+      groups.forEach(group => {
+        group.memberEmails.filter(e => nodeMap.has(e)).forEach(e => {
+          allVisibleMemberEmails.add(e);
+          if (!largeBorderColors.has(e)) largeBorderColors.set(e, [group.color]); // first group wins — single colour, no blend
         });
-      }
+      });
+
+      highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail);
+      return;
     }
 
-    // --- Message groups ---
-    selectedMsgGroups.forEach(([subject, emails], groupIdx) => {
-      const memberEmails = emails.map(e => e.toLowerCase());
+    groups.forEach(group => {
+      const { memberEmails, color, label, kind } = group;
       memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
 
-      const groupColor = graphConfig.groupColors[groupIdx % graphConfig.groupColors.length];
+      // Org ropes live in their own layer so they sit under the group ropes.
+      const layer = kind === 'domain' ? domainLinksGroupRef.current! : groupLinksGroupRef.current!;
 
       if (memberEmails.length <= ROPE_MAX_SIZE) {
-        drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, groupColor, subject);
+        drawRope(layer, memberEmails, nodeMap, color, label);
       } else {
+        // Too many members to rope without a hairball — mark them by border instead.
         memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
           const prev = largeBorderColors.get(email) ?? [];
-          largeBorderColors.set(email, [...prev, groupColor]);
+          largeBorderColors.set(email, [...prev, color]);
         });
       }
     });
 
-    // --- Event groups (overall mode shows both gmail message ropes and calendar event ropes) ---
-    if (options.filterType === 'overall') {
-      const selectedEventGroups = Object.entries(options.eventGroups?.groups ?? {})
-        .filter(([_, emails]) =>
-          emails.map(e => e.toLowerCase()).includes(selectedEmail) &&
-          emails.length >= MIN_MSG_GROUP_SIZE
-        )
-        .sort(([, a], [, b]) => b.length - a.length)
-        .slice(0, MAX_EVENT_GROUPS);
-
-      selectedEventGroups.forEach(([label, emails], eventIdx) => {
-        const memberEmails = emails.map(e => e.toLowerCase());
-        memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
-
-        // Offset palette so event-group colors differ from message-group colors
-        const colorIdx = (eventIdx + selectedMsgGroups.length) % graphConfig.groupColors.length;
-        const groupColor = graphConfig.groupColors[colorIdx];
-
-        if (memberEmails.length <= ROPE_MAX_SIZE) {
-          drawRope(groupLinksGroupRef.current!, memberEmails, nodeMap, groupColor, label);
-        } else {
-          memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
-            const prev = largeBorderColors.get(email) ?? [];
-            largeBorderColors.set(email, [...prev, groupColor]);
-          });
-        }
-      });
-    }
-
     highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail);
 
-  }, [options.selectedNode, options.data, options.domains, options.messageGroups, options.eventGroups, options.filterType]);
+  }, [options.selectedNode, options.isolatedGroupId, options.data, options.domains, options.messageGroups, options.eventGroups, options.filterType]);
 
   const focusGroup = useCallback((
     label: string,
