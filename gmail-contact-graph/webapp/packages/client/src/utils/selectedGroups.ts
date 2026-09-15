@@ -7,6 +7,8 @@ export const MIN_GROUP_SIZE = 3;
 export const MIN_DOMAIN_SIZE = 2;
 /** Event groups are capped so a contact with a busy calendar stays readable. */
 export const MAX_EVENT_GROUPS = 8;
+/** Above this many on-graph members a rope turns into a hairball, so borders mark the group instead. */
+export const ROPE_MAX_SIZE = 8;
 
 export type FilterType =
   | 'overall'
@@ -51,6 +53,17 @@ const palette = (i: number) => graphConfig.groupColors[i % graphConfig.groupColo
  */
 export function shouldDimNonMembers(visibleMemberCount: number, isolated: boolean): boolean {
   return isolated || visibleMemberCount > 1;
+}
+
+/**
+ * Whether a group is drawn as a rope rather than coloured borders.
+ *
+ * `visibleMemberCount` counts only members actually on the graph, the selected
+ * contact included — a big group with few contacts on screen is still readable
+ * as a rope, and members that aren't drawn can't tangle it.
+ */
+export function shouldDrawRope(visibleMemberCount: number): boolean {
+  return visibleMemberCount <= ROPE_MAX_SIZE;
 }
 
 /**

@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import { getSelectedGroups, supportsIsolation, shouldDimNonMembers, type SelectedGroup } from './selectedGroups.js';
+import {
+  getSelectedGroups,
+  supportsIsolation,
+  shouldDimNonMembers,
+  shouldDrawRope,
+  ROPE_MAX_SIZE,
+  type SelectedGroup,
+} from './selectedGroups.js';
 import { graphConfig } from './graphConfig.js';
 import type { DomainGroups, MessageGroups, EventGroups } from '@gmail-graph/shared';
 
@@ -246,6 +253,14 @@ const ids = (gs: SelectedGroup[]) => gs.map(g => g.id);
   assert.equal(shouldDimNonMembers(1, true), true);
   assert.equal(shouldDimNonMembers(0, true), true);
   assert.equal(shouldDimNonMembers(5, true), true);
+}
+
+// 15. The rope-vs-border choice counts members on the graph, not the group's
+//     full size — a 30-person thread with 3 contacts on screen still gets a rope.
+{
+  assert.equal(shouldDrawRope(ROPE_MAX_SIZE), true);
+  assert.equal(shouldDrawRope(ROPE_MAX_SIZE + 1), false);
+  assert.equal(shouldDrawRope(3), true);
 }
 
 console.log('selectedGroups: all assertions passed');

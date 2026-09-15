@@ -4,11 +4,10 @@ import type { GraphData, GraphNode, DomainGroups, MessageGroups, EventGroups } f
 import { graphConfig } from '../utils/graphConfig';
 import { getNodeRadius } from '../utils/filterData';
 import type { GroupHoverData } from '../utils/groupTypes';
-import { getSelectedGroups, shouldDimNonMembers, MIN_GROUP_SIZE, type FilterType } from '../utils/selectedGroups';
+import { getSelectedGroups, shouldDimNonMembers, shouldDrawRope, MIN_GROUP_SIZE, type FilterType } from '../utils/selectedGroups';
 export type { GroupHoverData };
 
 const MIN_MSG_GROUP_SIZE = MIN_GROUP_SIZE;
-const ROPE_MAX_SIZE = 8;
 
 interface RopeLink {
   source: GraphNode;
@@ -860,16 +859,17 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
     groups.forEach(group => {
       const { memberEmails, color, label, kind } = group;
-      memberEmails.filter(e => nodeMap.has(e)).forEach(e => allVisibleMemberEmails.add(e));
+      const visibleMembers = memberEmails.filter(e => nodeMap.has(e));
+      visibleMembers.forEach(e => allVisibleMemberEmails.add(e));
 
       // Org ropes live in their own layer so they sit under the group ropes.
       const layer = kind === 'domain' ? domainLinksGroupRef.current! : groupLinksGroupRef.current!;
 
-      if (memberEmails.length <= ROPE_MAX_SIZE) {
-        drawRope(layer, memberEmails, nodeMap, color, label);
+      if (shouldDrawRope(visibleMembers.length)) {
+        drawRope(layer, visibleMembers, nodeMap, color, label);
       } else {
-        // Too many members to rope without a hairball — mark them by border instead.
-        memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
+        // Too many members on screen to rope without a hairball — mark them by border instead.
+        visibleMembers.forEach(email => {
           const prev = largeBorderColors.get(email) ?? [];
           largeBorderColors.set(email, [...prev, color]);
         });
