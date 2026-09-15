@@ -141,7 +141,7 @@ export function Tooltip() {
         key={group.id}
         type="button"
         className={`group-row${active ? ' group-row-active' : ''}`}
-        style={{ color: group.color, borderLeftColor: group.color, opacity: muted ? 0.45 : 1 }}
+        style={{ color: group.color, opacity: muted ? 0.45 : 1 }}
         aria-pressed={active}
         title={active ? 'Show all connections again' : `Show only ${group.label}`}
         onClick={() => handleIsolate(group.id)}
@@ -190,9 +190,9 @@ export function Tooltip() {
       {contactGroups.length > 0 && (
         <div className="tooltip-groups visible">
           {visibleGroups.map(group => groupRow(group, `"${group.label}" (${group.count} recipients)`))}
-          {contactGroups.length > 2 && (
+          {(showAllGroups ? contactGroups.length > 2 : visibleGroups.length < contactGroups.length) && (
             <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
-              {showAllGroups ? 'Show less' : `+${contactGroups.length - 2} more groups`}
+              {showAllGroups ? 'Show less' : `+${contactGroups.length - visibleGroups.length} more groups`}
             </button>
           )}
         </div>
@@ -201,9 +201,9 @@ export function Tooltip() {
       {eventContactGroups.length > 0 && (
         <div className="tooltip-groups visible">
           {visibleEventGroups.map(group => groupRow(group, `"${group.label}" (${group.count} attendees)`))}
-          {eventContactGroups.length > 2 && (
+          {(showAllGroups ? eventContactGroups.length > 2 : visibleEventGroups.length < eventContactGroups.length) && (
             <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
-              {showAllGroups ? 'Show less' : `+${eventContactGroups.length - 2} more events`}
+              {showAllGroups ? 'Show less' : `+${eventContactGroups.length - visibleEventGroups.length} more events`}
             </button>
           )}
         </div>
