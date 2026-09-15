@@ -4,7 +4,7 @@ import type { GraphData, GraphNode, DomainGroups, MessageGroups, EventGroups } f
 import { graphConfig } from '../utils/graphConfig';
 import { getNodeRadius } from '../utils/filterData';
 import type { GroupHoverData } from '../utils/groupTypes';
-import { getSelectedGroups, MIN_GROUP_SIZE, type FilterType } from '../utils/selectedGroups';
+import { getSelectedGroups, shouldDimNonMembers, MIN_GROUP_SIZE, type FilterType } from '../utils/selectedGroups';
 export type { GroupHoverData };
 
 const MIN_MSG_GROUP_SIZE = MIN_GROUP_SIZE;
@@ -854,7 +854,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         });
       });
 
-      highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail);
+      highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail, Boolean(isolated));
       return;
     }
 
@@ -876,7 +876,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       }
     });
 
-    highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail);
+    highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail, Boolean(isolated));
 
   }, [options.selectedNode, options.isolatedGroupId, options.data, options.domains, options.messageGroups, options.eventGroups, options.filterType]);
 
@@ -973,6 +973,7 @@ function highlightGroupMembers(
   allVisibleMemberEmails: Set<string>,
   largeBorderColors: Map<string, string[]>,
   selectedEmail: string,
+  isolated: boolean,
 ) {
   // Colored borders for members of large (rope-skipped) groups
   if (largeBorderColors.size > 0) {
@@ -991,7 +992,7 @@ function highlightGroupMembers(
   }
 
   // Fade out non-members
-  if (allVisibleMemberEmails.size > 1) {
+  if (shouldDimNonMembers(allVisibleMemberEmails.size, isolated)) {
     nodesGroup.selectAll<SVGGElement, GraphNode>('g.node-contact').each(function (d) {
       const email = d.email.toLowerCase();
       if (!allVisibleMemberEmails.has(email) && email !== selectedEmail) {

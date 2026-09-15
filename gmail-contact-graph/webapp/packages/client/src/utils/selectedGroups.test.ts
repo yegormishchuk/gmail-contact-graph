@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { getSelectedGroups, supportsIsolation, type SelectedGroup } from './selectedGroups.js';
+import { getSelectedGroups, supportsIsolation, shouldDimNonMembers, type SelectedGroup } from './selectedGroups.js';
 import { graphConfig } from './graphConfig.js';
 import type { DomainGroups, MessageGroups, EventGroups } from '@gmail-graph/shared';
 
@@ -229,6 +229,23 @@ const ids = (gs: SelectedGroup[]) => gs.map(g => g.id);
   });
   assert.deepEqual(ids(r), ['msg:Sync', 'evt:Sync']);
   assert.equal(new Set(ids(r)).size, 2);
+}
+
+// 13. Without isolation, a contact whose group-mates are all off-graph (only the
+//     contact themself is visible) leaves the graph undimmed — nothing to focus on.
+{
+  assert.equal(shouldDimNonMembers(1, false), false);
+  assert.equal(shouldDimNonMembers(0, false), false);
+  assert.equal(shouldDimNonMembers(2, false), true);
+}
+
+// 14. With isolation, everyone outside the group dims even when no other member
+//     made it onto the graph — the user asked to see only that group, and
+//     leaving the graph bright made the click look like it did nothing.
+{
+  assert.equal(shouldDimNonMembers(1, true), true);
+  assert.equal(shouldDimNonMembers(0, true), true);
+  assert.equal(shouldDimNonMembers(5, true), true);
 }
 
 console.log('selectedGroups: all assertions passed');

@@ -41,6 +41,19 @@ interface Params {
 const palette = (i: number) => graphConfig.groupColors[i % graphConfig.groupColors.length];
 
 /**
+ * Whether contacts outside the highlighted groups should fade.
+ *
+ * `visibleMemberCount` counts group members actually on the graph, the selected
+ * contact included. Normally a lone contact with no visible group-mates leaves
+ * the graph bright — there's nothing to focus on. Isolating is an explicit ask
+ * to see only one group, though, so it always dims, even when every other
+ * member is off-graph.
+ */
+export function shouldDimNonMembers(visibleMemberCount: number, isolated: boolean): boolean {
+  return isolated || visibleMemberCount > 1;
+}
+
+/**
  * Whether a mode draws per-contact connections that isolating can narrow. The
  * cluster modes draw groups as their own circles instead of ropes off a
  * selected contact, so their rows are listed but not clickable.
