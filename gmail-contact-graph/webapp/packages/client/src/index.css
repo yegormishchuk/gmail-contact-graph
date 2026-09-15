@@ -733,6 +733,30 @@ input[type="range"]::-moz-range-thumb {
     color: #888;
 }
 
+.empty-state {
+    width: min(560px, calc(100% - 32px));
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.empty-state p,
+.empty-state ul {
+    margin: 0 0 10px;
+}
+
+.empty-state ul {
+    padding-left: 20px;
+}
+
+.empty-state .empty-state-title {
+    font-size: 1.3rem;
+    color: #ddd;
+}
+
+.empty-state code {
+    color: #00d68f;
+}
+
 /* Ranking panel */
 .ranking-panel {
     position: absolute;

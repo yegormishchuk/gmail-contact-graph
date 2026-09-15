@@ -30,6 +30,26 @@ function AppContent() {
     );
   }
 
+  if (state.rawData?.stats.totalContacts === 0) {
+    return (
+      <div className="container">
+        <div className="loading empty-state">
+          <p className="empty-state-title">No contacts to show</p>
+          <p>
+            Your data has zero good contacts: no one in the mailbox passed the
+            filters as someone you actually exchange emails with.
+          </p>
+          <p>Please check that:</p>
+          <ul>
+            <li>the <code>.mbox</code> file in <code>data/Email/</code> is the right Gmail export</li>
+            <li><code>USER_EMAIL</code> in <code>.env</code> is the Gmail address that mailbox belongs to</li>
+          </ul>
+          <p>Then re-run <code>make process-all</code> and restart the webapp.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <Header />

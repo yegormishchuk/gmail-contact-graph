@@ -17,6 +17,17 @@ export async function initDatabase(): Promise<SqlJsDatabase> {
     throw new Error(`Database file not found: ${config.CONTACTS_DB_FILE}`);
   }
 
+  // fill_db only creates contacts_filtered when at least one contact survives
+  // the spam filter. With zero contacts (wrong mbox or USER_EMAIL) the table is
+  // missing and every query joining it would fail, so start from an empty one.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS contacts_filtered (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      contact_id INTEGER NOT NULL UNIQUE REFERENCES contacts(id),
+      not_clear  INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
   return db;
 }
 
