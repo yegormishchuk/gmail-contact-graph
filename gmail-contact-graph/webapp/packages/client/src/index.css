@@ -253,13 +253,49 @@ h1 {
     to   { opacity: 1; transform: translateY(0); }
 }
 
-.tooltip-groups.visible > div {
+.tooltip-groups.visible > .group-row,
+.tooltip-groups.visible > .group-row-static {
     animation: group-row-in 0.22s ease-out both;
 }
 
-.tooltip-groups.visible > div:nth-child(1) { animation-delay: 0ms; }
-.tooltip-groups.visible > div:nth-child(2) { animation-delay: 40ms; }
-.tooltip-groups.visible > div:nth-child(n+3) { animation-delay: 80ms; }
+.tooltip-groups.visible > :nth-child(1) { animation-delay: 0ms; }
+.tooltip-groups.visible > :nth-child(2) { animation-delay: 40ms; }
+.tooltip-groups.visible > :nth-child(n+3) { animation-delay: 80ms; }
+
+/* A group row is a toggle: click to show only this group's connections in the
+   graph, click again to bring every connection back. */
+.group-row {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    border-left: 2px solid transparent;
+    border-radius: 4px;
+    padding: 3px 6px 3px 7px;
+    margin: 0 0 1px -7px;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.15s, opacity 0.15s, border-left-color 0.15s;
+}
+
+.group-row:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-left-color: currentColor;
+}
+
+.group-row:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 1px;
+}
+
+.group-row-active {
+    background: rgba(255, 255, 255, 0.1);
+    border-left-color: currentColor;
+    font-weight: 600;
+}
 
 .show-more-btn {
     display: block;

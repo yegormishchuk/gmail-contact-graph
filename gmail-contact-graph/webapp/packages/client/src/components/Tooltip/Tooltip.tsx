@@ -2,6 +2,7 @@ import React, { useRef, useLayoutEffect, useState, useCallback, useEffect } from
 import { useAppContext } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
+import { getSelectedGroups, supportsIsolation, type SelectedGroup } from '../../utils/selectedGroups';
 
 function formatDurationSec(seconds: number | null | undefined): string {
   if (!seconds || seconds <= 0) return '—';
@@ -16,7 +17,7 @@ const OFFSET = 14;
 
 export function Tooltip() {
   const { state, dispatch } = useAppContext();
-  const { selectedNode, selectedNodePosition, domains, messageGroups, eventGroups } = state;
+  const { selectedNode, selectedNodePosition, domains, messageGroups, eventGroups, isolatedGroupId } = state;
   const isCalendarMode = state.filters.filterType === 'calendar' || state.filters.filterType === 'eventGroups';
   const isOverallMode = state.filters.filterType === 'overall';
   const calendarInfo = (isCalendarMode || isOverallMode) && selectedNode
@@ -87,39 +88,67 @@ export function Tooltip() {
   const sentPercent = total > 0 ? Math.round((selectedNode.sent / total) * 100) : 0;
   const receivedPercent = total > 0 ? Math.round((selectedNode.received / total) * 100) : 0;
 
-  // Find domain info
-  const emailDomain = selectedNode.email.split('@')[1]?.toLowerCase();
-  const domainUsers = domains?.domain_groups?.[emailDomain];
-  const hasDomain = domainUsers && domainUsers.length >= 2;
+  // The graph reads this same list, so clicking a row isolates exactly the
+  // connection drawn for it — including its colour.
+  const allGroups = getSelectedGroups({
+    email: selectedNode.email,
+    domains,
+    messageGroups,
+    eventGroups,
+    filterType: state.filters.filterType,
+  });
 
-  // Find message groups (min 3 members), sorted by member count desc
-  const contactGroups = messageGroups?.groups
-    ? Object.entries(messageGroups.groups)
-        .filter(([_, emails]) =>
-          emails.map(e => e.toLowerCase()).includes(selectedNode.email.toLowerCase()) &&
-          emails.length >= 3
-        )
-        .map(([subject, emails]) => ({ subject, count: emails.length }))
-        .sort((a, b) => b.count - a.count)
-    : [];
+  const canIsolate = supportsIsolation(state.filters.filterType);
+  const domainGroup = allGroups.find(g => g.kind === 'domain') ?? null;
+  const contactGroups = allGroups.filter(g => g.kind === 'message');
+  const eventContactGroups = allGroups.filter(g => g.kind === 'event');
 
-  const visibleGroups = showAllGroups ? contactGroups : contactGroups.slice(0, 2);
+  // Collapsed lists show the two largest groups — plus the isolated one, so
+  // collapsing the list can never hide the row that turns isolation back off.
+  const collapse = (groups: SelectedGroup[]) => {
+    if (showAllGroups) return groups;
+    const head = groups.slice(0, 2);
+    const active = groups.find(g => g.id === isolatedGroupId);
+    return active && !head.includes(active) ? [...head, active] : head;
+  };
 
-  // Find event groups the attendee belongs to (calendar-data and overall modes), sorted by attendee count desc.
-  const eventContactGroups = (isCalendarMode || isOverallMode) && eventGroups?.groups
-    ? Object.entries(eventGroups.groups)
-        .filter(([_, emails]) =>
-          emails.map(e => e.toLowerCase()).includes(selectedNode.email.toLowerCase()) &&
-          emails.length >= 3
-        )
-        .map(([label, emails]) => ({ label, count: emails.length }))
-        .sort((a, b) => b.count - a.count)
-    : [];
-
-  const visibleEventGroups = showAllGroups ? eventContactGroups : eventContactGroups.slice(0, 2);
+  const visibleGroups = collapse(contactGroups);
+  const visibleEventGroups = collapse(eventContactGroups);
 
   const handleClose = () => {
     dispatch({ type: 'SELECT_NODE', payload: null });
+  };
+
+  const handleIsolate = (id: string) => {
+    dispatch({ type: 'ISOLATE_GROUP', payload: id });
+  };
+
+  // One row in the groups list: click to show only this group's connections,
+  // click again to bring the rest back. Cluster modes draw no such connections,
+  // so there the row stays a plain label.
+  const groupRow = (group: SelectedGroup, text: string) => {
+    if (!canIsolate) {
+      return (
+        <div key={group.id} className="group-row-static" style={{ color: group.color }}>
+          {text}
+        </div>
+      );
+    }
+    const active = isolatedGroupId === group.id;
+    const muted = isolatedGroupId !== null && !active;
+    return (
+      <button
+        key={group.id}
+        type="button"
+        className={`group-row${active ? ' group-row-active' : ''}`}
+        style={{ color: group.color, opacity: muted ? 0.45 : 1 }}
+        aria-pressed={active}
+        title={active ? 'Show all connections again' : `Show only ${group.label}`}
+        onClick={() => handleIsolate(group.id)}
+      >
+        {text}
+      </button>
+    );
   };
 
   const handleMarkHuman = async () => {
@@ -152,41 +181,29 @@ export function Tooltip() {
       <div className="tooltip-name">{selectedNode.name}</div>
       <div className="tooltip-email">{selectedNode.email}</div>
 
-      {!isCalendarMode && hasDomain && (
+      {domainGroup && (
         <div className="tooltip-org visible">
-          @{emailDomain} ({domainUsers.length} contacts)
+          {groupRow(domainGroup, `${domainGroup.label} (${domainGroup.count} contacts)`)}
         </div>
       )}
 
-      {!isCalendarMode && contactGroups.length > 0 && (
+      {contactGroups.length > 0 && (
         <div className="tooltip-groups visible">
-          {visibleGroups.map(({ subject, count }, i) => (
-            <div key={subject} style={{ color: graphConfig.groupColors[i % graphConfig.groupColors.length] }}>
-              "{subject}" ({count} recipients)
-            </div>
-          ))}
-          {contactGroups.length > 2 && (
+          {visibleGroups.map(group => groupRow(group, `"${group.label}" (${group.count} recipients)`))}
+          {(showAllGroups ? contactGroups.length > 2 : visibleGroups.length < contactGroups.length) && (
             <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
-              {showAllGroups ? 'Show less' : `+${contactGroups.length - 2} more groups`}
+              {showAllGroups ? 'Show less' : `+${contactGroups.length - visibleGroups.length} more groups`}
             </button>
           )}
         </div>
       )}
 
-      {(isCalendarMode || isOverallMode) && eventContactGroups.length > 0 && (
+      {eventContactGroups.length > 0 && (
         <div className="tooltip-groups visible">
-          {visibleEventGroups.map(({ label, count }, i) => {
-            // In overall mode, offset palette so event-group colors differ from message-group colors
-            const colorIdx = isOverallMode ? (i + contactGroups.length) : i;
-            return (
-              <div key={label} style={{ color: graphConfig.groupColors[colorIdx % graphConfig.groupColors.length] }}>
-                "{label}" ({count} attendees)
-              </div>
-            );
-          })}
-          {eventContactGroups.length > 2 && (
+          {visibleEventGroups.map(group => groupRow(group, `"${group.label}" (${group.count} attendees)`))}
+          {(showAllGroups ? eventContactGroups.length > 2 : visibleEventGroups.length < eventContactGroups.length) && (
             <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
-              {showAllGroups ? 'Show less' : `+${eventContactGroups.length - 2} more events`}
+              {showAllGroups ? 'Show less' : `+${eventContactGroups.length - visibleEventGroups.length} more events`}
             </button>
           )}
         </div>
