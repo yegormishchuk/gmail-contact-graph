@@ -9,6 +9,49 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-15
+
+Selecting a contact now lets you narrow the graph to one of their groups, and
+a mailbox that yields no contacts gets an explanation instead of a server
+error.
+
+### Added
+
+- The org, message-group and event rows in the contact panel are toggles:
+  clicking one hides every other group's ropes and member borders, leaving only
+  that group on the graph; clicking it again brings them all back. The survivor
+  keeps its colour and draws exactly as before, non-members are dimmed, and the
+  camera does not move. Calendar mode's border colouring isolates the same way.
+  The isolation clears on selecting another contact, closing the panel,
+  switching view, or marking the contact as not human. The cluster views still
+  list memberships, but as plain labels, since they draw no ropes to narrow.
+- When the data holds zero contacts, the webapp explains that nobody passed the
+  filters and asks you to check the `.mbox` file in `data/Email/` and the
+  `USER_EMAIL` in `.env`, instead of showing a bare error.
+- The README shows how to run the Docker fixture stack alongside one already
+  serving real mail, under its own Compose project name and port.
+- Client unit tests for group derivation and the app reducer, run from the
+  webapp's root `npm test` alongside the server's.
+
+### Changed
+
+- Whether a group is drawn as a rope or as coloured borders now depends on how
+  many of its members are on the graph, not its full membership. A large
+  thread or event with only a few contacts on screen now gets a rope.
+- The contact panel no longer lists event groups past the eight-group cap,
+  which had no rope on screen.
+- The three npm packages and three Rust crates now declare 0.2.2, tracking the
+  release tag.
+
+### Fixed
+
+- The API no longer answers 500 on every request when `fill_db` kept no
+  contacts. `fill_db` only creates `contacts_filtered` when at least one contact
+  passes the spam filter, so a wrong mbox or `USER_EMAIL` left the table
+  missing; the server now creates it empty on startup.
+- The Compose services join Docker's default bridge network, fixing a network
+  error when their containers were re-created.
+
 ## [0.2.1] - 2026-09-01
 
 A documentation release: the Docker chapter now teaches one route instead of
@@ -152,7 +195,8 @@ Takeout export to an interactive graph in the browser.
   Everything else in the pipeline is deterministic.
 - Requires Rust 1.87+ and Node.js 20.19+ (or 22+).
 
-[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.2
 [0.2.1]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.1
 [0.2.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.0
 [0.1.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.1.0
