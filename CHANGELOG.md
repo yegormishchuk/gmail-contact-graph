@@ -17,13 +17,15 @@ HTTP API may change in a minor release.
   mbox, and a final `done` with counts. Without the variable the output is
   unchanged.
 - The server starts without `contacts.db` instead of exiting. `/api/health`
-  answers as usual; the data endpoints answer `409 {"state":"empty"}` until
-  there is a database. At start it also removes leftovers of an interrupted
-  import (`contacts.db.new*`, `contacts.db.swap`) and restores
-  `contacts.db.prev` if `contacts.db` is missing.
+  answers as usual; every data endpoint, including the contact edits and
+  `/api/message-groups` (which used to answer an empty result), answers
+  `409 {"state":"empty"}` until there is a database. At start it also removes
+  leftovers of an interrupted import (`contacts.db.new*`, `contacts.db.swap`)
+  and restores `contacts.db.prev` if `contacts.db` is missing.
 - A `meta` table in `contacts.db` records the mailbox owner's email. When it
-  is present the graph centre uses it; databases without it fall back to
-  `USER_EMAIL` as before.
+  is present it identifies the owner everywhere: the centre of the email and
+  calendar graphs, message groups, event groups, and the default display
+  name. Databases without it fall back to `USER_EMAIL` as before.
 - `DATA_DIR` sets the data directory for the server (default `../data`).
 
 ### Changed

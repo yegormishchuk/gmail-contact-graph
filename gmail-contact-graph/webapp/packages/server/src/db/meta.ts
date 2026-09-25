@@ -21,10 +21,18 @@ export function setMeta(db: SqlJsDatabase, key: string, value: string): void {
  * database, else USER_EMAIL from the environment (databases built by the CLI).
  */
 export function getUserEmail(): string {
-  const fromMeta = hasDatabase() ? getMeta(getDatabase(), 'user_email') : null;
-  return fromMeta || config.ENV_USER_EMAIL;
+  return metaUserEmail() || config.ENV_USER_EMAIL;
 }
 
+/** USER_NAME, else the local part of the owner's email. */
 export function getUserName(): string {
-  return config.ENV_USER_NAME || getUserEmail().split('@')[0] || 'Me';
+  const metaEmail = metaUserEmail();
+  const local = metaEmail ? metaEmail.split('@')[0] : config.ENV_USER_EMAIL_LOCAL;
+  return config.ENV_USER_NAME || local || 'Me';
+}
+
+// Lowercased like every address the parser stores, so comparisons match.
+function metaUserEmail(): string {
+  const value = hasDatabase() ? getMeta(getDatabase(), 'user_email') : null;
+  return (value ?? '').trim().toLowerCase();
 }

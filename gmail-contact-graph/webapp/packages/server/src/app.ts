@@ -26,7 +26,9 @@ export function createApp(): express.Express {
     res.json({ status: 'ok' });
   });
 
-  // Data routes: every one of them needs a database.
+  // Data routes: every one of them needs a database. requireData runs for
+  // every /api path that reaches this router, matched or not, so routes that
+  // must work without a database (health, import) are registered above it.
   const data = express.Router();
   data.use(requireData);
   data.use(graphRouter);

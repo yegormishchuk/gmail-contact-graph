@@ -82,11 +82,11 @@ export function swapDatabase(next: SqlJsDatabase): void {
   const prevFile = file + '.prev';
 
   ensureSchema(next);
-  // Not closeDatabase(): it saves, and the old data would overwrite the file.
-  writeFileSync(tmp, Buffer.from(next.export()));
 
   const hadFile = existsSync(file);
   try {
+    // Not closeDatabase(): it saves, and the old data would overwrite the file.
+    writeFileSync(tmp, Buffer.from(next.export()));
     if (hadFile) renameWithRetry(file, prevFile);
     renameWithRetry(tmp, file);
   } catch (err) {

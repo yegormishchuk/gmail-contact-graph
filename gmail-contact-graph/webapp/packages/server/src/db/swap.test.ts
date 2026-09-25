@@ -75,7 +75,7 @@ try {
     assert.equal(hasDatabase(), false);
     assert.throws(() => getDatabase(), /not initialized|no database/i);
     assert.equal(getUserEmail(), 'env@example.com', 'env email is lowercased');
-    assert.equal(getUserName(), 'env');
+    assert.equal(getUserName(), 'Env', 'the name keeps the case USER_EMAIL is written in');
   }
 
   // 4. The first swap writes the file, ensures the schema and notifies.
@@ -103,6 +103,11 @@ try {
     assert.equal(getMeta(getDatabase(), 'missing'), null);
     assert.equal(getUserEmail(), 'meta@example.com');
     assert.equal(getUserName(), 'meta');
+
+    // The parser stores addresses lowercased, so the owner's must match.
+    setMeta(getDatabase(), 'user_email', ' Mixed@Example.COM ');
+    assert.equal(getUserEmail(), 'mixed@example.com');
+    setMeta(getDatabase(), 'user_email', 'meta@example.com');
   }
 
   // 6. A second swap keeps the previous file as .prev.
@@ -140,7 +145,18 @@ try {
     assert.equal(existsSync(dbFile + '.swap'), false);
   }
 
-  // 8. Opening an existing file ensures the schema, like the swap does.
+  // 8. Writing the new file fails (disk full): nothing is left behind.
+  {
+    const current = getDatabase();
+    const broken = new SQL.Database();
+    broken.export = () => { throw Object.assign(new Error('no space'), { code: 'ENOSPC' }); };
+    assert.throws(() => swapDatabase(broken), /no space/);
+    assert.equal(getDatabase(), current);
+    assert.equal(existsSync(dbFile + '.swap'), false);
+    assert.equal(markerOnDisk(SQL, dbFile), 'second');
+  }
+
+  // 9. Opening an existing file ensures the schema, like the swap does.
   {
     const sub = path.join(dir, 'schema');
     mkdirSync(sub);
