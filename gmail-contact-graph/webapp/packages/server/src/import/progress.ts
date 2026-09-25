@@ -33,13 +33,17 @@ export class ProgressTracker {
   private detail = '';
   private sawJson = false;
 
-  /** Reads one stderr line. Returns true if it was a progress event. */
+  /**
+   * Reads one stderr line. Returns true if it was progress output (a JSON
+   * event or a text `[progress]` line), which does not belong in the log.
+   */
   feed(line: string): boolean {
     const event = parseEvent(line);
     if (!event) {
       const legacy = line.match(/^\[progress\]\s*(.*)$/);
-      if (legacy && !this.sawJson) this.detail = legacy[1];
-      return false;
+      if (!legacy) return false;
+      if (!this.sawJson) this.detail = legacy[1];
+      return true;
     }
     this.sawJson = true;
 

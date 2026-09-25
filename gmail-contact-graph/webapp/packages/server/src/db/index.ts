@@ -116,7 +116,13 @@ export function swapDatabase(next: SqlJsDatabase): void {
  */
 export function recoverDataFiles(file: string): void {
   for (const suffix of ['.new', '.new-wal', '.new-shm', '.swap']) {
-    rmSync(file + suffix, { force: true });
+    try {
+      rmSync(file + suffix, { force: true });
+    } catch (err) {
+      // Held by a parser that outlived the previous server; it goes away
+      // once that exits, and an import refuses to start until then.
+      console.warn(`Could not delete ${file + suffix}:`, (err as Error).message);
+    }
   }
   if (!existsSync(file) && existsSync(file + '.prev')) {
     console.warn(`${file} is missing; restoring it from ${file}.prev (an interrupted import)`);

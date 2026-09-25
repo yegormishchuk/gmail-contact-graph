@@ -36,7 +36,7 @@ HTTP API may change in a minor release.
   `data/Email` and the `.ics` count in `data/Calendar`; `POST /api/import`
   runs `fill_db` (and `fill_events`) into `contacts.db.new` and, when they
   succeed, swaps the result in without a restart, carrying the manual edits
-  over; `GET /api/import/status` reports the phase and progress;
+  over when the mailbox owner's email is the same; `GET /api/import/status` reports the phase and progress;
   `POST /api/import/cancel` stops it. A failed or cancelled import leaves the
   current data untouched. The parser paths can be set with `FILL_DB_BIN` and
   `FILL_EVENTS_BIN`, the source folders with `MBOX_DIR` and `CALENDAR_DIR`.

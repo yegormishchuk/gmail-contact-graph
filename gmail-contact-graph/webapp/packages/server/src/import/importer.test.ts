@@ -41,6 +41,14 @@ writeFileSync(path.join(emailDir, 'fail.mbox'), `
   console.error('boom: not an mbox file');
   process.exit(3);
 `);
+writeFileSync(path.join(emailDir, 'ok.mbox'), `
+  require('fs').writeFileSync(process.argv[3], 'not really a database');
+`);
+// Run as fill_events: node is given CALENDAR_DIR and runs its index.js.
+writeFileSync(path.join(calendarDir, 'index.js'), `
+  console.error(JSON.stringify({ event: 'phase', phase: 'calendar' }));
+  setInterval(() => {}, 1000);
+`);
 writeFileSync(path.join(emailDir, 'hang.mbox'), `
   const db = process.argv[3];
   require('fs').writeFileSync(db, 'partial');
@@ -59,7 +67,7 @@ async function settle(): Promise<ImportStatus> {
 }
 
 async function until(check: () => boolean) {
-  for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 25));
+  for (let i = 0; i < 600 && !check(); i++) await new Promise((r) => setTimeout(r, 25));
   assert.ok(check(), 'condition not reached');
 }
 
@@ -87,8 +95,11 @@ try {
   {
     rejects(() => startImport({ mbox: '../contacts.db', email: 'me@x.com' }), 400, /No file/);
     rejects(() => startImport({ mbox: 'missing.mbox', email: 'me@x.com' }), 400, /No file/);
+    rejects(() => startImport({ email: 'me@x.com' }), 400, /mbox file name is required/);
     rejects(() => startImport({ mbox: 'fail.mbox', email: 'nobody' }), 400, /email/);
-    rejects(() => startImport(null), 400, /No file/);
+    rejects(() => startImport(null), 400, /mbox file name is required/);
+    // A calendar that cannot be imported is refused, not silently dropped.
+    rejects(() => startImport({ mbox: 'fail.mbox', email: 'me@x.com', includeCalendar: true }), 400, /No \.ics files/);
     rejects(() => cancelImport(), 409, /No import/);
 
     config.FILL_DB_BIN = path.join(dir, 'no-fill_db');
@@ -130,15 +141,45 @@ try {
     assert.deepEqual(leftovers(), []);
   }
 
+  // 4. A parser that cannot be started at all.
+  {
+    config.FILL_DB_BIN = path.join(emailDir, 'fail.mbox');
+    startImport({ mbox: 'fail.mbox', email: 'me@x.com' });
+    const done = await settle();
+    assert.equal(done.state, 'failed');
+    if (done.state === 'failed') assert.ok(done.error.length > 0);
+    assert.deepEqual(leftovers(), []);
+    config.FILL_DB_BIN = process.execPath;
+  }
+
+  // 5. Cancel while the calendar parser runs.
+  {
+    writeFileSync(path.join(calendarDir, 'cal.ics'), '');
+    config.FILL_EVENTS_BIN = path.join(dir, 'no-fill_events');
+    rejects(() => startImport({ mbox: 'ok.mbox', email: 'me@x.com', includeCalendar: true }), 400, /fill_events/);
+
+    config.FILL_EVENTS_BIN = process.execPath;
+    startImport({ mbox: 'ok.mbox', email: 'me@x.com', includeCalendar: true });
+    await until(() => (getImportStatus() as { progress?: number }).progress === 0.97);
+    cancelImport();
+    const done = await settle();
+    assert.equal(done.state, 'failed');
+    if (done.state === 'failed') assert.equal(done.error, 'cancelled');
+    assert.deepEqual(leftovers(), []);
+    assert.equal(hasDatabase(), false);
+    rmSync(path.join(calendarDir, 'cal.ics'));
+    config.FILL_EVENTS_BIN = path.join(dir, 'no-fill_events');
+  }
+
   if (!existsSync(REAL_FILL_DB)) {
     console.log(`importer.test: fill_db not built at ${REAL_FILL_DB}; skipping the real imports`);
   } else {
     config.FILL_DB_BIN = REAL_FILL_DB;
     copyFileSync(FIXTURE, path.join(emailDir, 'sample.mbox'));
 
-    // 4. A real import becomes the working database.
+    // 6. A real import becomes the working database.
     {
-      startImport({ mbox: 'sample.mbox', email: 'You@Example.com', includeCalendar: true });
+      startImport({ mbox: 'sample.mbox', email: 'You@Example.com', includeCalendar: false });
       const done = await settle();
       assert.equal(done.state, 'ready', JSON.stringify(done));
       if (done.state === 'ready') {
@@ -153,11 +194,10 @@ try {
       assert.ok(existsSync(dbFile));
       assert.equal(existsSync(dbFile + '.prev'), false, 'nothing to keep on the first import');
       assert.deepEqual(leftovers(), []);
-      // No .ics files and no fill_events: the calendar is skipped, not an error.
       assert.equal(count(`SELECT COUNT(*) FROM sqlite_master WHERE name = 'events'`), 0);
     }
 
-    // 5. A failed import leaves the working data alone.
+    // 7. A failed import leaves the working data alone.
     {
       const before = readFileSync(dbFile);
       config.FILL_DB_BIN = process.execPath;
@@ -170,7 +210,7 @@ try {
       config.FILL_DB_BIN = REAL_FILL_DB;
     }
 
-    // 6. Re-importing the same mailbox keeps a manual edit; the old file is kept.
+    // 8. Re-importing the same mailbox keeps a manual edit; the old file is kept.
     {
       markContactNotHuman('alice@example.com');
       startImport({ mbox: 'sample.mbox', email: 'you@example.com' });
@@ -180,14 +220,14 @@ try {
       assert.ok(existsSync(dbFile + '.prev'));
     }
 
-    // 7. Another mailbox owner: the edit does not carry over.
+    // 9. Another mailbox owner: the edit does not carry over.
     {
       startImport({ mbox: 'sample.mbox', email: 'someone-else@example.com' });
       assert.equal((await settle()).state, 'ready');
       assert.equal(count(`SELECT COUNT(*) FROM user_overrides`), 0);
     }
 
-    // 8. With .ics files and fill_events built, the calendar is imported too.
+    // 10. With .ics files and fill_events built, the calendar is imported too.
     if (existsSync(REAL_FILL_EVENTS)) {
       config.FILL_EVENTS_BIN = REAL_FILL_EVENTS;
       writeFileSync(path.join(calendarDir, 'cal.ics'), 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n');

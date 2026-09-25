@@ -75,6 +75,9 @@ export function startImport(body: unknown): ImportStatus {
   if (job) throw new ImportRequestError(409, 'An import is already running.');
 
   const req = (body ?? {}) as Partial<StartImportRequest>;
+  if (typeof req.mbox !== 'string' || !req.mbox) {
+    throw new ImportRequestError(400, 'An mbox file name is required.');
+  }
   const mboxPath = resolveMbox(req.mbox);
   if (!mboxPath) {
     throw new ImportRequestError(400, `No file named ${JSON.stringify(req.mbox)} in ${config.MBOX_DIR}.`);
@@ -89,15 +92,37 @@ export function startImport(body: unknown): ImportStatus {
   // Recorded as listed, so the import screen can mark this file as current.
   const source = listMbox().find((f) => f.name === path.basename(mboxPath));
   if (!source) throw new ImportRequestError(400, `${mboxPath} disappeared.`);
-  const withCalendar = req.includeCalendar === true && countIcs() > 0 && existsSync(config.FILL_EVENTS_BIN);
+  // Refused rather than skipped: the new data would silently lose the
+  // calendar the current data has.
+  const withCalendar = req.includeCalendar === true;
+  if (withCalendar && countIcs() === 0) {
+    throw new ImportRequestError(400, `No .ics files in ${config.CALENDAR_DIR}.`);
+  }
+  if (withCalendar && !existsSync(config.FILL_EVENTS_BIN)) {
+    throw new ImportRequestError(400,
+      `The calendar parser is not built (${config.FILL_EVENTS_BIN}). Run: cd calendar-parser && make build`);
+  }
 
-  removeParserOutput();
+  // A parser left running by a server that was killed can still hold the file.
+  if (!removeParserOutput()) {
+    throw new ImportRequestError(409,
+      `${newDbFile()} is still in use, probably by a parser from an earlier run. Try again once it exits.`);
+  }
   failure = null;
   const current: Job = { tracker: new ProgressTracker(), startedAt: Date.now(), log: [], child: null, cancelled: false };
   job = current;
   setImporting(true);
-  void run(current, mboxPath, email, withCalendar, source);
+  run(current, mboxPath, email, withCalendar, source).catch((err) => {
+    // run() handles its own errors; this is only a last line of defence
+    // against an unhandled rejection taking the server down.
+    console.error('Import crashed:', err);
+  });
   return getImportStatus();
+}
+
+/** Kills the running parser, if any. For a server that is shutting down. */
+export function stopParser(): void {
+  job?.child?.kill();
 }
 
 /**
@@ -124,6 +149,7 @@ async function run(current: Job, mboxPath: string, email: string, withCalendar: 
     current.tracker.setPhase('finalizing');
     await finalize(current, dbNew, email, source);
   } catch (err) {
+    // Best effort: whatever stays behind is removed at the next start.
     removeParserOutput();
     const error = current.cancelled ? 'cancelled' : (err as Error).message;
     console.error(`Import failed: ${error}`);
@@ -174,8 +200,8 @@ async function finalize(current: Job, dbNew: string, email: string, source: Sour
   // before exiting, so anything left in a -wal file would be lost data.
   const wal = dbNew + '-wal';
   if (existsSync(wal) && statSync(wal).size > 0) throw new Error('WAL not checkpointed');
-  rmSync(wal, { force: true });
-  rmSync(dbNew + '-shm', { force: true });
+  removeQuietly(wal);
+  removeQuietly(dbNew + '-shm');
 
   const SQL = await getSqlJs();
   if (current.cancelled) throw new Error('cancelled');
@@ -198,18 +224,37 @@ async function finalize(current: Job, dbNew: string, email: string, source: Sour
     }
     swapDatabase(next);
   } catch (err) {
-    next.close();
+    // Unless the swap got as far as making it the working database.
+    if (!hasDatabase() || getDatabase() !== next) next.close();
     throw err;
   }
-  rmSync(dbNew, { force: true });
+  // The import has succeeded; a copy that cannot be deleted right now is
+  // removed at the next start.
+  removeQuietly(dbNew);
 }
 
 function newDbFile(): string {
   return config.CONTACTS_DB_FILE + '.new';
 }
 
-function removeParserOutput(): void {
-  for (const suffix of ['', '-wal', '-shm']) rmSync(newDbFile() + suffix, { force: true });
+/** Deletes the parser output. Returns false if some of it could not be deleted. */
+function removeParserOutput(): boolean {
+  let removed = true;
+  for (const suffix of ['', '-wal', '-shm']) removed = removeQuietly(newDbFile() + suffix) && removed;
+  return removed;
+}
+
+// On Windows a scanner or indexer may hold a freshly written file for a
+// moment, and a parser that outlived its server holds its output until it
+// exits. Neither is worth failing (or crashing) over.
+function removeQuietly(file: string): boolean {
+  try {
+    rmSync(file, { force: true });
+    return true;
+  } catch (err) {
+    console.warn(`Could not delete ${file}:`, (err as Error).message);
+    return false;
+  }
 }
 
 // The last stderr line worth showing as the error. Rust panics end with a
@@ -221,6 +266,3 @@ function lastMeaningfulLine(log: string[]): string | null {
   }
   return null;
 }
-
-// A parser outlives a server that exits mid-import unless it is stopped.
-process.once('exit', () => job?.child?.kill());

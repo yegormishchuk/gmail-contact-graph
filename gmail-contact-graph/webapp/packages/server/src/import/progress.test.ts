@@ -42,10 +42,11 @@ import { ProgressTracker } from './progress.js';
 }
 
 // 4. A parser without JSON output: no percentage, the text line as detail.
+//    Its [progress] lines count as progress output, not as log lines.
 {
   const t = new ProgressTracker();
   assert.equal(t.feed('     mbox: data.mbox'), false);
-  assert.equal(t.feed('[progress] 5000 messages, 5100 rows, 3 skipped'), false);
+  assert.equal(t.feed('[progress] 5000 messages, 5100 rows, 3 skipped'), true);
   assert.deepEqual(t.snapshot(), { phase: 'mails', progress: null, detail: '5000 messages, 5100 rows, 3 skipped' });
 }
 
