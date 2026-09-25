@@ -2,7 +2,8 @@ import { Router } from 'express';
 import type { GraphData, GraphNode, GraphLink } from '@gmail-graph/shared';
 import { loadContactsFromFiltered } from '../db/queries.js';
 import { calculateCompositeScores } from '../services/ranking.js';
-import { config } from '../config.js';
+import { onDatabaseReload } from '../db/index.js';
+import { getUserEmail, getUserName } from '../db/meta.js';
 
 const router = Router();
 
@@ -14,6 +15,8 @@ export function clearCache() {
   contactsCache = null;
   scoresCache = null;
 }
+
+onDatabaseReload(clearCache);
 
 function getContacts() {
   if (!contactsCache) {
@@ -29,8 +32,8 @@ router.get('/graph', (req, res) => {
   const nodes: GraphNode[] = [
     {
       id: 'me',
-      name: config.MY_NAME,
-      email: config.MY_EMAIL,
+      name: getUserName(),
+      email: getUserEmail(),
       isCenter: true,
       received: 0,
       sent: 0,

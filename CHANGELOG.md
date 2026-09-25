@@ -16,6 +16,22 @@ HTTP API may change in a minor release.
   (`mails`, `contacts`, `spam`, `ai`, `calendar`), byte progress through the
   mbox, and a final `done` with counts. Without the variable the output is
   unchanged.
+- The server starts without `contacts.db` instead of exiting. `/api/health`
+  answers as usual; every data endpoint, including the contact edits and
+  `/api/message-groups` (which used to answer an empty result), answers
+  `409 {"state":"empty"}` until there is a database. At start it also removes
+  leftovers of an interrupted import (`contacts.db.new*`, `contacts.db.swap`)
+  and restores `contacts.db.prev` if `contacts.db` is missing.
+- A `meta` table in `contacts.db` records the mailbox owner's email. When it
+  is present it identifies the owner everywhere: the centre of the email and
+  calendar graphs, message groups, event groups, and the default display
+  name. Databases without it fall back to `USER_EMAIL` as before.
+- `DATA_DIR` sets the data directory for the server (default `../data`).
+
+### Changed
+
+- `/api/message-groups` reads the database the server already has in memory
+  instead of reopening the file on every request.
 
 ## [0.2.2] - 2026-09-15
 

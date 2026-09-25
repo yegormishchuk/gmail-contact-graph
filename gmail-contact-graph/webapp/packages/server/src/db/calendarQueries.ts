@@ -1,5 +1,5 @@
 import { getDatabase } from './index.js';
-import { config } from '../config.js';
+import { getUserEmail, getUserName } from './meta.js';
 import type { CalendarGraphData, CalendarNode, CalendarStats, EventGroups } from '@gmail-graph/shared';
 import { buildEventGroups, type EventRow } from './eventGroups.js';
 
@@ -21,11 +21,11 @@ function hasCalendarTables(db: ReturnType<typeof getDatabase>): boolean {
 
 export function loadCalendarGraph(): CalendarGraphData {
   const db = getDatabase();
-  const userEmail = config.MY_EMAIL;
+  const userEmail = getUserEmail();
 
   const centerNode: CalendarNode = {
     id: 'me',
-    name: config.MY_NAME,
+    name: getUserName(),
     email: userEmail,
     isCenter: true,
     totalEvents: 0,
@@ -228,5 +228,5 @@ export function loadEventGroups(): EventGroups {
   }
   stmt.free();
 
-  return buildEventGroups(rows, config.MY_EMAIL);
+  return buildEventGroups(rows, getUserEmail());
 }
