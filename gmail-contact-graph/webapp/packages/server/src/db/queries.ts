@@ -1,5 +1,5 @@
 import { getDatabase, saveDatabase } from './index.js';
-import { applyOverride, recordOverride } from './overrides.js';
+import { applyOverride, hasContact, recordOverride } from './overrides.js';
 import type { ContactFiltered, ExcludedContact, Contact } from '@gmail-graph/shared';
 
 export interface DbContact {
@@ -80,17 +80,20 @@ export function loadSpamStats(): { excludedCount: number; excludedTotal: number 
   return { excludedCount: row.count as number, excludedTotal: row.total as number };
 }
 
+// Only addresses that are contacts are journaled, so a stray request cannot
+// leave an edit behind to hit a matching contact in some later import.
+
 export function markContactClear(email: string): void {
   const db = getDatabase();
   applyOverride(db, email, 'clear');
-  recordOverride(db, email, 'clear');
+  if (hasContact(db, email)) recordOverride(db, email, 'clear');
   saveDatabase();
 }
 
 export function markContactNotHuman(email: string): void {
   const db = getDatabase();
   applyOverride(db, email, 'not_human');
-  recordOverride(db, email, 'not_human');
+  if (hasContact(db, email)) recordOverride(db, email, 'not_human');
   saveDatabase();
 }
 

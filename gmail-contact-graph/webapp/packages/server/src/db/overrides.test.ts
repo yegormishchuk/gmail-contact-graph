@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import initSqlJs, { type Database } from 'sql.js';
 import { ensureSchema } from './schema.js';
-import { applyOverride, carryOverOverrides, recordOverride } from './overrides.js';
+import { applyOverride, carryOverOverrides, hasContact, recordOverride } from './overrides.js';
 
 const SQL = await initSqlJs();
 
@@ -59,6 +59,13 @@ function journal(db: Database): Array<[string, string]> {
   // Only a contact that passed the basic spam filter can be restored.
   assert.equal(applyOverride(db, 'spam@x.com', 'restore'), false);
   assert.equal(filtered(db, 'spam@x.com'), null);
+
+  // An action that finds nothing to change reports so.
+  assert.equal(applyOverride(db, 'a@x.com', 'clear'), false, 'already clear');
+  assert.equal(applyOverride(db, 'b@x.com', 'not_human'), false, 'already excluded');
+  assert.equal(applyOverride(db, 'nobody@x.com', 'clear'), false);
+  assert.equal(hasContact(db, 'A@X.com'), true);
+  assert.equal(hasContact(db, 'nobody@x.com'), false);
 }
 
 // 2. The journal keeps the last action per email, lowercased.
@@ -109,7 +116,17 @@ function journal(db: Database): Array<[string, string]> {
   assert.deepEqual(carryOverOverrides(old, next, 'me@x.com', 'me@x.com'), { copied: 0, applied: 0 });
 }
 
-// 6. Journal emails match contacts regardless of case.
+// 6. `applied` counts only rows that changed the new data.
+{
+  const old = mailbox({});
+  recordOverride(old, 'excluded@x.com', 'not_human');
+  recordOverride(old, 'clear@x.com', 'clear');
+  recordOverride(old, 'unclear@x.com', 'clear');
+  const next = mailbox({ 'excluded@x.com': [0, null], 'clear@x.com': [1, 0], 'unclear@x.com': [1, 1] });
+  assert.deepEqual(carryOverOverrides(old, next, 'me@x.com', 'me@x.com'), { copied: 3, applied: 1 });
+}
+
+// 7. Journal emails match contacts regardless of case.
 {
   const old = mailbox({});
   old.run(`INSERT INTO user_overrides (email, action, updated_at) VALUES ('Mixed@X.com', 'not_human', 1)`);

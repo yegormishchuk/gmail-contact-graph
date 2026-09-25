@@ -42,7 +42,7 @@ router.get('/contacts/all', (req, res) => {
 
 router.post('/contacts/mark-clear', requireIdle, (req, res) => {
   const { email } = req.body;
-  if (!email) {
+  if (typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email required' });
   }
 
@@ -53,7 +53,7 @@ router.post('/contacts/mark-clear', requireIdle, (req, res) => {
 
 router.post('/contacts/mark-not-human', requireIdle, (req, res) => {
   const { email } = req.body;
-  if (!email) {
+  if (typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email required' });
   }
 
@@ -64,7 +64,7 @@ router.post('/contacts/mark-not-human', requireIdle, (req, res) => {
 
 router.post('/contacts/restore', requireIdle, (req, res) => {
   const { email } = req.body;
-  if (!email) {
+  if (typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email required' });
   }
 

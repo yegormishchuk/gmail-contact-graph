@@ -13,18 +13,20 @@ export type OverrideAction = 'clear' | 'not_human' | 'restore';
 const CONTACT_ID = `(SELECT id FROM contacts WHERE email = ?)`;
 
 /**
- * Applies `action` to contacts_filtered. Returns false when it cannot take
- * effect: a restore needs a contact that passed the basic spam filter.
+ * Applies `action` to contacts_filtered. Returns whether it changed anything:
+ * false for a contact that is missing or already clear / already excluded.
+ * A restore returns false only for a contact that did not pass the basic spam
+ * filter (the restore endpoint answers 404 for it), and true otherwise.
  */
 export function applyOverride(db: SqlJsDatabase, email: string, action: OverrideAction): boolean {
   const key = normalize(email);
   switch (action) {
     case 'clear':
-      db.run(`UPDATE contacts_filtered SET not_clear = 0 WHERE contact_id = ${CONTACT_ID}`, [key]);
-      return true;
+      db.run(`UPDATE contacts_filtered SET not_clear = 0 WHERE contact_id = ${CONTACT_ID} AND not_clear != 0`, [key]);
+      return db.getRowsModified() > 0;
     case 'not_human':
       db.run(`DELETE FROM contacts_filtered WHERE contact_id = ${CONTACT_ID}`, [key]);
-      return true;
+      return db.getRowsModified() > 0;
     case 'restore': {
       const res = db.exec(`SELECT id FROM contacts WHERE email = ? AND not_spam = 1`, [key]);
       if (!res.length) return false;
@@ -75,12 +77,12 @@ export function carryOverOverrides(
     const key = String(email);
     const act = action as OverrideAction;
     recordOverride(to, key, act, Number(updatedAt));
-    if (contactExists(to, key) && applyOverride(to, key, act)) applied++;
+    if (applyOverride(to, key, act)) applied++;
   }
   return { copied: rows.length, applied };
 }
 
-function contactExists(db: SqlJsDatabase, email: string): boolean {
+export function hasContact(db: SqlJsDatabase, email: string): boolean {
   return db.exec(`SELECT 1 FROM contacts WHERE email = ?`, [normalize(email)]).length > 0;
 }
 
