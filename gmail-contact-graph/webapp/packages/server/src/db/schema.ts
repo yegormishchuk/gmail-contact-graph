@@ -21,4 +21,13 @@ export function ensureSchema(db: SqlJsDatabase): void {
   // Written by the server when it imports a mailbox (user_email, imported_at,
   // source). The parsers do not know about it.
   db.run(`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+
+  // Manual contact edits, re-applied after a re-import (see overrides.ts).
+  db.run(`
+    CREATE TABLE IF NOT EXISTS user_overrides (
+      email      TEXT PRIMARY KEY,
+      action     TEXT NOT NULL CHECK (action IN ('clear', 'not_human', 'restore')),
+      updated_at INTEGER NOT NULL
+    )
+  `);
 }

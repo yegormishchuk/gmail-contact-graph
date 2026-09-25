@@ -27,6 +27,10 @@ HTTP API may change in a minor release.
   calendar graphs, message groups, event groups, and the default display
   name. Databases without it fall back to `USER_EMAIL` as before.
 - `DATA_DIR` sets the data directory for the server (default `../data`).
+- Marking a contact clear or not human, and restoring one, is also recorded in
+  a `user_overrides` table, so a later import of the same mailbox can apply
+  the edits again. Only the latest action per contact is kept. Edits made
+  before this version were not recorded and will not carry over.
 
 ### Changed
 

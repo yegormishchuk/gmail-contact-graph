@@ -11,7 +11,7 @@ process.env.USER_EMAIL = 'env@example.com';
 process.env.USER_NAME = '';
 
 const { createApp } = await import('./app.js');
-const { initDatabase, getSqlJs, swapDatabase } = await import('./db/index.js');
+const { initDatabase, getDatabase, getSqlJs, swapDatabase } = await import('./db/index.js');
 const { setMeta } = await import('./db/meta.js');
 const { setImporting } = await import('./import/state.js');
 
@@ -106,6 +106,29 @@ try {
     }
     setImporting(false);
     assert.equal((await post('/api/contacts/mark-clear', { email: 'bob@x.com' })).status, 200);
+  }
+
+  // 5. Edits are journaled, so a re-import can apply them again.
+  {
+    assert.equal((await post('/api/contacts/mark-not-human', { email: 'bob@x.com' })).status, 200);
+    const rows = getDatabase().exec(`SELECT email, action FROM user_overrides`)[0].values;
+    assert.deepEqual(rows, [['bob@x.com', 'not_human']], 'the last action replaces the earlier clear');
+
+    // Addresses that are not contacts are not journaled: a failed restore,
+    // or a clear / not-human for a typo.
+    assert.equal((await post('/api/contacts/restore', { email: 'nobody@x.com' })).status, 404);
+    assert.equal((await post('/api/contacts/mark-clear', { email: 'nobody@x.com' })).status, 200);
+    assert.equal((await post('/api/contacts/mark-not-human', { email: 'nobody@x.com' })).status, 200);
+    assert.equal(getDatabase().exec(`SELECT COUNT(*) FROM user_overrides`)[0].values[0][0], 1);
+  }
+
+  // 6. The email must be a non-empty string.
+  {
+    for (const url of ['/api/contacts/mark-clear', '/api/contacts/mark-not-human', '/api/contacts/restore']) {
+      for (const email of [123, ['a@x.com'], { a: 1 }, '  ', undefined]) {
+        assert.equal((await post(url, { email })).status, 400, `${url} ${JSON.stringify(email)}`);
+      }
+    }
   }
 
   console.log('app.test: all assertions passed');
