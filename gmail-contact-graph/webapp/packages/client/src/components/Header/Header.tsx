@@ -20,6 +20,13 @@ export function Header() {
         >
           Statistics
         </button>
+        <button
+          className="header-tab header-import"
+          onClick={() => dispatch({ type: 'OPEN_IMPORT' })}
+          title="Import a mailbox again"
+        >
+          {state.importStatus?.state === 'importing' ? 'Importing…' : 'Re-import'}
+        </button>
       </div>
     </header>
   );

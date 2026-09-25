@@ -1429,3 +1429,358 @@ header {
     border-color: #00d68f;
     box-shadow: 0 0 24px rgba(0, 214, 143, 0.15);
 }
+
+/* Import: screen, progress, banner, dialog */
+.import-page {
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.import-screen,
+.import-progress {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 14px;
+  color: #ccc;
+}
+
+.import-progress.fullscreen,
+.import-page > .import-screen {
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 214, 143, 0.15);
+  border-radius: 16px;
+  padding: 24px 28px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.import-dialog {
+  width: min(600px, calc(100% - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.99);
+  border: 1px solid rgba(0, 214, 143, 0.25);
+  border-radius: 16px;
+  padding: 24px 28px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+}
+
+.import-title {
+  font-size: 1.3rem;
+  font-weight: 300;
+  letter-spacing: 1px;
+  color: #eee;
+}
+
+.import-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.import-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-weight: 500;
+  color: #ddd;
+}
+
+.import-hint {
+  font-size: 12px;
+  color: #888;
+  overflow-wrap: anywhere;
+}
+
+.import-screen code,
+.import-error code {
+  color: #00d68f;
+  overflow-wrap: anywhere;
+}
+
+.import-empty {
+  padding: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #888;
+  text-align: center;
+}
+
+.import-files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.import-file {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: 'radio name tag' 'radio meta meta';
+  column-gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.import-file:hover {
+  border-color: rgba(0, 214, 143, 0.3);
+}
+
+.import-file.selected {
+  border-color: rgba(0, 214, 143, 0.5);
+  background: rgba(0, 214, 143, 0.07);
+}
+
+.import-file input {
+  grid-area: radio;
+  accent-color: #00d68f;
+}
+
+.import-file-name {
+  grid-area: name;
+  color: #eee;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-file-current {
+  grid-area: tag;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(0, 214, 143, 0.15);
+  color: #00d68f;
+}
+
+.import-file-meta {
+  grid-area: meta;
+  font-size: 12px;
+  color: #888;
+}
+
+.import-input {
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #eee;
+  font: inherit;
+}
+
+.import-input:focus {
+  outline: none;
+  border-color: rgba(0, 214, 143, 0.5);
+}
+
+.import-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.import-check input {
+  margin-top: 3px;
+  accent-color: #00d68f;
+}
+
+.import-check.disabled {
+  color: #666;
+  cursor: default;
+}
+
+.import-error {
+  padding: 10px 12px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.08);
+  color: #f8a5a5;
+  overflow-wrap: anywhere;
+}
+
+.import-error pre {
+  margin-top: 8px;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 11px;
+  color: #ccc;
+  white-space: pre-wrap;
+}
+
+.import-error summary {
+  margin-top: 6px;
+  cursor: pointer;
+  color: #aaa;
+}
+
+.import-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.import-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.import-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.import-btn.primary {
+  background: rgba(0, 214, 143, 0.18);
+  border: 1px solid rgba(0, 214, 143, 0.45);
+  color: #00d68f;
+}
+
+.import-btn.primary:hover:not(:disabled) {
+  background: rgba(0, 214, 143, 0.28);
+}
+
+.import-btn.secondary {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ccc;
+}
+
+.import-btn.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.import-btn.danger {
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #f87171;
+}
+
+.import-btn.danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.25);
+}
+
+.empty-state .import-btn {
+  margin-top: 6px;
+}
+
+.import-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #00d68f;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.import-link:hover {
+  text-decoration: underline;
+}
+
+.import-progress-phase,
+.import-progress-detail {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.import-progress-phase {
+  color: #eee;
+}
+
+.import-progress-detail {
+  font-size: 12px;
+  color: #888;
+}
+
+.import-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.import-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00d68f, #86efac);
+  transition: width 0.4s ease;
+}
+
+.import-bar.indeterminate .import-bar-fill {
+  width: 30%;
+  animation: import-bar-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes import-bar-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .import-bar.indeterminate .import-bar-fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}
+
+.import-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 20px;
+  font-size: 13px;
+  color: #ccc;
+  background: rgba(0, 214, 143, 0.08);
+  border-bottom: 1px solid rgba(0, 214, 143, 0.2);
+}
+
+.import-banner.failed {
+  background: rgba(248, 113, 113, 0.08);
+  border-bottom-color: rgba(248, 113, 113, 0.25);
+  color: #f8a5a5;
+}
+
+.import-banner-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-import {
+  margin-left: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.mark-human-btn:disabled,
+.mark-not-human-btn:disabled,
+.ranking-delete:disabled,
+.spam-restore:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Let the title and tabs wrap on narrow screens instead of overflowing. */
+header {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}

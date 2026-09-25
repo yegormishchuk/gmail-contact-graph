@@ -1,8 +1,10 @@
 import React, { useRef, useLayoutEffect, useState, useCallback, useEffect } from 'react';
-import { useAppContext } from '../../context/AppContext';
+import { useAppContext, editsLocked } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
 import { getSelectedGroups, supportsIsolation, type SelectedGroup } from '../../utils/selectedGroups';
+
+const LOCKED_TITLE = 'Not while an import is running';
 
 function formatDurationSec(seconds: number | null | undefined): string {
   if (!seconds || seconds <= 0) return '—';
@@ -17,6 +19,7 @@ const OFFSET = 14;
 
 export function Tooltip() {
   const { state, dispatch } = useAppContext();
+  const locked = editsLocked(state);
   const { selectedNode, selectedNodePosition, domains, messageGroups, eventGroups, isolatedGroupId } = state;
   const isCalendarMode = state.filters.filterType === 'calendar' || state.filters.filterType === 'eventGroups';
   const isOverallMode = state.filters.filterType === 'overall';
@@ -305,11 +308,22 @@ export function Tooltip() {
       {!isCalendarMode && (
         <div className="tooltip-buttons">
           {selectedNode.notClear && (
-            <button className="mark-human-btn" style={{ display: 'block' }} onClick={handleMarkHuman}>
+            <button
+              className="mark-human-btn"
+              style={{ display: 'block' }}
+              onClick={handleMarkHuman}
+              disabled={locked}
+              title={locked ? LOCKED_TITLE : undefined}
+            >
               It's a human
             </button>
           )}
-          <button className="mark-not-human-btn" onClick={handleMarkNotHuman}>
+          <button
+            className="mark-not-human-btn"
+            onClick={handleMarkNotHuman}
+            disabled={locked}
+            title={locked ? LOCKED_TITLE : undefined}
+          >
             Not a human
           </button>
         </div>

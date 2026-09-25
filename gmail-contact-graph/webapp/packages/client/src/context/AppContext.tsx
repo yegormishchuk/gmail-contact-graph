@@ -8,6 +8,7 @@ import type {
   CalendarGraphData,
   CalendarStats,
   EventGroups,
+  ImportStatus,
 } from '@gmail-graph/shared';
 import type { GroupHoverData } from '../utils/groupTypes';
 
@@ -42,6 +43,21 @@ interface AppState {
 
   loading: boolean;
   error: string | null;
+
+  /** Last answer of /api/import/status; null until the first one arrives. */
+  importStatus: ImportStatus | null;
+  /**
+   * Which data the graph should show: the importedAt of the import that
+   * produced it ('cli' for a database built by the CLI, 'current' when the
+   * page opened mid-import over existing data), or null when there is none.
+   * useGraphData loads again whenever it changes.
+   */
+  dataVersion: string | null;
+  importDialogOpen: boolean;
+  /** Sequence number of the request importStatus came from (see nextStatusSeq). */
+  importStatusSeq: number;
+  /** Why the last status poll failed; cleared by the next answer. */
+  importStatusError: string | null;
 }
 
 export const initialState: AppState = {
@@ -67,7 +83,23 @@ export const initialState: AppState = {
   activeTab: 'graph',
   loading: true,
   error: null,
+  importStatus: null,
+  dataVersion: null,
+  importDialogOpen: false,
+  importStatusSeq: 0,
+  importStatusError: null,
 };
+
+let statusSeq = 0;
+
+/**
+ * Numbers a request whose answer is an ImportStatus (the poll, start,
+ * cancel). Taken when the request is sent, so an answer to an older request
+ * that arrives late cannot overwrite a newer one.
+ */
+export function nextStatusSeq(): number {
+  return ++statusSeq;
+}
 
 // Actions
 type Action =
@@ -86,7 +118,28 @@ type Action =
   | { type: 'SET_TAB'; payload: 'graph' | 'stats' }
   | { type: 'REMOVE_CONTACT'; payload: string }
   | { type: 'RESTORE_CONTACT'; payload: ExcludedContact }
-  | { type: 'MARK_CONTACT_CLEAR'; payload: string };
+  | { type: 'MARK_CONTACT_CLEAR'; payload: string }
+  | { type: 'SET_IMPORT_STATUS'; payload: ImportStatus; seq?: number }
+  | { type: 'SET_IMPORT_STATUS_ERROR'; payload: string }
+  | { type: 'OPEN_IMPORT' }
+  | { type: 'CLOSE_IMPORT' };
+
+function nextDataVersion(current: string | null, status: ImportStatus): string | null {
+  switch (status.state) {
+    case 'empty':
+      return null;
+    case 'ready':
+      return String(status.importedAt ?? 'cli');
+    case 'importing':
+    case 'failed':
+      return status.hasData ? current ?? 'current' : null;
+  }
+}
+
+/** Contact edits are refused by the server while an import runs. */
+export function editsLocked(state: AppState): boolean {
+  return state.importStatus?.state === 'importing';
+}
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -100,7 +153,8 @@ export function reducer(state: AppState, action: Action): AppState {
         loading: false,
       };
     case 'SET_LOADING':
-      return { ...state, loading: action.payload };
+      // A new load starts clean; a failed earlier one no longer applies.
+      return { ...state, loading: action.payload, error: action.payload ? null : state.error };
     case 'SET_ERROR':
       return { ...state, error: action.payload, loading: false };
     case 'SET_FILTER_LIMIT':
@@ -182,6 +236,37 @@ export function reducer(state: AppState, action: Action): AppState {
         },
       };
     }
+    case 'SET_IMPORT_STATUS': {
+      if (action.seq !== undefined && action.seq < state.importStatusSeq) return state;
+      const status = action.payload;
+      const dataVersion = nextDataVersion(state.dataVersion, status);
+      const next = {
+        ...state,
+        importStatus: status,
+        importStatusSeq: action.seq ?? state.importStatusSeq,
+        importStatusError: null,
+        dataVersion,
+      };
+      if (dataVersion === state.dataVersion) return next;
+      // Other data: whatever was selected may not exist in it, and a dialog
+      // opened to replace the old data has done its job (here or in another
+      // tab).
+      return {
+        ...next,
+        importDialogOpen: dataVersion === null ? next.importDialogOpen : false,
+        selectedNode: null,
+        selectedNodePosition: null,
+        isolatedGroupId: null,
+        selectedGroup: null,
+        selectedGroupPosition: null,
+      };
+    }
+    case 'SET_IMPORT_STATUS_ERROR':
+      return { ...state, importStatusError: action.payload };
+    case 'OPEN_IMPORT':
+      return { ...state, importDialogOpen: true };
+    case 'CLOSE_IMPORT':
+      return { ...state, importDialogOpen: false };
     default:
       return state;
   }
