@@ -15,7 +15,7 @@ use rusqlite::{params, Connection};
 
 use gmail_mbox_parser::hf::{ContactForVerification, HFClient, HFConfig};
 use models::{ContactStats, EmailMessage, ParseState};
-use progress::{MailCounts, Reporter};
+use progress::{CountingReader, MailCounts, Reporter};
 use spam::is_spam_contact;
 
 // ---------------------------------------------------------------------------
@@ -111,6 +111,7 @@ async fn main() {
     if !candidates.is_empty() {
         fill_filtered_with_ai(db_path, candidates, &reporter).await;
     } else {
+        reporter.ai_phase(false, 0);
         eprintln!("No candidates for AI verification.");
     }
 
@@ -149,7 +150,7 @@ fn fill_mails_db(
 
     let file = File::open(mbox_path).expect("failed to open mbox file");
     let total_bytes = file.metadata().map(|m| m.len()).unwrap_or(0);
-    let mut bytes: u64 = 0;
+    let (file, bytes_read) = CountingReader::new(file);
     let reader = BufReader::with_capacity(1024 * 1024, file);
 
     let mut state = ParseState::Seeking;
@@ -176,7 +177,6 @@ fn fill_mails_db(
             Ok(l) => l,
             Err(_) => continue,
         };
-        bytes += line.len() as u64 + 1;
 
         match state {
             ParseState::Seeking => {
@@ -216,7 +216,7 @@ fn fill_mails_db(
                     }
                     msg_count += 1;
                     reporter.message_parsed(MailCounts {
-                        bytes,
+                        bytes: bytes_read.get(),
                         total_bytes,
                         messages: msg_count,
                         rows: row_count,
@@ -249,7 +249,7 @@ fn fill_mails_db(
     conn.execute_batch("COMMIT").unwrap();
 
     reporter.mails_finished(MailCounts {
-        bytes,
+        bytes: bytes_read.get(),
         total_bytes,
         messages: msg_count,
         rows: row_count,

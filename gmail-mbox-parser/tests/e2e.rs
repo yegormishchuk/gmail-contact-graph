@@ -44,7 +44,7 @@ fn run_fill_db(case: &str) -> Run {
 }
 
 fn run_fill_db_into(case: &str, db_relative: &str) -> Run {
-    run_fill_db_with(case, db_relative, None).0
+    run_fill_db_with(case, db_relative, None, None).0
 }
 
 fn fixture_path() -> PathBuf {
@@ -56,14 +56,28 @@ fn fixture_path() -> PathBuf {
 
 /// Runs `fill_db` with `PROGRESS_FORMAT` set to `progress_format` (or removed
 /// when `None`) and returns the run together with its stderr.
-fn run_fill_db_with(case: &str, db_relative: &str, progress_format: Option<&str>) -> (Run, String) {
-    let fixture = fixture_path();
-    assert!(fixture.is_file(), "fixture missing: {}", fixture.display());
-
+///
+/// The input is the fixture, or `mbox` written into the scratch directory.
+fn run_fill_db_with(
+    case: &str,
+    db_relative: &str,
+    progress_format: Option<&str>,
+    mbox: Option<&[u8]>,
+) -> (Run, String) {
     let dir = std::env::temp_dir().join(format!("fill_db_e2e_{}_{}", case, std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("failed to create temp dir");
     let db = dir.join(db_relative);
+
+    let fixture = match mbox {
+        Some(bytes) => {
+            let path = dir.join("input.mbox");
+            std::fs::write(&path, bytes).expect("failed to write mbox");
+            path
+        }
+        None => fixture_path(),
+    };
+    assert!(fixture.is_file(), "fixture missing: {}", fixture.display());
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_fill_db"));
     command
@@ -299,32 +313,35 @@ fn json_events(stderr: &str) -> Vec<serde_json::Value> {
     stderr
         .lines()
         .filter(|l| l.starts_with('{'))
-        .map(|l| {
-            serde_json::from_str(l).unwrap_or_else(|e| {
-                panic!(
-                    "bad JSON line: {l}
-{e}"
-                )
-            })
-        })
+        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("bad JSON line: {l}\n{e}")))
         .collect()
+}
+
+fn phases(events: &[serde_json::Value]) -> Vec<&str> {
+    events
+        .iter()
+        .filter(|e| e["event"] == "phase")
+        .map(|e| e["phase"].as_str().unwrap())
+        .collect()
+}
+
+fn last_progress(events: Vec<serde_json::Value>) -> serde_json::Value {
+    events
+        .into_iter()
+        .rev()
+        .find(|e| e["event"] == "progress")
+        .expect("no progress event")
 }
 
 #[test]
 fn json_progress_reports_phases_in_order_and_ends_with_done() {
-    let (_run, stderr) = run_fill_db_with("json_phases", "contacts.db", Some("json"));
+    let (_run, stderr) = run_fill_db_with("json_phases", "contacts.db", Some("json"), None);
     let events = json_events(&stderr);
 
-    let phases: Vec<&str> = events
-        .iter()
-        .filter(|e| e["event"] == "phase")
-        .map(|e| e["phase"].as_str().unwrap())
-        .collect();
     assert_eq!(
-        phases,
+        phases(&events),
         ["mails", "contacts", "spam", "ai"],
-        "stderr:
-{stderr}"
+        "stderr:\n{stderr}"
     );
 
     let ai = events
@@ -345,35 +362,64 @@ fn json_progress_reports_phases_in_order_and_ends_with_done() {
 fn json_progress_reports_the_byte_count_of_a_small_mbox() {
     // The fixture holds far fewer than 1000 messages, so the only progress
     // event is the one sent when the mails phase finishes.
-    let (_run, stderr) = run_fill_db_with("json_bytes", "contacts.db", Some("json"));
+    let (_run, stderr) = run_fill_db_with("json_bytes", "contacts.db", Some("json"), None);
     let size = std::fs::metadata(fixture_path()).unwrap().len();
 
-    let last = json_events(&stderr)
-        .into_iter()
-        .rev()
-        .find(|e| e["event"] == "progress")
-        .expect("no progress event");
+    let last = last_progress(json_events(&stderr));
     assert_eq!(last["phase"], "mails");
     assert_eq!(last["total_bytes"], size);
+    assert_eq!(last["bytes"], size);
     assert_eq!(last["messages"], 19);
-    let bytes = last["bytes"].as_u64().unwrap();
-    assert!(
-        bytes.abs_diff(size) <= 1,
-        "bytes {bytes} vs file size {size}"
+}
+
+#[test]
+fn json_progress_counts_crlf_and_undecodable_bytes() {
+    // `lines()` strips "\r\n" and drops lines that are not UTF-8, so a count
+    // built from decoded lines would stop short of the file size.
+    let mut mbox = std::fs::read(fixture_path())
+        .unwrap()
+        .split(|&b| b == b'\n')
+        .map(|line| line.to_vec())
+        .collect::<Vec<_>>()
+        .join(&b"\r\n"[..]);
+    mbox.extend_from_slice(b"Latin-1 body line: caf\xe9\r\n");
+
+    let (_run, stderr) = run_fill_db_with("json_crlf", "contacts.db", Some("json"), Some(&mbox));
+    let last = last_progress(json_events(&stderr));
+    assert_eq!(last["total_bytes"], mbox.len());
+    assert_eq!(last["bytes"], mbox.len());
+}
+
+#[test]
+fn json_progress_reports_the_ai_phase_even_without_candidates() {
+    let (_run, stderr) = run_fill_db_with("json_empty", "contacts.db", Some("json"), Some(b""));
+    let events = json_events(&stderr);
+
+    assert_eq!(
+        phases(&events),
+        ["mails", "contacts", "spam", "ai"],
+        "stderr:\n{stderr}"
     );
+    let ai = events.iter().find(|e| e["phase"] == "ai").unwrap();
+    assert_eq!(ai["enabled"], false);
+    assert_eq!(ai["contacts"], 0);
+
+    let done = events.last().unwrap();
+    assert_eq!(done["event"], "done");
+    assert_eq!(done["messages"], 0);
+    assert_eq!(done["contacts"], 0);
+    assert_eq!(done["filtered"], 0);
 }
 
 #[test]
 fn without_progress_format_stderr_has_no_json() {
-    let (_run, stderr) = run_fill_db_with("text", "contacts.db", None);
+    let (_run, stderr) = run_fill_db_with("text", "contacts.db", None, None);
     assert!(
         !stderr.lines().any(|l| l.starts_with('{')),
-        "unexpected JSON in text mode:
-{stderr}"
+        "unexpected JSON in text mode:\n{stderr}"
     );
     assert!(
         stderr.contains("Mails DB: 19 messages"),
-        "stderr:
-{stderr}"
+        "stderr:\n{stderr}"
     );
 }

@@ -6,6 +6,9 @@
 //! than a flag because `parse_args` reads any argument without '@' as the DB
 //! path. Every other stderr line is left as it is in both modes.
 
+use std::cell::Cell;
+use std::io::Read;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use serde_json::json;
@@ -115,10 +118,37 @@ impl Reporter {
     }
 }
 
-/// Where the mails phase stands after a message.
+/// Counts the bytes read from the inner reader.
 ///
-/// `bytes` is an estimate: it sums decoded line lengths plus one per newline,
-/// so CRLF endings and lines that fail to decode make it drift slightly.
+/// It sits under the `BufReader`, so the count includes line endings and
+/// lines that fail to decode, and runs ahead of the parser by at most one
+/// buffer. At end of file it equals the file size.
+pub struct CountingReader<R> {
+    inner: R,
+    count: Rc<Cell<u64>>,
+}
+
+impl<R> CountingReader<R> {
+    /// Wraps `inner`; the returned handle reads the running count.
+    pub fn new(inner: R) -> (Self, Rc<Cell<u64>>) {
+        let count = Rc::new(Cell::new(0));
+        let reader = CountingReader {
+            inner,
+            count: Rc::clone(&count),
+        };
+        (reader, count)
+    }
+}
+
+impl<R: Read> Read for CountingReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.count.set(self.count.get() + n as u64);
+        Ok(n)
+    }
+}
+
+/// Where the mails phase stands after a message.
 #[derive(Clone, Copy, Default)]
 pub struct MailCounts {
     pub bytes: u64,
@@ -213,6 +243,17 @@ mod tests {
             .mails_finished_line(counts(1003), start)
             .expect("final progress was throttled");
         assert_eq!(parse(&line)["messages"], 1003);
+    }
+
+    #[test]
+    fn counting_reader_counts_every_byte_read() {
+        use std::io::{BufRead, BufReader};
+
+        let data: &[u8] = b"one\r\ntwo\n\xff\xfe\nthree";
+        let (reader, count) = CountingReader::new(data);
+        let lines = BufReader::new(reader).lines().count();
+        assert_eq!(lines, 4);
+        assert_eq!(count.get(), data.len() as u64);
     }
 
     #[test]
