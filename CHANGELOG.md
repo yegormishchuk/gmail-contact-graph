@@ -9,6 +9,14 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+### Added
+
+- `fill_db` and `fill_events` print machine-readable progress when
+  `PROGRESS_FORMAT=json` is set: one JSON object per stderr line for each phase
+  (`mails`, `contacts`, `spam`, `ai`, `calendar`), byte progress through the
+  mbox, and a final `done` with counts. Without the variable the output is
+  unchanged.
+
 ## [0.2.2] - 2026-09-15
 
 Selecting a contact now lets you narrow the graph to one of their groups, and

@@ -44,26 +44,54 @@ fn run_fill_db(case: &str) -> Run {
 }
 
 fn run_fill_db_into(case: &str, db_relative: &str) -> Run {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+    run_fill_db_with(case, db_relative, None, None).0
+}
+
+fn fixture_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
-        .join("sample.mbox");
-    assert!(fixture.is_file(), "fixture missing: {}", fixture.display());
+        .join("sample.mbox")
+}
 
+/// Runs `fill_db` with `PROGRESS_FORMAT` set to `progress_format` (or removed
+/// when `None`) and returns the run together with its stderr.
+///
+/// The input is the fixture, or `mbox` written into the scratch directory.
+fn run_fill_db_with(
+    case: &str,
+    db_relative: &str,
+    progress_format: Option<&str>,
+    mbox: Option<&[u8]>,
+) -> (Run, String) {
     let dir = std::env::temp_dir().join(format!("fill_db_e2e_{}_{}", case, std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("failed to create temp dir");
     let db = dir.join(db_relative);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_fill_db"))
+    let fixture = match mbox {
+        Some(bytes) => {
+            let path = dir.join("input.mbox");
+            std::fs::write(&path, bytes).expect("failed to write mbox");
+            path
+        }
+        None => fixture_path(),
+    };
+    assert!(fixture.is_file(), "fixture missing: {}", fixture.display());
+
+    let mut command = Command::new(env!("CARGO_BIN_EXE_fill_db"));
+    command
         .current_dir(&dir)
         .env_remove("HF_API_KEY")
         .env_remove("USER_EMAIL")
+        .env_remove("PROGRESS_FORMAT")
         .arg(&fixture)
         .arg(USER)
-        .arg(&db)
-        .output()
-        .expect("failed to run fill_db");
+        .arg(&db);
+    if let Some(format) = progress_format {
+        command.env("PROGRESS_FORMAT", format);
+    }
+    let output = command.output().expect("failed to run fill_db");
 
     assert!(
         output.status.success(),
@@ -74,7 +102,8 @@ fn run_fill_db_into(case: &str, db_relative: &str) -> Run {
     assert!(db.is_file(), "fill_db produced no database at {db:?}");
 
     let conn = Connection::open(&db).expect("failed to open result db");
-    Run { conn, dir }
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    (Run { conn, dir }, stderr)
 }
 
 // ---------------------------------------------------------------------------
@@ -273,5 +302,124 @@ fn without_an_api_key_every_survivor_is_marked_unclear() {
     assert_eq!(
         run.count("SELECT COUNT(*) FROM contacts_filtered WHERE not_clear = 1"),
         7
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Machine-readable progress (PROGRESS_FORMAT=json)
+// ---------------------------------------------------------------------------
+
+fn json_events(stderr: &str) -> Vec<serde_json::Value> {
+    stderr
+        .lines()
+        .filter(|l| l.starts_with('{'))
+        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("bad JSON line: {l}\n{e}")))
+        .collect()
+}
+
+fn phases(events: &[serde_json::Value]) -> Vec<&str> {
+    events
+        .iter()
+        .filter(|e| e["event"] == "phase")
+        .map(|e| e["phase"].as_str().unwrap())
+        .collect()
+}
+
+fn last_progress(events: Vec<serde_json::Value>) -> serde_json::Value {
+    events
+        .into_iter()
+        .rev()
+        .find(|e| e["event"] == "progress")
+        .expect("no progress event")
+}
+
+#[test]
+fn json_progress_reports_phases_in_order_and_ends_with_done() {
+    let (_run, stderr) = run_fill_db_with("json_phases", "contacts.db", Some("json"), None);
+    let events = json_events(&stderr);
+
+    assert_eq!(
+        phases(&events),
+        ["mails", "contacts", "spam", "ai"],
+        "stderr:\n{stderr}"
+    );
+
+    let ai = events
+        .iter()
+        .find(|e| e["phase"] == "ai" && e["event"] == "phase")
+        .unwrap();
+    assert_eq!(ai["enabled"], false, "HF_API_KEY is removed for tests");
+    assert_eq!(ai["contacts"], 7);
+
+    let done = events.last().expect("no JSON events");
+    assert_eq!(done["event"], "done");
+    assert_eq!(done["messages"], 19);
+    assert_eq!(done["contacts"], 12);
+    assert_eq!(done["filtered"], 7);
+}
+
+#[test]
+fn json_progress_reports_the_byte_count_of_a_small_mbox() {
+    // The fixture holds far fewer than 1000 messages, so the only progress
+    // event is the one sent when the mails phase finishes.
+    let (_run, stderr) = run_fill_db_with("json_bytes", "contacts.db", Some("json"), None);
+    let size = std::fs::metadata(fixture_path()).unwrap().len();
+
+    let last = last_progress(json_events(&stderr));
+    assert_eq!(last["phase"], "mails");
+    assert_eq!(last["total_bytes"], size);
+    assert_eq!(last["bytes"], size);
+    assert_eq!(last["messages"], 19);
+}
+
+#[test]
+fn json_progress_counts_crlf_and_undecodable_bytes() {
+    // `lines()` strips "\r\n" and drops lines that are not UTF-8, so a count
+    // built from decoded lines would stop short of the file size.
+    let mut mbox = std::fs::read(fixture_path())
+        .unwrap()
+        .split(|&b| b == b'\n')
+        .map(|line| line.to_vec())
+        .collect::<Vec<_>>()
+        .join(&b"\r\n"[..]);
+    mbox.extend_from_slice(b"Latin-1 body line: caf\xe9\r\n");
+
+    let (_run, stderr) = run_fill_db_with("json_crlf", "contacts.db", Some("json"), Some(&mbox));
+    let last = last_progress(json_events(&stderr));
+    assert_eq!(last["total_bytes"], mbox.len());
+    assert_eq!(last["bytes"], mbox.len());
+}
+
+#[test]
+fn json_progress_reports_the_ai_phase_even_without_candidates() {
+    let (_run, stderr) = run_fill_db_with("json_empty", "contacts.db", Some("json"), Some(b""));
+    let events = json_events(&stderr);
+
+    assert_eq!(
+        phases(&events),
+        ["mails", "contacts", "spam", "ai"],
+        "stderr:\n{stderr}"
+    );
+    let ai = events.iter().find(|e| e["phase"] == "ai").unwrap();
+    assert_eq!(ai["enabled"], false);
+    assert_eq!(ai["contacts"], 0);
+
+    let done = events.last().unwrap();
+    assert_eq!(done["event"], "done");
+    assert_eq!(done["messages"], 0);
+    assert_eq!(done["contacts"], 0);
+    assert_eq!(done["filtered"], 0);
+}
+
+#[test]
+fn without_progress_format_stderr_has_no_json() {
+    let (_run, stderr) = run_fill_db_with("text", "contacts.db", None, None);
+    assert!(
+        !stderr.lines().any(|l| l.starts_with('{')),
+        "unexpected JSON in text mode:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("Mails DB: 19 messages"),
+        "stderr:\n{stderr}"
     );
 }
