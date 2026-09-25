@@ -147,30 +147,7 @@ git clone https://github.com/yegormishchuk/gmail-contact-graph.git
 ```
 
 ```bash
-cd gmail-contact-graph
-```
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and set `USER_EMAIL` to your Gmail address.
-
-When the Takeout archive arrives, put the mail export at
-`data/Email/data.mbox`, then parse it:
-
-```bash
-cd gmail-mbox-parser
-```
-
-```bash
-make process-all
-```
-
-Finally, build and start the webapp:
-
-```bash
-cd ../gmail-contact-graph
+cd gmail-contact-graph/gmail-contact-graph
 ```
 
 ```bash
@@ -181,7 +158,22 @@ make setup
 make run
 ```
 
-Open [http://localhost:5000](http://localhost:5000).
+`make setup` installs the webapp's dependencies, builds it, and builds the two
+parsers it runs for you (that part needs Rust; see [Install
+dependencies](#install-dependencies)). Open
+[http://localhost:5000](http://localhost:5000).
+
+With no data yet, the webapp opens on its import screen. When the Takeout
+archive arrives, put the mail export (any name ending in `.mbox`) in
+`data/Email/` and, if you have them, the calendar `.ics` files in
+`data/Calendar/`. Click **Refresh list**, pick the file, check your Gmail
+address, and press **Import**. A mailbox of a gigabyte or so takes a few
+minutes; the graph opens by itself when it is done. **Re-import** in the header
+runs it again later, for a newer export, while the current graph stays up.
+
+Prefer the command line? `make process-all` in `gmail-mbox-parser/` still builds
+the same database, and adds the ranking `.txt` files — see [Step-by-step
+setup](#step-by-step-setup).
 
 ## Run with Docker
 
@@ -189,26 +181,41 @@ No Rust, no Node, no `make` — just Docker (with Compose v2.27+, which is where
 `up --abort-on-container-failure` arrived). The native
 workflow above stays the primary, fully supported path; this is an alternative.
 
-**1. Configure.**
+**1. Configure (optional).** Nothing is required. To turn on the AI spam
+filter, change the port, or pre-fill your address on the import screen:
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and set `USER_EMAIL`.
+and edit `HF_API_KEY`, `PORT` or `USER_EMAIL` there.
 
 **2. Put your exports in place.**
 
 ```
-data/Email/data.mbox        <- your Gmail .mbox export
+data/Email/*.mbox           <- your Gmail .mbox export
 data/Calendar/*.ics         <- your Google Calendar exports
 ```
 
-A differently named export? Either rename it to `data.mbox` or set
-`MBOX_FILE=my_export.mbox` in `.env`. One file per run — see [Why only one mbox
-at a time](#why-only-one-mbox-at-a-time).
+**3. Start the webapp.**
 
-**3. Run everything.** Three commands, in this order:
+```bash
+docker compose up -d webapp
+```
+
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000) and import the mailbox from
+the screen that greets you, as in the [Quick start](#quick-start). The image
+carries the parsers, so nothing else needs to run. The first start builds the
+image, which takes several minutes — the parsers compile SQLite from source.
+Later runs reuse the cache.
+
+### Parse from the command line instead
+
+The parsers also run as their own one-shot services, which is what to use for
+scripting or when you want the ranking `.txt` files. They read one mbox,
+`MBOX_FILE` (default `data.mbox`) — see [Why only one mbox at a
+time](#why-only-one-mbox-at-a-time) — and need `USER_EMAIL` in `.env`. Three
+commands, in this order:
 
 ```bash
 docker compose stop webapp
@@ -228,7 +235,7 @@ builds the images, which takes several minutes — the parsers compile SQLite fr
 source. Later runs reuse the cache.
 
 None of the three steps is cosmetic. The webapp is stopped first because it must
-not run while the database is rebuilt — see [The one rule](#the-one-rule-dont-parse-while-the-webapp-is-running).
+not run while the database is rebuilt — see [The one rule](#the-one-rule-dont-parse-from-the-command-line-while-the-webapp-is-running).
 Naming `parser calendar` explicitly matters as well: `docker compose --profile
 parse up` without service names would also start the webapp, which is exactly
 the situation that rule warns about. And `--abort-on-container-failure` is what
@@ -324,9 +331,10 @@ docker compose stop webapp      # stop
 docker compose logs -f webapp   # follow the logs
 ```
 
-Run the three commands again after a fresh Takeout export. If nothing changed
-the parser says so and skips the slow part; `FORCE_REPARSE=1` in the
-environment re-parses anyway.
+After a fresh Takeout export, drop it in `data/Email/` and use **Re-import** in
+the webapp. With the command-line parse, run the three commands again instead:
+if nothing changed the parser says so and skips the slow part;
+`FORCE_REPARSE=1` in the environment re-parses anyway.
 
 After a `git pull` or an edit to the parser or webapp sources, rebuild the
 images — `docker compose up` reuses whatever image is already there and will
@@ -337,7 +345,11 @@ docker compose --profile parse build   # both images
 docker compose up -d --build webapp    # or just the webapp, rebuilt in place
 ```
 
-### The one rule: don't parse while the webapp is running
+### The one rule: don't parse from the command line while the webapp is running
+
+This is about the command-line parse only. **Re-import** in the webapp is safe
+at any time: the server writes the new data to a separate file and swaps it in
+itself.
 
 The webapp loads the whole database into memory at startup, and every time you
 exclude a contact it writes that in-memory copy back over the file. A webapp
@@ -352,9 +364,9 @@ ERROR: the webapp container is running and would overwrite this parse.
 Stop it first:  docker compose stop webapp
 ```
 
-For the same reason, a webapp already running when you re-parse keeps serving
-the old graph until `docker compose restart webapp` — the database is read once,
-at startup.
+For the same reason, a webapp already running during a command-line parse keeps
+serving the old graph until `docker compose restart webapp` — it reads a
+database it did not import itself only at startup.
 
 ### Why only one mbox at a time
 
@@ -367,10 +379,10 @@ lists what is actually in `data/Email/`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `USER_EMAIL` | — | Required. Your address; the "you" node. |
-| `MBOX_FILE` | `data.mbox` | Which file in `data/Email/` to parse. |
+| `USER_EMAIL` | — | Required for the command-line parse. For the webapp, only the address pre-filled on the import screen. |
+| `MBOX_FILE` | `data.mbox` | Command-line parse only: which file in `data/Email/` to parse. |
 | `PORT` | `5000` | Host and container port, kept in sync automatically. |
-| `DATA_DIR` | `./data` | Where the exports and database live. |
+| `DATA_DIR` | `./data` | Where the exports and database live, relative to the repo root. (The native webapp resolves a relative `DATA_DIR` against `gmail-contact-graph/` instead, so for a native run pass it on the command line — `make run DATA_DIR=../data/demo` — rather than putting a Docker value in `.env`.) |
 | `FORCE_REPARSE` | `0` | `1` re-parses even when nothing changed. |
 | `HF_API_KEY` | empty | Optional AI spam filtering (non-deterministic). |
 
@@ -409,9 +421,31 @@ exits successfully — the mail graph does not depend on it.
 
 ## Try it without your own mail
 
-A Takeout export takes hours to arrive. To see the graph before then, build the
-databases from the synthetic mbox that ships with the parser — nineteen
-invented messages between made-up addresses, no personal data involved:
+A Takeout export takes hours to arrive. To see the graph before then, import
+the synthetic mbox that ships with the parser — nineteen invented messages
+between made-up addresses, no personal data involved. Keep it in its own data
+directory so it never mixes with your real one:
+
+```bash
+mkdir -p data/demo/Email && cp gmail-mbox-parser/tests/fixtures/sample.mbox data/demo/Email/
+```
+
+```bash
+cd gmail-contact-graph
+```
+
+```bash
+make setup
+```
+
+```bash
+make run DATA_DIR=../data/demo
+```
+
+On the import screen pick `sample.mbox`, enter `you@example.com` (every message
+in the fixture is to or from that address), and import.
+
+Or build the same demo database from the command line:
 
 ```bash
 cd gmail-mbox-parser
@@ -433,9 +467,9 @@ make setup
 make run CONTACTS_DB_FILE=../data/demo/contacts.db
 ```
 
-The result is a graph of seven contacts. Everything lands in `data/demo/`, so a
-real `data/contacts.db` you have already built is left alone — drop the whole
-directory when you are done.
+Either way the result is a graph of seven contacts. Everything lands in
+`data/demo/`, so a real `data/contacts.db` you have already built is left alone
+— drop the whole directory when you are done.
 
 Leave the `HF_API_KEY` line in `.env` empty for this run — the fixture's
 invented addresses are exactly the kind of input the classifier judges
@@ -585,6 +619,11 @@ npm start
 
 </details>
 
+If `data/contacts.db` does not exist yet, the webapp opens on its import
+screen instead, and **Re-import** in the header replaces the data later without
+a restart. Manual edits (marking a contact as human, not human, or not spam)
+are carried over to a re-import of the same mailbox.
+
 The webapp auto-detects calendar data: if the `events` / `event_attendees`
 tables exist in `contacts.db`, the Calendar, Overall, and Event Groups filter
 modes light up. If you skipped step 5, only the Gmail and Domains views are
@@ -599,10 +638,14 @@ data/
 ├── Calendar/    # calendar exports: *.ics
 ├── Email/       # mail exports: *.mbox
 ├── rankings/    # generated *_ranking.txt files
-└── contacts.db  # shared database, written by both parsers
+├── contacts.db       # shared database, written by both parsers
+└── contacts.db.prev  # the database before the last webapp import
 ```
 
-Inputs go in `Calendar/` and `Email/`; everything else is generated.
+Inputs go in `Calendar/` and `Email/`; everything else is generated. During an
+import from the webapp the parsers write `contacts.db.new`, which replaces
+`contacts.db` only when they succeed; the previous file is kept as
+`contacts.db.prev` for manual recovery.
 
 ### Output files
 
@@ -635,12 +678,14 @@ Inputs go in `Calendar/` and `Email/`; everything else is generated.
 | `gmail-mbox-parser/` | `make fill-db` | Parse mbox only |
 | `gmail-mbox-parser/` | `make rankings` | Generate rankings only |
 | `calendar-parser/`   | `make fill-events` | Parse `.ics` files into `events` / `event_attendees` |
-| `gmail-contact-graph/` | `make setup` | Install deps + build |
+| `gmail-contact-graph/` | `make setup` | Install deps + build, including the parsers |
+| `gmail-contact-graph/` | `make build-parsers` | Build `fill_db` and `fill_events` for the import screen |
 | `gmail-contact-graph/` | `make run` | Start production server (port 5000) |
 | `gmail-contact-graph/` | `make dev` | Start dev servers (API:5000, Client:3000) |
 
-All commands read `USER_EMAIL` from the project-root `.env` (step 3); pass
-`USER_EMAIL=...` on the command line to override it for a single run.
+The parser commands read `USER_EMAIL` from the project-root `.env` (step 3);
+pass `USER_EMAIL=...` on the command line to override it for a single run. The
+webapp asks for it on the import screen.
 
 ## Contributing
 
