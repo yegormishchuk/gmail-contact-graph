@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx src/utils/selectedGroups.test.ts && tsx src/context/appReducer.test.ts"
+    "test": "tsx src/utils/selectedGroups.test.ts && tsx src/utils/importFormat.test.ts && tsx src/context/appReducer.test.ts"
   },
   "dependencies": {
     "@gmail-graph/shared": "*",

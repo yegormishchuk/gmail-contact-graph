@@ -41,6 +41,13 @@ HTTP API may change in a minor release.
   current data untouched. The parser paths can be set with `FILL_DB_BIN` and
   `FILL_EVENTS_BIN`, the source folders with `MBOX_DIR` and `CALENDAR_DIR`.
 
+- The webapp imports a mailbox itself. With no data yet it opens on an import
+  screen: pick an `.mbox` from `data/Email`, confirm your Gmail address, tick
+  the calendar if there are `.ics` files, and follow the progress; the graph
+  opens when the import is done. **Re-import** in the header runs another
+  import while the current graph stays usable, with a progress strip under
+  the header and a cancel button. Contact edits are disabled until it ends.
+
 ### Changed
 
 - The contact edit endpoints, like the new import ones, accept only

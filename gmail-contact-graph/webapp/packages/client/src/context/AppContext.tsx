@@ -8,6 +8,7 @@ import type {
   CalendarGraphData,
   CalendarStats,
   EventGroups,
+  ImportStatus,
 } from '@gmail-graph/shared';
 import type { GroupHoverData } from '../utils/groupTypes';
 
@@ -42,6 +43,17 @@ interface AppState {
 
   loading: boolean;
   error: string | null;
+
+  /** Last answer of /api/import/status; null until the first one arrives. */
+  importStatus: ImportStatus | null;
+  /**
+   * Which data the graph should show: the importedAt of the import that
+   * produced it ('cli' for a database built by the CLI, 'current' when the
+   * page opened mid-import over existing data), or null when there is none.
+   * useGraphData loads again whenever it changes.
+   */
+  dataVersion: string | null;
+  importDialogOpen: boolean;
 }
 
 export const initialState: AppState = {
@@ -67,6 +79,9 @@ export const initialState: AppState = {
   activeTab: 'graph',
   loading: true,
   error: null,
+  importStatus: null,
+  dataVersion: null,
+  importDialogOpen: false,
 };
 
 // Actions
@@ -86,7 +101,27 @@ type Action =
   | { type: 'SET_TAB'; payload: 'graph' | 'stats' }
   | { type: 'REMOVE_CONTACT'; payload: string }
   | { type: 'RESTORE_CONTACT'; payload: ExcludedContact }
-  | { type: 'MARK_CONTACT_CLEAR'; payload: string };
+  | { type: 'MARK_CONTACT_CLEAR'; payload: string }
+  | { type: 'SET_IMPORT_STATUS'; payload: ImportStatus }
+  | { type: 'OPEN_IMPORT' }
+  | { type: 'CLOSE_IMPORT' };
+
+function nextDataVersion(current: string | null, status: ImportStatus): string | null {
+  switch (status.state) {
+    case 'empty':
+      return null;
+    case 'ready':
+      return String(status.importedAt ?? 'cli');
+    case 'importing':
+    case 'failed':
+      return status.hasData ? current ?? 'current' : null;
+  }
+}
+
+/** Contact edits are refused by the server while an import runs. */
+export function editsLocked(state: AppState): boolean {
+  return state.importStatus?.state === 'importing';
+}
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -182,6 +217,31 @@ export function reducer(state: AppState, action: Action): AppState {
         },
       };
     }
+    case 'SET_IMPORT_STATUS': {
+      const status = action.payload;
+      const dataVersion = nextDataVersion(state.dataVersion, status);
+      const importDone = state.importStatus?.state === 'importing' && status.state === 'ready';
+      const next = {
+        ...state,
+        importStatus: status,
+        dataVersion,
+        importDialogOpen: importDone ? false : state.importDialogOpen,
+      };
+      if (dataVersion === state.dataVersion) return next;
+      // Other data: whatever was selected may not exist in it.
+      return {
+        ...next,
+        selectedNode: null,
+        selectedNodePosition: null,
+        isolatedGroupId: null,
+        selectedGroup: null,
+        selectedGroupPosition: null,
+      };
+    }
+    case 'OPEN_IMPORT':
+      return { ...state, importDialogOpen: true };
+    case 'CLOSE_IMPORT':
+      return { ...state, importDialogOpen: false };
     default:
       return state;
   }
