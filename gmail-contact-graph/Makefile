@@ -10,7 +10,7 @@
 # Main targets
 # ============================================
 
-.PHONY: all setup install build run dev dev-server dev-client clean help
+.PHONY: all setup install build build-parsers run dev dev-server dev-client clean help
 
 all: setup
 
@@ -18,8 +18,8 @@ all: setup
 # Setup targets
 # ============================================
 
-setup: install build
-	@echo "Setup complete. Run 'make dev' for development or 'make run' for production."
+setup: install build build-parsers
+	@echo "Setup complete. Run 'make run' and open http://localhost:5000 to import your mailbox."
 
 install:
 	@echo "Installing dependencies..."
@@ -28,6 +28,15 @@ install:
 build:
 	@echo "Building application..."
 	cd webapp && npm run build
+
+# The webapp runs fill_db and fill_events itself when you import a mailbox from
+# the UI. Building them needs Rust; without it this warns instead of failing,
+# and the import screen shows the command to run once Rust is installed.
+build-parsers:
+	@echo "Building the parsers (needs Rust / cargo)..."
+	-$(MAKE) -C ../gmail-mbox-parser build-parser
+	-$(MAKE) -C ../calendar-parser build
+	@echo "If the parser build failed above, the webapp still runs; build them later with this same target."
 
 # ============================================
 # Run targets
@@ -67,7 +76,8 @@ help:
 	@echo "Gmail Contact Graph Webapp - Available targets:"
 	@echo ""
 	@echo "  Setup:"
-	@echo "    make setup          - Install dependencies and build"
+	@echo "    make setup          - Install dependencies, build, and build the parsers"
+	@echo "    make build-parsers  - Build fill_db and fill_events (needs Rust)"
 	@echo "    make install        - Install npm dependencies"
 	@echo "    make build          - Build all packages"
 	@echo ""
@@ -81,8 +91,9 @@ help:
 	@echo "    make clean          - Remove node_modules and build files"
 	@echo ""
 	@echo "  Variables (set in ../.env, or override on the command line):"
-	@echo "    USER_EMAIL          - Your Gmail address (the \"you\" node)"
-	@echo "    CONTACTS_DB_FILE    - Path to contacts.db"
+	@echo "    USER_EMAIL          - Default address on the import screen"
+	@echo "    DATA_DIR            - Data directory (default: ../data)"
+	@echo "    CONTACTS_DB_FILE    - Path to contacts.db (default: DATA_DIR/contacts.db)"
 	@echo "    PORT                - Server port (default: 5000)"
 	@echo "    HOST                - Bind address (default: 127.0.0.1)"
 	@echo "    ALLOWED_ORIGINS     - Extra CORS origins, comma-separated"
@@ -92,4 +103,5 @@ help:
 	@echo ""
 	@echo "  Prerequisites:"
 	@echo "    - Node.js 20.19+ required"
-	@echo "    - Database files in ../data/ (default location)"
+	@echo "    - Rust 1.87+ to build the parsers the import screen runs"
+	@echo "    - A Gmail .mbox export in ../data/Email/"

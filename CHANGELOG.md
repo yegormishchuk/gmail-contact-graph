@@ -50,8 +50,18 @@ HTTP API may change in a minor release.
   **Details** open the progress with a cancel button. Contact edits are
   disabled until it ends.
 
+- `make setup` in `gmail-contact-graph/` also builds the parsers the import
+  screen runs (`make build-parsers`); without Rust it warns and carries on.
+
 ### Changed
 
+- The webapp Docker image now includes `fill_db` and `fill_events`, so
+  `docker compose up -d webapp` is enough: import from the UI. The webapp no
+  longer requires `USER_EMAIL` or an existing `contacts.db` to start, and its
+  healthcheck uses `/api/import/status`. The `parse` profile still works as
+  the command-line path.
+- Quick start (README) now goes through the import screen; the
+  command-line pipeline is documented as the alternative.
 - The contact edit endpoints, like the new import ones, accept only
   `Content-Type: application/json` and answer 415 otherwise, so a page from
   another site cannot send them without a CORS preflight.

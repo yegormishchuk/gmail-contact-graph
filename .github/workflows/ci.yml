@@ -161,9 +161,10 @@ jobs:
       - name: Start the webapp
         run: docker compose up -d --no-build webapp
 
-      # The compose healthcheck hits /api/contacts, so "healthy" already means
-      # the database is readable -- but wait for it explicitly to get a clean
-      # failure instead of a curl connection refused.
+      # The compose healthcheck hits /api/import/status, which answers in every
+      # state; the smoke test below is what proves the database is readable.
+      # Waiting for "healthy" gives a clean failure instead of a curl
+      # connection refused.
       - name: Wait for the webapp to report healthy
         run: |
           cid=$(docker compose ps -q webapp)
@@ -185,6 +186,41 @@ jobs:
           curl -fsS "http://127.0.0.1:5000/api/contacts" -o contacts.json
           test "$(jq 'length' contacts.json)" -gt 0
           jq -e 'map(select(.email == "alice@example.com")) | length == 1' contacts.json
+
+      # The usual path since the import screen: a webapp that starts with no
+      # database runs the parsers bundled in its image when asked to.
+      - name: Import through the webapp into an empty data directory
+        env:
+          DATA_DIR: ./ci-import
+        run: |
+          docker compose stop webapp
+          mkdir -p ci-import/Email
+          cp gmail-mbox-parser/tests/fixtures/sample.mbox ci-import/Email/
+          sudo chown -R 1000:1000 ci-import
+
+          # A different DATA_DIR changes the mount, so compose recreates it.
+          docker compose up -d --no-build webapp
+          cid=$(docker compose ps -q webapp)
+          timeout 120 sh -c "until [ \"\$(docker inspect -f '{{.State.Health.Status}}' $cid)\" = healthy ]; do sleep 2; done"
+
+          api=http://127.0.0.1:5000/api
+          curl -fsS "$api/import/status" | jq -e '.state == "empty"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$api/graph")" = 409
+          curl -fsS "$api/import/sources" | jq -e '.parserAvailable and (.mbox | map(.name) == ["sample.mbox"])'
+
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            -d '{"mbox":"sample.mbox","email":"you@example.com","includeCalendar":false}' \
+            "$api/import"
+          for _ in $(seq 60); do
+            state=$(curl -fsS "$api/import/status" | jq -r .state)
+            [ "$state" = importing ] || break
+            sleep 1
+          done
+          curl -fsS "$api/import/status" | jq -e '.state == "ready" and .source == "sample.mbox"'
+
+          curl -fsS "$api/contacts" | jq -e 'map(select(.email == "alice@example.com")) | length == 1'
+          test -f ci-import/contacts.db
+          test ! -e ci-import/contacts.db.new
 
       - name: Container logs
         if: failure()

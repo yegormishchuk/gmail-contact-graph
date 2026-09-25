@@ -25,9 +25,10 @@ or pass it on the command line: USER_EMAIL=you@gmail.com docker compose ..."
 [ -d "$DATA_DIR" ] || die "$DATA_DIR is not mounted."
 
 # The webapp reads contacts.db into memory once at startup and writes the WHOLE
-# file back on every exclude-contact action (server/src/db/index.ts:30-34).
-# A webapp started before this parse would silently overwrite the fresh
-# database with its stale snapshot.
+# file back on every exclude-contact action (saveDatabase in
+# server/src/db/index.ts). A webapp started before this parse would silently
+# overwrite the fresh database with its stale snapshot. (To re-parse while it
+# runs, use Re-import in the webapp instead.)
 if [ -e "$LOCK" ]; then
     die "the webapp container is running and would overwrite this parse.
 Stop it first:  docker compose stop webapp

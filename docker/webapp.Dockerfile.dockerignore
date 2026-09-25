@@ -3,6 +3,12 @@
 *
 !gmail-contact-graph/webapp
 !docker/webapp-entrypoint.sh
+!gmail-mbox-parser/Cargo.toml
+!gmail-mbox-parser/Cargo.lock
+!gmail-mbox-parser/src
+!calendar-parser/Cargo.toml
+!calendar-parser/Cargo.lock
+!calendar-parser/src
 gmail-contact-graph/webapp/node_modules
 gmail-contact-graph/webapp/packages/*/node_modules
 gmail-contact-graph/webapp/packages/*/dist
