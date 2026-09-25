@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "tsx src/db/eventGroups.test.ts && tsx src/db/swap.test.ts && tsx src/app.test.ts"
+    "test": "tsx src/db/eventGroups.test.ts && tsx src/db/swap.test.ts && tsx src/db/overrides.test.ts && tsx src/app.test.ts"
   },
   "dependencies": {
     "@gmail-graph/shared": "*",
