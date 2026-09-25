@@ -32,8 +32,20 @@ HTTP API may change in a minor release.
   the edits again. Only the latest action per contact is kept. Edits made
   before this version were not recorded and will not carry over.
 
+- An import API: `GET /api/import/sources` lists the `.mbox` files in
+  `data/Email` and the `.ics` count in `data/Calendar`; `POST /api/import`
+  runs `fill_db` (and `fill_events`) into `contacts.db.new` and, when they
+  succeed, swaps the result in without a restart, carrying the manual edits
+  over when the mailbox owner's email is the same; `GET /api/import/status` reports the phase and progress;
+  `POST /api/import/cancel` stops it. A failed or cancelled import leaves the
+  current data untouched. The parser paths can be set with `FILL_DB_BIN` and
+  `FILL_EVENTS_BIN`, the source folders with `MBOX_DIR` and `CALENDAR_DIR`.
+
 ### Changed
 
+- The contact edit endpoints, like the new import ones, accept only
+  `Content-Type: application/json` and answer 415 otherwise, so a page from
+  another site cannot send them without a CORS preflight.
 - `/api/message-groups` reads the database the server already has in memory
   instead of reopening the file on every request.
 

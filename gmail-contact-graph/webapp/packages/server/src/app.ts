@@ -10,6 +10,7 @@ import { contactsRouter } from './routes/contacts.js';
 import { domainsRouter } from './routes/domains.js';
 import { groupsRouter } from './routes/groups.js';
 import { calendarRouter } from './routes/calendar.js';
+import { importRouter } from './routes/import.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,6 +26,7 @@ export function createApp(): express.Express {
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
   });
+  app.use('/api', importRouter);
 
   // Data routes: every one of them needs a database. requireData runs for
   // every /api path that reaches this router, matched or not, so routes that

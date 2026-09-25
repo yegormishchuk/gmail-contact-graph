@@ -32,6 +32,13 @@ if (fs.existsSync(ENV_FILE)) {
 // Relative values resolve against PROJECT_ROOT (the gmail-contact-graph
 // directory), which is where `make run` is invoked from; see CONTACTS_DB_FILE.
 const DATA_DIR = path.resolve(PROJECT_ROOT, process.env.DATA_DIR || '../data');
+const REPO_ROOT = path.resolve(PROJECT_ROOT, '..');
+const EXE = process.platform === 'win32' ? '.exe' : '';
+
+function fromEnvPath(name: string, fallback: string): string {
+  const value = process.env[name];
+  return value ? path.resolve(PROJECT_ROOT, value) : fallback;
+}
 
 export const config = {
   DATA_DIR,
@@ -46,6 +53,15 @@ export const config = {
   CONTACTS_DB_FILE: process.env.CONTACTS_DB_FILE
     ? path.resolve(PROJECT_ROOT, process.env.CONTACTS_DB_FILE)
     : path.join(DATA_DIR, 'contacts.db'),
+
+  // Where the import screen lists sources from (same defaults as the Makefiles).
+  MBOX_DIR: fromEnvPath('MBOX_DIR', path.join(DATA_DIR, 'Email')),
+  CALENDAR_DIR: fromEnvPath('CALENDAR_DIR', path.join(DATA_DIR, 'Calendar')),
+
+  // The parsers the server runs for an import: built in place by `make build`
+  // natively, installed in /usr/local/bin in the Docker image.
+  FILL_DB_BIN: fromEnvPath('FILL_DB_BIN', path.join(REPO_ROOT, 'gmail-mbox-parser', 'target', 'release', 'fill_db' + EXE)),
+  FILL_EVENTS_BIN: fromEnvPath('FILL_EVENTS_BIN', path.join(REPO_ROOT, 'calendar-parser', 'target', 'release', 'fill_events' + EXE)),
 
   // Fallbacks for databases without a meta table; use getUserEmail() and
   // getUserName() from db/meta.ts, which prefer the email the import recorded.
