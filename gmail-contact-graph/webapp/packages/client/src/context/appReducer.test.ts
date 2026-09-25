@@ -154,4 +154,35 @@ function statuses(...list: ImportStatus[]) {
   assert.equal(reducer(s, { type: 'CLOSE_IMPORT' }).importDialogOpen, false);
 }
 
+// 14. New data from an import finished elsewhere also closes the dialog.
+{
+  let s = reducer(statuses(ready(1)), { type: 'OPEN_IMPORT' });
+  s = reducer(s, { type: 'SET_IMPORT_STATUS', payload: ready(2) });
+  assert.equal(s.importDialogOpen, false);
+}
+
+// 15. An answer to an older request never overwrites a newer one.
+{
+  let s = reducer(initialState, { type: 'SET_IMPORT_STATUS', payload: importing(false), seq: 5 });
+  s = reducer(s, { type: 'SET_IMPORT_STATUS', payload: { state: 'empty' }, seq: 4 });
+  assert.equal(s.importStatus?.state, 'importing', 'the late poll answer is dropped');
+  s = reducer(s, { type: 'SET_IMPORT_STATUS', payload: ready(9), seq: 6 });
+  assert.equal(s.importStatus?.state, 'ready');
+}
+
+// 16. A failed status poll is reported, and cleared by the next answer.
+{
+  let s = reducer(initialState, { type: 'SET_IMPORT_STATUS_ERROR', payload: 'Failed to fetch' });
+  assert.equal(s.importStatusError, 'Failed to fetch');
+  s = reducer(s, { type: 'SET_IMPORT_STATUS', payload: ready(1) });
+  assert.equal(s.importStatusError, null);
+}
+
+// 17. Loading again clears the error of a previous load.
+{
+  let s = reducer(initialState, { type: 'SET_ERROR', payload: 'API error: 500' });
+  s = reducer(s, { type: 'SET_LOADING', payload: true });
+  assert.equal(s.error, null);
+}
+
 console.log('appReducer: all assertions passed');

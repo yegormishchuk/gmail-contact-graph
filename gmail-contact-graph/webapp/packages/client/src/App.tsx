@@ -24,7 +24,11 @@ function AppContent() {
   if (!status) {
     return (
       <div className="container">
-        <div className="loading">Loading…</div>
+        <div className="loading">
+          {state.importStatusError
+            ? `Can't reach the server (${state.importStatusError}). Retrying…`
+            : 'Loading…'}
+        </div>
       </div>
     );
   }
@@ -56,7 +60,14 @@ function AppContent() {
   if (error) {
     return (
       <div className="container">
-        <div className="loading">Error: {error}</div>
+        <ImportBanner />
+        <ImportDialog />
+        <div className="loading empty-state">
+          <p>Error: {error}</p>
+          <button className="import-btn primary" onClick={() => dispatch({ type: 'OPEN_IMPORT' })}>
+            Import again
+          </button>
+        </div>
       </div>
     );
   }

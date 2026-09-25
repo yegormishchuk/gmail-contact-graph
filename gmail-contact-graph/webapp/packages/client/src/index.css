@@ -1778,3 +1778,9 @@ header {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* Let the title and tabs wrap on narrow screens instead of overflowing. */
+header {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { ImportSources } from '@gmail-graph/shared';
 import { api } from '../../api/client';
-import { useAppContext } from '../../context/AppContext';
+import { useAppContext, nextStatusSeq } from '../../context/AppContext';
 import { formatBytes, formatDate } from '../../utils/importFormat';
 
 interface ImportScreenProps {
@@ -55,9 +55,10 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
     if (!canStart) return;
     setStarting(true);
     setStartError(null);
+    const seq = nextStatusSeq();
     try {
       const status = await api.startImport({ mbox, email: email.trim(), includeCalendar });
-      dispatch({ type: 'SET_IMPORT_STATUS', payload: status });
+      dispatch({ type: 'SET_IMPORT_STATUS', payload: status, seq });
     } catch (err) {
       setStartError(err instanceof Error ? err.message : 'Failed to start the import');
       load();
@@ -68,8 +69,11 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
 
   return (
     <form className={`import-screen ${inDialog ? 'in-dialog' : ''}`} onSubmit={start}>
-      <div className="import-title">{inDialog ? 'Import again' : 'Import your mailbox'}</div>
+      <div className="import-title" id="import-dialog-title">{inDialog ? 'Import again' : 'Import your mailbox'}</div>
 
+      {failure?.error === 'cancelled' && (
+        <div className="import-hint">The last import was cancelled.</div>
+      )}
       {failure && failure.error !== 'cancelled' && (
         <div className="import-error">
           <div>The last import failed: {failure.error}</div>
@@ -92,11 +96,11 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
         </div>
       )}
 
-      {sources && (
+      {sources?.parserAvailable && (
         <>
           <div className="import-section">
             <div className="import-label">
-              <span>Mailbox file</span>
+              <span id="import-mbox-label">Mailbox file</span>
               <button type="button" className="import-link" onClick={load}>Refresh list</button>
             </div>
             <div className="import-hint">
@@ -105,7 +109,7 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
             {sources.mbox.length === 0 ? (
               <div className="import-empty">No .mbox files there yet.</div>
             ) : (
-              <div className="import-files" role="radiogroup">
+              <div className="import-files" role="radiogroup" aria-labelledby="import-mbox-label">
                 {sources.mbox.map((f) => (
                   <label key={f.name} className={`import-file ${mbox === f.name ? 'selected' : ''}`}>
                     <input
@@ -163,9 +167,13 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
             Close
           </button>
         )}
-        <button type="submit" className="import-btn primary" disabled={!canStart}>
-          {starting ? 'Starting…' : 'Import'}
-        </button>
+        {sources && !sources.parserAvailable ? (
+          <button type="button" className="import-btn primary" onClick={load}>Refresh</button>
+        ) : (
+          <button type="submit" className="import-btn primary" disabled={!canStart}>
+            {starting ? 'Starting…' : 'Import'}
+          </button>
+        )}
       </div>
     </form>
   );

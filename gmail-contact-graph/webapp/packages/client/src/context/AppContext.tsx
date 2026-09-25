@@ -54,6 +54,10 @@ interface AppState {
    */
   dataVersion: string | null;
   importDialogOpen: boolean;
+  /** Sequence number of the request importStatus came from (see nextStatusSeq). */
+  importStatusSeq: number;
+  /** Why the last status poll failed; cleared by the next answer. */
+  importStatusError: string | null;
 }
 
 export const initialState: AppState = {
@@ -82,7 +86,20 @@ export const initialState: AppState = {
   importStatus: null,
   dataVersion: null,
   importDialogOpen: false,
+  importStatusSeq: 0,
+  importStatusError: null,
 };
+
+let statusSeq = 0;
+
+/**
+ * Numbers a request whose answer is an ImportStatus (the poll, start,
+ * cancel). Taken when the request is sent, so an answer to an older request
+ * that arrives late cannot overwrite a newer one.
+ */
+export function nextStatusSeq(): number {
+  return ++statusSeq;
+}
 
 // Actions
 type Action =
@@ -102,7 +119,8 @@ type Action =
   | { type: 'REMOVE_CONTACT'; payload: string }
   | { type: 'RESTORE_CONTACT'; payload: ExcludedContact }
   | { type: 'MARK_CONTACT_CLEAR'; payload: string }
-  | { type: 'SET_IMPORT_STATUS'; payload: ImportStatus }
+  | { type: 'SET_IMPORT_STATUS'; payload: ImportStatus; seq?: number }
+  | { type: 'SET_IMPORT_STATUS_ERROR'; payload: string }
   | { type: 'OPEN_IMPORT' }
   | { type: 'CLOSE_IMPORT' };
 
@@ -135,7 +153,8 @@ export function reducer(state: AppState, action: Action): AppState {
         loading: false,
       };
     case 'SET_LOADING':
-      return { ...state, loading: action.payload };
+      // A new load starts clean; a failed earlier one no longer applies.
+      return { ...state, loading: action.payload, error: action.payload ? null : state.error };
     case 'SET_ERROR':
       return { ...state, error: action.payload, loading: false };
     case 'SET_FILTER_LIMIT':
@@ -218,19 +237,23 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     }
     case 'SET_IMPORT_STATUS': {
+      if (action.seq !== undefined && action.seq < state.importStatusSeq) return state;
       const status = action.payload;
       const dataVersion = nextDataVersion(state.dataVersion, status);
-      const importDone = state.importStatus?.state === 'importing' && status.state === 'ready';
       const next = {
         ...state,
         importStatus: status,
+        importStatusSeq: action.seq ?? state.importStatusSeq,
+        importStatusError: null,
         dataVersion,
-        importDialogOpen: importDone ? false : state.importDialogOpen,
       };
       if (dataVersion === state.dataVersion) return next;
-      // Other data: whatever was selected may not exist in it.
+      // Other data: whatever was selected may not exist in it, and a dialog
+      // opened to replace the old data has done its job (here or in another
+      // tab).
       return {
         ...next,
+        importDialogOpen: dataVersion === null ? next.importDialogOpen : false,
         selectedNode: null,
         selectedNodePosition: null,
         isolatedGroupId: null,
@@ -238,6 +261,8 @@ export function reducer(state: AppState, action: Action): AppState {
         selectedGroupPosition: null,
       };
     }
+    case 'SET_IMPORT_STATUS_ERROR':
+      return { ...state, importStatusError: action.payload };
     case 'OPEN_IMPORT':
       return { ...state, importDialogOpen: true };
     case 'CLOSE_IMPORT':
