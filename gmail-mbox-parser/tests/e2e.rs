@@ -44,10 +44,20 @@ fn run_fill_db(case: &str) -> Run {
 }
 
 fn run_fill_db_into(case: &str, db_relative: &str) -> Run {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+    run_fill_db_with(case, db_relative, None).0
+}
+
+fn fixture_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
-        .join("sample.mbox");
+        .join("sample.mbox")
+}
+
+/// Runs `fill_db` with `PROGRESS_FORMAT` set to `progress_format` (or removed
+/// when `None`) and returns the run together with its stderr.
+fn run_fill_db_with(case: &str, db_relative: &str, progress_format: Option<&str>) -> (Run, String) {
+    let fixture = fixture_path();
     assert!(fixture.is_file(), "fixture missing: {}", fixture.display());
 
     let dir = std::env::temp_dir().join(format!("fill_db_e2e_{}_{}", case, std::process::id()));
@@ -55,15 +65,19 @@ fn run_fill_db_into(case: &str, db_relative: &str) -> Run {
     std::fs::create_dir_all(&dir).expect("failed to create temp dir");
     let db = dir.join(db_relative);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_fill_db"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_fill_db"));
+    command
         .current_dir(&dir)
         .env_remove("HF_API_KEY")
         .env_remove("USER_EMAIL")
+        .env_remove("PROGRESS_FORMAT")
         .arg(&fixture)
         .arg(USER)
-        .arg(&db)
-        .output()
-        .expect("failed to run fill_db");
+        .arg(&db);
+    if let Some(format) = progress_format {
+        command.env("PROGRESS_FORMAT", format);
+    }
+    let output = command.output().expect("failed to run fill_db");
 
     assert!(
         output.status.success(),
@@ -74,7 +88,8 @@ fn run_fill_db_into(case: &str, db_relative: &str) -> Run {
     assert!(db.is_file(), "fill_db produced no database at {db:?}");
 
     let conn = Connection::open(&db).expect("failed to open result db");
-    Run { conn, dir }
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    (Run { conn, dir }, stderr)
 }
 
 // ---------------------------------------------------------------------------
@@ -273,5 +288,92 @@ fn without_an_api_key_every_survivor_is_marked_unclear() {
     assert_eq!(
         run.count("SELECT COUNT(*) FROM contacts_filtered WHERE not_clear = 1"),
         7
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Machine-readable progress (PROGRESS_FORMAT=json)
+// ---------------------------------------------------------------------------
+
+fn json_events(stderr: &str) -> Vec<serde_json::Value> {
+    stderr
+        .lines()
+        .filter(|l| l.starts_with('{'))
+        .map(|l| {
+            serde_json::from_str(l).unwrap_or_else(|e| {
+                panic!(
+                    "bad JSON line: {l}
+{e}"
+                )
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn json_progress_reports_phases_in_order_and_ends_with_done() {
+    let (_run, stderr) = run_fill_db_with("json_phases", "contacts.db", Some("json"));
+    let events = json_events(&stderr);
+
+    let phases: Vec<&str> = events
+        .iter()
+        .filter(|e| e["event"] == "phase")
+        .map(|e| e["phase"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        phases,
+        ["mails", "contacts", "spam", "ai"],
+        "stderr:
+{stderr}"
+    );
+
+    let ai = events
+        .iter()
+        .find(|e| e["phase"] == "ai" && e["event"] == "phase")
+        .unwrap();
+    assert_eq!(ai["enabled"], false, "HF_API_KEY is removed for tests");
+    assert_eq!(ai["contacts"], 7);
+
+    let done = events.last().expect("no JSON events");
+    assert_eq!(done["event"], "done");
+    assert_eq!(done["messages"], 19);
+    assert_eq!(done["contacts"], 12);
+    assert_eq!(done["filtered"], 7);
+}
+
+#[test]
+fn json_progress_reports_the_byte_count_of_a_small_mbox() {
+    // The fixture holds far fewer than 1000 messages, so the only progress
+    // event is the one sent when the mails phase finishes.
+    let (_run, stderr) = run_fill_db_with("json_bytes", "contacts.db", Some("json"));
+    let size = std::fs::metadata(fixture_path()).unwrap().len();
+
+    let last = json_events(&stderr)
+        .into_iter()
+        .rev()
+        .find(|e| e["event"] == "progress")
+        .expect("no progress event");
+    assert_eq!(last["phase"], "mails");
+    assert_eq!(last["total_bytes"], size);
+    assert_eq!(last["messages"], 19);
+    let bytes = last["bytes"].as_u64().unwrap();
+    assert!(
+        bytes.abs_diff(size) <= 1,
+        "bytes {bytes} vs file size {size}"
+    );
+}
+
+#[test]
+fn without_progress_format_stderr_has_no_json() {
+    let (_run, stderr) = run_fill_db_with("text", "contacts.db", None);
+    assert!(
+        !stderr.lines().any(|l| l.starts_with('{')),
+        "unexpected JSON in text mode:
+{stderr}"
+    );
+    assert!(
+        stderr.contains("Mails DB: 19 messages"),
+        "stderr:
+{stderr}"
     );
 }

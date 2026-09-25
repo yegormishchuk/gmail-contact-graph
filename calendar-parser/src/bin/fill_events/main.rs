@@ -48,6 +48,14 @@ async fn main() {
         std::process::exit(1);
     }
 
+    let json_progress = json_progress_enabled();
+    if json_progress {
+        eprintln!(
+            "{}",
+            serde_json::json!({ "event": "phase", "phase": "calendar" })
+        );
+    }
+
     eprintln!("DB: {}", db_path);
     for f in &ics_files {
         eprintln!("ICS: {}", f);
@@ -130,6 +138,25 @@ async fn main() {
     // webapp) see the latest state instead of a stale pre-WAL snapshot.
     conn.query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |_| Ok(()))
         .expect("wal_checkpoint failed");
+
+    if json_progress {
+        eprintln!(
+            "{}",
+            serde_json::json!({
+                "event": "done",
+                "masters": totals.masters,
+                "occurrences": totals.occurrences,
+            })
+        );
+    }
+}
+
+/// `PROGRESS_FORMAT=json` adds phase and done events as JSON lines on stderr,
+/// read by the webapp when it runs the import itself. Matches `fill_db`.
+fn json_progress_enabled() -> bool {
+    env::var("PROGRESS_FORMAT")
+        .map(|v| v.trim().eq_ignore_ascii_case("json"))
+        .unwrap_or(false)
 }
 
 fn parse_args(args: Vec<String>) -> (Vec<String>, String, Option<String>) {
