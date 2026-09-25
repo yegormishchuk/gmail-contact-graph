@@ -6,6 +6,7 @@ import path from 'node:path';
 
 // Set before config.ts is loaded; the project .env never overrides these.
 const dir = mkdtempSync(path.join(tmpdir(), 'gcg-app-'));
+process.env.DATA_DIR = dir;
 process.env.CONTACTS_DB_FILE = path.join(dir, 'contacts.db');
 process.env.USER_EMAIL = 'env@example.com';
 process.env.USER_NAME = '';
@@ -58,6 +59,16 @@ async function mailbox(contact: string, userEmail: string | null) {
   return db;
 }
 
+async function assertJsonOnly(url: string) {
+  const variants: Array<Record<string, string>> = [
+    {}, { 'Content-Type': 'text/plain' }, { 'Content-Type': 'application/x-www-form-urlencoded' },
+  ];
+  for (const headers of variants) {
+    const res = await fetch(base + url, { method: 'POST', headers, body: 'email=a@x.com' });
+    assert.equal(res.status, 415, `${url} ${JSON.stringify(headers)}`);
+  }
+}
+
 function emails(graph: { nodes: { email: string }[] }): string[] {
   return graph.nodes.map((n) => n.email);
 }
@@ -73,6 +84,28 @@ try {
     }
     const edit = await post('/api/contacts/mark-clear', { email: 'a@x.com' });
     assert.equal(edit.status, 409);
+
+    // The import API works without a database.
+    assert.deepEqual(await get('/api/import/status'), { status: 200, body: { state: 'empty' } });
+    const sources = await get('/api/import/sources');
+    assert.equal(sources.status, 200);
+    assert.deepEqual(sources.body.mbox, []);
+    const bad = await post('/api/import', { mbox: '../contacts.db', email: 'a@x.com' });
+    assert.equal(bad.status, 400);
+    assert.deepEqual(bad.body.status, { state: 'empty' });
+    assert.equal((await post('/api/import/cancel', {})).status, 409);
+  }
+
+  // State-changing POSTs accept JSON only, so another site open in the
+  // browser cannot send them without a CORS preflight.
+  {
+    for (const url of ['/api/import', '/api/import/cancel']) {
+      await assertJsonOnly(url);
+    }
+    const res = await fetch(base + '/api/import/cancel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
+    assert.equal(res.status, 409, 'JSON with a charset and no body passes the check');
   }
 
   // 2. After a swap the data routes serve the new database, with the email
@@ -84,6 +117,9 @@ try {
     assert.deepEqual(emails(r.body), ['owner@x.com', 'alice@x.com']);
     assert.equal(r.body.nodes[0].name, 'owner');
     assert.equal((await get('/api/message-groups')).status, 200);
+    for (const url of ['/api/contacts/mark-clear', '/api/contacts/mark-not-human', '/api/contacts/restore']) {
+      await assertJsonOnly(url);
+    }
   }
 
   // 3. A second swap drops the cached graph.
