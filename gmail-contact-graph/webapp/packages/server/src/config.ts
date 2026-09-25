@@ -6,7 +6,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Paths relative to project root
 const PROJECT_ROOT = path.resolve(__dirname, '../../../../');
-const DATA_DIR = path.resolve(PROJECT_ROOT, '../data');
 
 // Load the single project-root .env (one level up from PROJECT_ROOT, alongside
 // the Rust parsers). Existing process.env values take precedence.
@@ -30,7 +29,13 @@ if (fs.existsSync(ENV_FILE)) {
   }
 }
 
+// Relative values resolve against PROJECT_ROOT (the gmail-contact-graph
+// directory), which is where `make run` is invoked from; see CONTACTS_DB_FILE.
+const DATA_DIR = path.resolve(PROJECT_ROOT, process.env.DATA_DIR || '../data');
+
 export const config = {
+  DATA_DIR,
+
   // The parsers write every table — contacts, mails, events, event_attendees —
   // into this one file.
   //
@@ -42,8 +47,10 @@ export const config = {
     ? path.resolve(PROJECT_ROOT, process.env.CONTACTS_DB_FILE)
     : path.join(DATA_DIR, 'contacts.db'),
 
-  MY_EMAIL: (process.env.USER_EMAIL || '').toLowerCase(),
-  MY_NAME: process.env.USER_NAME || (process.env.USER_EMAIL || '').split('@')[0] || 'Me',
+  // Fallbacks for databases without a meta table; use getUserEmail() and
+  // getUserName() from db/meta.ts, which prefer the email the import recorded.
+  ENV_USER_EMAIL: (process.env.USER_EMAIL || '').trim().toLowerCase(),
+  ENV_USER_NAME: (process.env.USER_NAME || '').trim(),
 
   // Server
   PORT: parseInt(process.env.PORT || '5000', 10),

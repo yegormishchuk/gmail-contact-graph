@@ -9,6 +9,7 @@ import {
   loadAllContacts,
 } from '../db/queries.js';
 import { clearCache } from './graph.js';
+import { requireIdle } from '../middleware/guards.js';
 
 const router = Router();
 
@@ -39,7 +40,7 @@ router.get('/contacts/all', (req, res) => {
   res.json(result);
 });
 
-router.post('/contacts/mark-clear', (req, res) => {
+router.post('/contacts/mark-clear', requireIdle, (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email required' });
@@ -50,7 +51,7 @@ router.post('/contacts/mark-clear', (req, res) => {
   res.json({ success: true, email });
 });
 
-router.post('/contacts/mark-not-human', (req, res) => {
+router.post('/contacts/mark-not-human', requireIdle, (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email required' });
@@ -61,7 +62,7 @@ router.post('/contacts/mark-not-human', (req, res) => {
   res.json({ success: true, email });
 });
 
-router.post('/contacts/restore', (req, res) => {
+router.post('/contacts/restore', requireIdle, (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email required' });
