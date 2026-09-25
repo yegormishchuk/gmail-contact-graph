@@ -213,8 +213,12 @@ try {
     // 8. Re-importing the same mailbox keeps a manual edit; the old file is kept.
     {
       markContactNotHuman('alice@example.com');
+      // Left by a command-line parse (docker/parse-entrypoint.sh): it would
+      // call the replaced database up to date on the next CLI run.
+      writeFileSync(path.join(dir, '.parse-stamp'), 'data.mbox 1 2 you@example.com');
       startImport({ mbox: 'sample.mbox', email: 'you@example.com' });
       assert.equal((await settle()).state, 'ready');
+      assert.equal(existsSync(path.join(dir, '.parse-stamp')), false, 'the CLI parse stamp is dropped');
       assert.equal(count(`SELECT COUNT(*) FROM contacts_filtered`), 6);
       assert.equal(count(`SELECT COUNT(*) FROM user_overrides WHERE email = 'alice@example.com'`), 1);
       assert.ok(existsSync(dbFile + '.prev'));

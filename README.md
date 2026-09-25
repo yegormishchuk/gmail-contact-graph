@@ -364,9 +364,9 @@ ERROR: the webapp container is running and would overwrite this parse.
 Stop it first:  docker compose stop webapp
 ```
 
-For the same reason, a webapp already running when you re-parse keeps serving
-the old graph until `docker compose restart webapp` — the database is read once,
-at startup.
+For the same reason, a webapp already running during a command-line parse keeps
+serving the old graph until `docker compose restart webapp` — it reads a
+database it did not import itself only at startup.
 
 ### Why only one mbox at a time
 
@@ -382,7 +382,7 @@ lists what is actually in `data/Email/`.
 | `USER_EMAIL` | — | Required for the command-line parse. For the webapp, only the address pre-filled on the import screen. |
 | `MBOX_FILE` | `data.mbox` | Command-line parse only: which file in `data/Email/` to parse. |
 | `PORT` | `5000` | Host and container port, kept in sync automatically. |
-| `DATA_DIR` | `./data` | Where the exports and database live. |
+| `DATA_DIR` | `./data` | Where the exports and database live, relative to the repo root. (The native webapp resolves a relative `DATA_DIR` against `gmail-contact-graph/` instead, so for a native run pass it on the command line — `make run DATA_DIR=../data/demo` — rather than putting a Docker value in `.env`.) |
 | `FORCE_REPARSE` | `0` | `1` re-parses even when nothing changed. |
 | `HF_API_KEY` | empty | Optional AI spam filtering (non-deterministic). |
 

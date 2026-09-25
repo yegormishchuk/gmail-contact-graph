@@ -59,7 +59,9 @@ HTTP API may change in a minor release.
   `docker compose up -d webapp` is enough: import from the UI. The webapp no
   longer requires `USER_EMAIL` or an existing `contacts.db` to start, and its
   healthcheck uses `/api/import/status`. The `parse` profile still works as
-  the command-line path.
+  the command-line path; an import from the webapp drops its
+  `.parse-stamp`, so the next command-line parse does not skip as "up to
+  date" over data it did not produce.
 - Quick start (README) now goes through the import screen; the
   command-line pipeline is documented as the alternative.
 - The contact edit endpoints, like the new import ones, accept only

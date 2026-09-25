@@ -231,6 +231,9 @@ async function finalize(current: Job, dbNew: string, email: string, source: Sour
   // The import has succeeded; a copy that cannot be deleted right now is
   // removed at the next start.
   removeQuietly(dbNew);
+  // The command-line parse (docker/parse-entrypoint.sh) skips when this stamp
+  // matches its mbox; the database it vouched for has just been replaced.
+  removeQuietly(path.join(config.DATA_DIR, '.parse-stamp'));
 }
 
 function newDbFile(): string {

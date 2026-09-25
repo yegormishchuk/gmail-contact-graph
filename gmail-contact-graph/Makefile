@@ -36,7 +36,6 @@ build-parsers:
 	@echo "Building the parsers (needs Rust / cargo)..."
 	-$(MAKE) -C ../gmail-mbox-parser build-parser
 	-$(MAKE) -C ../calendar-parser build
-	@echo "If the parser build failed above, the webapp still runs; build them later with this same target."
 
 # ============================================
 # Run targets
