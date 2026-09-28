@@ -68,6 +68,18 @@ try {
     assert.equal(existsSync(f + '.swap'), false);
   }
 
+  // 2b. A .prev alone is what any import leaves: deleting the working file
+  //     (make clean-db) must not bring the old data back.
+  {
+    const sub = path.join(dir, 'recover2b');
+    mkdirSync(sub);
+    const f = path.join(sub, 'contacts.db');
+    writeFileSync(f + '.prev', 'previous');
+    recoverDataFiles(f);
+    assert.equal(existsSync(f), false);
+    assert.equal(readFileSync(f + '.prev', 'utf8'), 'previous');
+  }
+
   // 3. No database file: the server starts empty instead of throwing.
   {
     const db = await initDatabase();
@@ -141,6 +153,27 @@ try {
     assert.equal(attempts, 5, 'EBUSY is retried five times');
     assert.equal(getDatabase(), current);
     assert.equal(reloads, 2, 'a failed swap does not notify');
+    assert.equal(markerOnDisk(SQL, dbFile), 'second');
+    assert.equal(existsSync(dbFile + '.swap'), false);
+  }
+
+  // 7b. Putting the previous file back fails too: the .swap is kept, so the
+  //     next start restores .prev.
+  {
+    _testing.setRename((from, to) => {
+      if (from === dbFile + '.swap' || from === dbFile + '.prev') {
+        throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+      }
+      return _testing.realRename(from, to);
+    });
+    try {
+      assert.throws(() => swapDatabase(new SQL.Database()), /busy/);
+    } finally {
+      _testing.setRename(_testing.realRename);
+    }
+    assert.equal(existsSync(dbFile), false);
+    assert.equal(existsSync(dbFile + '.swap'), true, '.swap marks the interrupted swap');
+    recoverDataFiles(dbFile);
     assert.equal(markerOnDisk(SQL, dbFile), 'second');
     assert.equal(existsSync(dbFile + '.swap'), false);
   }

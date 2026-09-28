@@ -94,7 +94,9 @@ export function swapDatabase(next: SqlJsDatabase): void {
       try {
         renameWithRetry(prevFile, file);
       } catch (restoreErr) {
-        console.error(`Could not restore ${prevFile}; it is left for manual recovery:`, restoreErr);
+        // .swap stays behind: it tells the next start to restore .prev.
+        console.error(`Could not restore ${prevFile}; the next start will retry:`, restoreErr);
+        throw err;
       }
     }
     rmSync(tmp, { force: true });
@@ -111,10 +113,13 @@ export function swapDatabase(next: SqlJsDatabase): void {
  * Cleans up after an import or swap that the process did not live to finish.
  *
  * Parser output (.new and its WAL files) and a half-written .swap are
- * dropped. A missing working file next to a .prev means the process died
- * between the two renames of a swap, so the previous file goes back in place.
+ * dropped. A missing working file next to a .swap and a .prev means the
+ * process died between the two renames of a swap, so the previous file goes
+ * back in place. Without the .swap the working file was deleted on purpose
+ * (every import leaves a .prev), and the server starts empty.
  */
 export function recoverDataFiles(file: string): void {
+  const interruptedSwap = !existsSync(file) && existsSync(file + '.swap') && existsSync(file + '.prev');
   for (const suffix of ['.new', '.new-wal', '.new-shm', '.swap']) {
     try {
       rmSync(file + suffix, { force: true });
@@ -124,7 +129,7 @@ export function recoverDataFiles(file: string): void {
       console.warn(`Could not delete ${file + suffix}:`, (err as Error).message);
     }
   }
-  if (!existsSync(file) && existsSync(file + '.prev')) {
+  if (interruptedSwap) {
     console.warn(`${file} is missing; restoring it from ${file}.prev (an interrupted import)`);
     renameWithRetry(file + '.prev', file);
   }
