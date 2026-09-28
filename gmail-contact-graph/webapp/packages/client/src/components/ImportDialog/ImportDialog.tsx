@@ -1,9 +1,8 @@
 import React, { useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { ImportProgress } from '../ImportProgress';
 import { ImportScreen } from '../ImportScreen';
 
-/** "Re-import" over the graph: the progress while an import runs, else the form. */
+/** "Re-import" over the graph: the form (a running import shows on the overlay). */
 export function ImportDialog() {
   const { state, dispatch } = useAppContext();
   const open = state.importDialogOpen;
@@ -17,9 +16,9 @@ export function ImportDialog() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, dispatch]);
 
-  if (!open) return null;
+  // A running import shows on the overlay (or the banner when hidden).
+  if (!open || state.importStatus?.state === 'importing') return null;
 
-  const status = state.importStatus;
   const close = () => dispatch({ type: 'CLOSE_IMPORT' });
 
   return (
@@ -31,7 +30,7 @@ export function ImportDialog() {
         aria-labelledby="import-dialog-title"
         onClick={(e) => e.stopPropagation()}
       >
-        {status?.state === 'importing' ? <ImportProgress status={status} /> : <ImportScreen inDialog />}
+        <ImportScreen inDialog />
       </div>
     </div>
   );

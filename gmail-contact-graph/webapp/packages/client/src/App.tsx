@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { useGraphData } from './hooks/useGraphData';
 import { Graph } from './components/Graph';
@@ -8,9 +8,8 @@ import { RankingPanel } from './components/RankingPanel';
 import { Legend } from './components/Legend';
 import { Tooltip } from './components/Tooltip';
 import { StatsPage } from './components/StatsPage';
-import { IntroSequence } from './components/IntroSequence';
+import { ImportOverlay } from './components/ImportOverlay';
 import { ImportScreen } from './components/ImportScreen';
-import { ImportProgress } from './components/ImportProgress';
 import { ImportBanner } from './components/ImportBanner';
 import { ImportDialog } from './components/ImportDialog';
 import { useImportStatus } from './hooks/useImportStatus';
@@ -41,12 +40,9 @@ function AppContent() {
       </div>
     );
   }
+  // The import overlay shows this one (state.importOverlayOpen is forced on).
   if (status.state === 'importing' && !status.hasData) {
-    return (
-      <div className="container import-page">
-        <ImportProgress status={status} fullscreen />
-      </div>
-    );
+    return <div className="container import-page" />;
   }
 
   if (loading) {
@@ -117,20 +113,18 @@ function AppContent() {
   );
 }
 
-// The intro animates the contacts, so it waits until there is data: after
-// the first import when the webapp starts without any.
-function Intro() {
+// Beside AppContent, so it lives on while the page under it switches from
+// the first-import screen to the graph.
+function Overlay() {
   const { state } = useAppContext();
-  const [showIntro, setShowIntro] = useState(!localStorage.getItem('intro_seen'));
-  if (!showIntro || state.dataVersion === null) return null;
-  return <IntroSequence onComplete={() => setShowIntro(false)} />;
+  return state.importOverlayOpen ? <ImportOverlay /> : null;
 }
 
 function App() {
   return (
     <AppProvider>
       <AppContent />
-      <Intro />
+      <Overlay />
     </AppProvider>
   );
 }

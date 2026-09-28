@@ -1379,55 +1379,20 @@ header {
   font-size: 11px;
 }
 
-/* ── Intro sequence overlay ──────────────────────────────────────────────── */
+/* ── Import overlay ──────────────────────────────────────────────────────── */
 
-.intro-overlay {
+.import-overlay {
     position: fixed;
     inset: 0;
     background: radial-gradient(ellipse at center, #0a0a0a 0%, #000000 100%);
     z-index: 9999;
 }
 
-.intro-svg {
+.import-overlay-svg {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
-}
-
-.intro-loading {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: #444;
-    font-size: 0.9rem;
-    letter-spacing: 3px;
-    font-weight: 300;
-    text-transform: uppercase;
-}
-
-.intro-button {
-    position: absolute;
-    bottom: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: transparent;
-    border: 1px solid rgba(0, 214, 143, 0.4);
-    color: #00d68f;
-    padding: 12px 36px;
-    font-size: 0.85rem;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-    font-family: inherit;
-}
-
-.intro-button:hover {
-    background: rgba(0, 214, 143, 0.08);
-    border-color: #00d68f;
-    box-shadow: 0 0 24px rgba(0, 214, 143, 0.15);
 }
 
 /* Import: screen, progress, banner, dialog */
@@ -1448,7 +1413,7 @@ header {
   color: #ccc;
 }
 
-.import-progress.fullscreen,
+.import-progress.overlay,
 .import-page > .import-screen {
   background: rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(0, 214, 143, 0.15);
@@ -1456,6 +1421,16 @@ header {
   padding: 24px 28px;
   max-height: calc(100vh - 32px);
   overflow-y: auto;
+}
+
+.import-progress.overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100vh - 80px);
+  background: rgba(0, 0, 0, 0.75);
 }
 
 .import-dialog {
