@@ -54,6 +54,12 @@ interface AppState {
    */
   dataVersion: string | null;
   importDialogOpen: boolean;
+  /**
+   * The import animation over everything (see ImportOverlay). Its own flag,
+   * because the dialog closes when new data arrives, just when the animation
+   * shows its ending.
+   */
+  importOverlayOpen: boolean;
   /** Sequence number of the request importStatus came from (see nextStatusSeq). */
   importStatusSeq: number;
   /** Why the last status poll failed; cleared by the next answer. */
@@ -86,6 +92,7 @@ export const initialState: AppState = {
   importStatus: null,
   dataVersion: null,
   importDialogOpen: false,
+  importOverlayOpen: false,
   importStatusSeq: 0,
   importStatusError: null,
 };
@@ -139,6 +146,13 @@ function nextDataVersion(current: string | null, status: ImportStatus): string |
 /** Contact edits are refused by the server while an import runs. */
 export function editsLocked(state: AppState): boolean {
   return state.importStatus?.state === 'importing';
+}
+
+/** A first import always shows the overlay; an import that ends without new data closes it. */
+function nextOverlayOpen(open: boolean, status: ImportStatus): boolean {
+  if (status.state === 'importing' && !status.hasData) return true;
+  if (status.state === 'failed' || status.state === 'empty') return false;
+  return open;
 }
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -246,6 +260,7 @@ export function reducer(state: AppState, action: Action): AppState {
         importStatusSeq: action.seq ?? state.importStatusSeq,
         importStatusError: null,
         dataVersion,
+        importOverlayOpen: nextOverlayOpen(state.importOverlayOpen, status),
       };
       if (dataVersion === state.dataVersion) return next;
       // Other data: whatever was selected may not exist in it, and a dialog
@@ -264,9 +279,12 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'SET_IMPORT_STATUS_ERROR':
       return { ...state, importStatusError: action.payload };
     case 'OPEN_IMPORT':
-      return { ...state, importDialogOpen: true };
+      // While an import runs, its progress is the overlay.
+      return state.importStatus?.state === 'importing'
+        ? { ...state, importOverlayOpen: true, importDialogOpen: false }
+        : { ...state, importDialogOpen: true };
     case 'CLOSE_IMPORT':
-      return { ...state, importDialogOpen: false };
+      return { ...state, importDialogOpen: false, importOverlayOpen: false };
     default:
       return state;
   }
