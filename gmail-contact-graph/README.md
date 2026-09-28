@@ -29,7 +29,6 @@ on startup via an inline parser in `packages/server/src/config.ts`.
 
 ```env
 USER_EMAIL=your.email@gmail.com   # "you" node in the graph
-USER_NAME=Your Name               # display name (optional; defaults to local-part of USER_EMAIL)
 ```
 
 The database path defaults to `../data/contacts.db`; override it with

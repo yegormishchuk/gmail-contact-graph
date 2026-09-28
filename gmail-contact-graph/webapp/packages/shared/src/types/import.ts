@@ -54,11 +54,15 @@ export interface ImportSources {
   /** HF_API_KEY is set, so fill_db will run the AI filter. */
   aiEnabled: boolean;
   defaultEmail: string;
+  /** The name the current data was imported with, '' if none. */
+  defaultName: string;
 }
 
 export interface StartImportRequest {
   /** A file name from ImportSources.mbox, not a path. */
   mbox: string;
   email: string;
+  /** Shown on the centre node; blank means the local part of the email. */
+  name?: string;
   includeCalendar: boolean;
 }

@@ -24,15 +24,23 @@ export function getUserEmail(): string {
   return metaUserEmail() || config.ENV_USER_EMAIL;
 }
 
-/** USER_NAME, else the local part of the owner's email. */
+/** The name given on import, else the local part of the owner's email. */
 export function getUserName(): string {
   const metaEmail = metaUserEmail();
   const local = metaEmail ? metaEmail.split('@')[0] : config.ENV_USER_EMAIL_LOCAL;
-  return config.ENV_USER_NAME || local || 'Me';
+  return metaUserName() || local || 'Me';
+}
+
+/** The name given on import, '' if none was. */
+export function metaUserName(): string {
+  return currentMeta('user_name').trim();
 }
 
 // Lowercased like every address the parser stores, so comparisons match.
 function metaUserEmail(): string {
-  const value = hasDatabase() ? getMeta(getDatabase(), 'user_email') : null;
-  return (value ?? '').trim().toLowerCase();
+  return currentMeta('user_email').trim().toLowerCase();
+}
+
+function currentMeta(key: string): string {
+  return (hasDatabase() ? getMeta(getDatabase(), key) : null) ?? '';
 }

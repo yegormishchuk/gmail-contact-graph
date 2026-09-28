@@ -2,7 +2,7 @@ import { existsSync, readdirSync, statSync } from 'fs';
 import path from 'path';
 import type { ImportSources, MboxFile } from '@gmail-graph/shared';
 import { config } from '../config.js';
-import { getUserEmail } from '../db/meta.js';
+import { getUserEmail, metaUserName } from '../db/meta.js';
 
 /** Identifies the file an import read: name plus size and mtime at the time. */
 export interface SourceRef {
@@ -66,6 +66,7 @@ export function getSources(current: SourceRef | null): ImportSources {
     calendarParserAvailable: existsSync(config.FILL_EVENTS_BIN),
     aiEnabled: aiEnabled(),
     defaultEmail: getUserEmail(),
+    defaultName: metaUserName(),
   };
 }
 

@@ -66,7 +66,6 @@ export const config = {
   // Fallbacks for databases without a meta table; use getUserEmail() and
   // getUserName() from db/meta.ts, which prefer the email the import recorded.
   ENV_USER_EMAIL: (process.env.USER_EMAIL || '').trim().toLowerCase(),
-  ENV_USER_NAME: (process.env.USER_NAME || '').trim(),
   // As written, not lowercased: 'John.Doe@…' names the centre node 'John.Doe'.
   ENV_USER_EMAIL_LOCAL: (process.env.USER_EMAIL || '').trim().split('@')[0],
 

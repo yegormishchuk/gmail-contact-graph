@@ -10,7 +10,6 @@ const dir = mkdtempSync(path.join(tmpdir(), 'gcg-swap-'));
 const dbFile = path.join(dir, 'contacts.db');
 process.env.CONTACTS_DB_FILE = dbFile;
 process.env.USER_EMAIL = 'Env@Example.com';
-process.env.USER_NAME = '';
 
 const {
   initDatabase, hasDatabase, getDatabase, getSqlJs, swapDatabase, onDatabaseReload,
