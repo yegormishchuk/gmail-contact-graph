@@ -17,6 +17,8 @@ async function startServer() {
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK'] as const) {
   process.once(signal, () => {
     stopParser();
+    // Windows cannot raise SIGBREAK (process.kill throws ENOSYS), so exit directly.
+    if (signal === 'SIGBREAK') process.exit(1);
     // The handler is gone (once), so this ends the process the default way.
     process.kill(process.pid, signal);
   });
