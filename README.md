@@ -508,7 +508,6 @@ cp .env.example .env
 
 ```env
 USER_EMAIL=you@gmail.com           # required — identifies "you" in the graph
-USER_NAME=Your Name                # optional — display name for your node
 HF_API_KEY=                        # optional — see below
 ```
 

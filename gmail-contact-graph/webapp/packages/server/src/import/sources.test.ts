@@ -69,6 +69,7 @@ try {
     assert.equal(s.calendarParserAvailable, true);
     assert.equal(s.aiEnabled, false, 'a blank HF_API_KEY disables AI, as in fill_db');
     assert.equal(s.defaultEmail, 'env@example.com');
+    assert.equal(s.defaultName, '', 'no name without imported data');
 
     // A file changed since the import is no longer the current one.
     const s2 = getSources({ ...current, size: 999 });

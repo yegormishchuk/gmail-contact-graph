@@ -15,7 +15,6 @@ mkdirSync(calendarDir);
 process.env.DATA_DIR = dir;
 process.env.CONTACTS_DB_FILE = dbFile;
 process.env.USER_EMAIL = '';
-process.env.USER_NAME = '';
 // Real parsers must never send test data to Hugging Face.
 process.env.HF_API_KEY = '';
 // Node stands in for fill_db: the "mbox" it is given is a script (below).
@@ -28,6 +27,7 @@ const { markContactNotHuman } = await import('../db/queries.js');
 const { startImport, cancelImport, getImportStatus, currentSource } = await import('./importer.js');
 const { isImporting } = await import('./state.js');
 const { getSources } = await import('./sources.js');
+const { getUserName } = await import('../db/meta.js');
 
 const REPO = fileURLToPath(new URL('../../../../../../', import.meta.url));
 const EXE = process.platform === 'win32' ? '.exe' : '';
@@ -179,9 +179,11 @@ try {
 
     // 6. A real import becomes the working database.
     {
-      startImport({ mbox: 'sample.mbox', email: 'You@Example.com', includeCalendar: false });
+      startImport({ mbox: 'sample.mbox', email: 'You@Example.com', name: '  Your Name ', includeCalendar: false });
       const done = await settle();
       assert.equal(done.state, 'ready', JSON.stringify(done));
+      assert.equal(getUserName(), 'Your Name');
+      assert.equal(getSources(currentSource()).defaultName, 'Your Name');
       if (done.state === 'ready') {
         assert.equal(done.userEmail, 'you@example.com');
         assert.equal(done.source, 'sample.mbox');
@@ -218,6 +220,7 @@ try {
       writeFileSync(path.join(dir, '.parse-stamp'), 'data.mbox 1 2 you@example.com');
       startImport({ mbox: 'sample.mbox', email: 'you@example.com' });
       assert.equal((await settle()).state, 'ready');
+      assert.equal(getUserName(), 'you', 'no name given: the local part of the email');
       assert.equal(existsSync(path.join(dir, '.parse-stamp')), false, 'the CLI parse stamp is dropped');
       assert.equal(count(`SELECT COUNT(*) FROM contacts_filtered`), 6);
       assert.equal(count(`SELECT COUNT(*) FROM user_overrides WHERE email = 'alice@example.com'`), 1);

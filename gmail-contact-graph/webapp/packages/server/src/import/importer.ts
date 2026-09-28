@@ -84,6 +84,7 @@ export function startImport(body: unknown): ImportStatus {
   }
   const email = typeof req.email === 'string' ? req.email.trim().toLowerCase() : '';
   if (!email.includes('@')) throw new ImportRequestError(400, 'A valid email address is required.');
+  const name = typeof req.name === 'string' ? req.name.trim() : '';
   if (!existsSync(config.FILL_DB_BIN)) {
     throw new ImportRequestError(500,
       `The parser is not built (${config.FILL_DB_BIN}). Run: cd gmail-mbox-parser && make build-parser`);
@@ -112,7 +113,7 @@ export function startImport(body: unknown): ImportStatus {
   const current: Job = { tracker: new ProgressTracker(), startedAt: Date.now(), log: [], child: null, cancelled: false };
   job = current;
   setImporting(true);
-  run(current, mboxPath, email, withCalendar, source).catch((err) => {
+  run(current, mboxPath, email, name, withCalendar, source).catch((err) => {
     // run() handles its own errors; this is only a last line of defence
     // against an unhandled rejection taking the server down.
     console.error('Import crashed:', err);
@@ -136,7 +137,9 @@ export function cancelImport(): ImportStatus {
   return getImportStatus();
 }
 
-async function run(current: Job, mboxPath: string, email: string, withCalendar: boolean, source: SourceRef) {
+async function run(
+  current: Job, mboxPath: string, email: string, name: string, withCalendar: boolean, source: SourceRef,
+) {
   const dbNew = newDbFile();
   try {
     mkdirSync(path.dirname(dbNew), { recursive: true });
@@ -147,7 +150,7 @@ async function run(current: Job, mboxPath: string, email: string, withCalendar: 
         [config.CALENDAR_DIR, '--db', dbNew, '--user-email', email]);
     }
     current.tracker.setPhase('finalizing');
-    await finalize(current, dbNew, email, source);
+    await finalize(current, dbNew, email, name, source);
   } catch (err) {
     // Best effort: whatever stays behind is removed at the next start.
     removeParserOutput();
@@ -195,7 +198,7 @@ function runParser(current: Job, bin: string, args: string[]): Promise<void> {
   });
 }
 
-async function finalize(current: Job, dbNew: string, email: string, source: SourceRef) {
+async function finalize(current: Job, dbNew: string, email: string, name: string, source: SourceRef) {
   // sql.js reads the main file only. Both parsers checkpoint their WAL into it
   // before exiting, so anything left in a -wal file would be lost data.
   const wal = dbNew + '-wal';
@@ -215,6 +218,7 @@ async function finalize(current: Job, dbNew: string, email: string, source: Sour
 
     ensureSchema(next);
     setMeta(next, 'user_email', email);
+    if (name) setMeta(next, 'user_name', name);
     setMeta(next, 'imported_at', String(Date.now()));
     setMeta(next, 'source', JSON.stringify(source));
 

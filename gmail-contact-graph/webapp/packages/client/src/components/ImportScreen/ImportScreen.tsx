@@ -19,6 +19,7 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mbox, setMbox] = useState('');
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [includeCalendar, setIncludeCalendar] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
       // Keep the user's choices across a refresh; fill in what is still empty.
       setMbox((prev) => (s.mbox.some((f) => f.name === prev) ? prev : s.mbox[0]?.name ?? ''));
       setEmail((prev) => prev || s.defaultEmail);
+      setName((prev) => prev || s.defaultName);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to list the files');
     }
@@ -57,7 +59,7 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
     setStartError(null);
     const seq = nextStatusSeq();
     try {
-      const status = await api.startImport({ mbox, email: email.trim(), includeCalendar });
+      const status = await api.startImport({ mbox, email: email.trim(), name: name.trim(), includeCalendar });
       dispatch({ type: 'SET_IMPORT_STATUS', payload: status, seq });
       dispatch({ type: 'OPEN_IMPORT' });
     } catch (err) {
@@ -139,6 +141,18 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
               onChange={(e) => setEmail(e.target.value)}
             />
             <span className="import-hint">The address this mailbox belongs to: it is the centre of the graph.</span>
+          </label>
+
+          <label className="import-section">
+            <span className="import-label">Your name</span>
+            <input
+              className="import-input"
+              type="text"
+              value={name}
+              placeholder={email.trim().split('@')[0] || 'Your Name'}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <span className="import-hint">Shown on the centre node. Optional: left blank, the address is used.</span>
           </label>
 
           <label className={`import-check ${calendarPossible ? '' : 'disabled'}`}>

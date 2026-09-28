@@ -9,7 +9,6 @@ const dir = mkdtempSync(path.join(tmpdir(), 'gcg-app-'));
 process.env.DATA_DIR = dir;
 process.env.CONTACTS_DB_FILE = path.join(dir, 'contacts.db');
 process.env.USER_EMAIL = 'env@example.com';
-process.env.USER_NAME = '';
 
 const { createApp } = await import('./app.js');
 const { initDatabase, getDatabase, getSqlJs, swapDatabase } = await import('./db/index.js');
