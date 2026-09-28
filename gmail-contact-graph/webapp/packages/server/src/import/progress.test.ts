@@ -67,4 +67,22 @@ import { ProgressTracker } from './progress.js';
   assert.equal(t.snapshot().progress, 0.85);
 }
 
+// 7. fill_db's stage timings are kept for the timing record; the calendar
+//    parser's done event, which has none, does not replace them.
+{
+  const t = new ProgressTracker();
+  assert.equal(t.fillDbTimings(), null);
+  t.feed('{"event":"phase","phase":"ai","enabled":true,"contacts":3}');
+  t.feed('{"event":"done","messages":19,"contacts":12,"filtered":7,'
+    + '"stages_ms":{"mails":100,"contacts":5,"spam":1,"ai":40,"checkpoint":2},"total_ms":150}');
+  t.feed('{"event":"done","masters":4,"occurrences":9}');
+  assert.deepEqual(t.fillDbTimings(), {
+    messages: 19,
+    contacts: 12,
+    aiEnabled: true,
+    stagesMs: { mails: 100, contacts: 5, spam: 1, ai: 40, checkpoint: 2 },
+    totalMs: 150,
+  });
+}
+
 console.log('progress.test: all assertions passed');

@@ -83,6 +83,13 @@ function leftovers(): string[] {
   return readdirSync(dir).filter((f) => /\.(new|swap)/.test(f));
 }
 
+const TIMINGS = path.join(dir, 'benchmarks', 'timings.jsonl');
+
+function timingRecords(): Record<string, unknown>[] {
+  if (!existsSync(TIMINGS)) return [];
+  return readFileSync(TIMINGS, 'utf8').trim().split(/\r?\n/).map((l) => JSON.parse(l));
+}
+
 function count(sql: string): number {
   return Number(getDatabase().exec(sql)[0].values[0][0]);
 }
@@ -197,6 +204,23 @@ try {
       assert.equal(existsSync(dbFile + '.prev'), false, 'nothing to keep on the first import');
       assert.deepEqual(leftovers(), []);
       assert.equal(count(`SELECT COUNT(*) FROM sqlite_master WHERE name = 'events'`), 0);
+
+      // Only this successful import left a timing record, next to contacts.db.
+      const records = timingRecords();
+      assert.equal(records.length, 1);
+      const r = records[0] as Record<string, number & string & Record<string, number>>;
+      assert.equal(r.mode, 'webapp');
+      assert.equal(r.mbox, 'sample.mbox');
+      assert.equal(r.mbox_bytes, readFileSync(FIXTURE).length);
+      assert.equal(r.messages, 19);
+      assert.equal(r.contacts, 12);
+      assert.equal(r.ai_enabled, false);
+      assert.deepEqual(Object.keys(r.stages_ms).sort(), ['ai', 'checkpoint', 'contacts', 'mails', 'spam']);
+      assert.ok(r.fill_db_wall_ms >= r.fill_db_total_ms, 'the wall time includes the process start');
+      assert.equal(r.calendar_ms, null);
+      assert.equal(typeof r.finalize_ms, 'number');
+      assert.ok(r.total_ms >= r.fill_db_wall_ms + r.finalize_ms);
+      assert.match(r.at, /Z$/);
     }
 
     // 7. A failed import leaves the working data alone.
@@ -209,6 +233,7 @@ try {
       if (done.state === 'failed') assert.equal(done.hasData, true);
       assert.deepEqual(readFileSync(dbFile), before);
       assert.equal(count(`SELECT COUNT(*) FROM contacts`), 12);
+      assert.equal(timingRecords().length, 1, 'a failed import is not recorded');
       config.FILL_DB_BIN = REAL_FILL_DB;
     }
 
@@ -241,6 +266,7 @@ try {
       startImport({ mbox: 'sample.mbox', email: 'you@example.com', includeCalendar: true });
       assert.equal((await settle()).state, 'ready');
       assert.equal(count(`SELECT COUNT(*) FROM sqlite_master WHERE name IN ('events', 'event_attendees')`), 2);
+      assert.equal(typeof timingRecords().at(-1)?.calendar_ms, 'number');
 
       // Unticked: no calendar tables in the new data.
       startImport({ mbox: 'sample.mbox', email: 'you@example.com', includeCalendar: false });

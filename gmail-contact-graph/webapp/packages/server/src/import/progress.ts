@@ -17,7 +17,16 @@ const PHASE_START: Record<ImportPhase, number> = {
 type ParserEvent =
   | { event: 'phase'; phase: string; enabled?: boolean; contacts?: number }
   | { event: 'progress'; phase: string; bytes: number; total_bytes: number; messages: number }
-  | { event: 'done' };
+  | { event: 'done'; messages?: number; contacts?: number; stages_ms?: Record<string, number>; total_ms?: number };
+
+/** What fill_db reported about its own run, for the timing record. */
+export interface FillDbTimings {
+  messages: number;
+  contacts: number;
+  aiEnabled: boolean;
+  stagesMs: Record<string, number>;
+  totalMs: number;
+}
 
 /**
  * Turns the parsers' stderr into the phase, overall progress and detail shown
@@ -32,6 +41,8 @@ export class ProgressTracker {
   private progress = 0;
   private detail = '';
   private sawJson = false;
+  private aiEnabled = false;
+  private timings: FillDbTimings | null = null;
 
   /**
    * Reads one stderr line. Returns true if it was progress output (a JSON
@@ -50,6 +61,7 @@ export class ProgressTracker {
     if (event.event === 'phase' && isPhase(event.phase)) {
       this.setPhase(event.phase);
       if (event.phase === 'ai') {
+        this.aiEnabled = event.enabled === true;
         const n = (event.contacts ?? 0).toLocaleString('en-US');
         this.detail = event.enabled
           ? `Checking ${n} contacts with AI`
@@ -59,8 +71,22 @@ export class ProgressTracker {
       const fraction = event.total_bytes > 0 ? Math.min(event.bytes / event.total_bytes, 1) : 0;
       this.progress = fraction * PHASE_START.contacts;
       this.detail = `${event.messages.toLocaleString('en-US')} messages`;
+    } else if (event.event === 'done' && event.stages_ms) {
+      // Only fill_db's done has timings; fill_events' done has none.
+      this.timings = {
+        messages: event.messages ?? 0,
+        contacts: event.contacts ?? 0,
+        aiEnabled: this.aiEnabled,
+        stagesMs: event.stages_ms,
+        totalMs: event.total_ms ?? 0,
+      };
     }
     return true;
+  }
+
+  /** fill_db's timings, or null if it sent none (a parser built before them). */
+  fillDbTimings(): FillDbTimings | null {
+    return this.timings;
   }
 
   setPhase(phase: ImportPhase): void {

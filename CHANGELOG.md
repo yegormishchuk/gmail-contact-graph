@@ -52,6 +52,13 @@ HTTP API may change in a minor release.
 
 - `make setup` in `gmail-contact-graph/` also builds the parsers the import
   screen runs (`make build-parsers`); without Rust it warns and carries on.
+- Stage timings. `fill_db` times each stage (`mails`, `contacts`, `spam`,
+  `ai`, `checkpoint`). From the command line it prints them as a table and
+  appends a `"mode": "cli"` record to `benchmarks/timings.jsonl` next to the
+  database. With `PROGRESS_FORMAT=json` they go in the `done` event instead,
+  and a successful webapp import logs them and appends a `"mode": "webapp"`
+  record with the parser's wall time, the calendar parser, the finalize step
+  and the total. Runs of the same mbox can be compared from that one file.
 
 ### Changed
 

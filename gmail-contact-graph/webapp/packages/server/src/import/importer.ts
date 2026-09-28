@@ -11,6 +11,7 @@ import { ensureSchema } from '../db/schema.js';
 import { ProgressTracker } from './progress.js';
 import { countIcs, listMbox, resolveMbox, type SourceRef } from './sources.js';
 import { setImporting } from './state.js';
+import { recordImportTimings } from './timings.js';
 
 /**
  * Runs an import: fill_db (and fill_events) write contacts.db.new, which is
@@ -141,16 +142,24 @@ async function run(
   current: Job, mboxPath: string, email: string, name: string, withCalendar: boolean, source: SourceRef,
 ) {
   const dbNew = newDbFile();
+  const started = performance.now();
   try {
     mkdirSync(path.dirname(dbNew), { recursive: true });
-    await runParser(current, config.FILL_DB_BIN, [mboxPath, email, dbNew]);
+    const fillDbWallMs = await timed(() => runParser(current, config.FILL_DB_BIN, [mboxPath, email, dbNew]));
+    let calendarMs: number | null = null;
     if (withCalendar) {
       current.tracker.setPhase('calendar');
-      await runParser(current, config.FILL_EVENTS_BIN,
-        [config.CALENDAR_DIR, '--db', dbNew, '--user-email', email]);
+      calendarMs = await timed(() => runParser(current, config.FILL_EVENTS_BIN,
+        [config.CALENDAR_DIR, '--db', dbNew, '--user-email', email]));
     }
     current.tracker.setPhase('finalizing');
-    await finalize(current, dbNew, email, name, source);
+    const finalizeMs = await timed(() => finalize(current, dbNew, email, name, source));
+
+    const fillDb = current.tracker.fillDbTimings();
+    if (fillDb) {
+      recordImportTimings(fillDb, source,
+        { fillDbWallMs, calendarMs, finalizeMs, totalMs: Math.round(performance.now() - started) });
+    }
   } catch (err) {
     // Best effort: whatever stays behind is removed at the next start.
     removeParserOutput();
@@ -161,6 +170,13 @@ async function run(
     job = null;
     setImporting(false);
   }
+}
+
+/** Runs `step` and resolves to how long it took, in whole milliseconds. */
+async function timed(step: () => Promise<void>): Promise<number> {
+  const start = performance.now();
+  await step();
+  return Math.round(performance.now() - start);
 }
 
 function runParser(current: Job, bin: string, args: string[]): Promise<void> {
