@@ -109,7 +109,7 @@ async fn main() {
 
     // Phase 4: AI verification and fill filtered contacts table
     if !candidates.is_empty() {
-        fill_filtered_with_ai(db_path, candidates, &reporter).await;
+        fill_filtered_with_ai(db_path, candidates, &mut reporter).await;
     } else {
         reporter.ai_phase(false, 0);
         eprintln!("No candidates for AI verification.");
@@ -117,15 +117,18 @@ async fn main() {
 
     // Merge WAL into the main DB file so non-WAL readers (e.g. sql.js in the
     // webapp) see the latest state instead of a stale pre-WAL snapshot.
+    reporter.stage("checkpoint");
     let conn = Connection::open(db_path).expect("failed to open database");
     conn.query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |_| Ok(()))
         .expect("wal_checkpoint failed");
 
-    reporter.done(
-        msg_count,
-        count_rows(&conn, "contacts"),
-        count_rows(&conn, "contacts_filtered"),
-    );
+    let contacts = count_rows(&conn, "contacts");
+    reporter.done(msg_count, contacts, count_rows(&conn, "contacts_filtered"));
+
+    let mbox_bytes = std::fs::metadata(mbox_path).map(|m| m.len()).unwrap_or(0);
+    if let Some(record) = reporter.record_line(mbox_path, mbox_bytes, msg_count, contacts) {
+        progress::append_record(db_path, &record);
+    }
 }
 
 /// Row count of `table`, or 0 if it does not exist: `contacts_filtered` is
@@ -431,7 +434,7 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
 async fn fill_filtered_with_ai(
     db_path: &str,
     candidates: Vec<ContactCandidate>,
-    reporter: &Reporter,
+    reporter: &mut Reporter,
 ) {
     eprintln!("\n=== Phase 4: AI Verification ===");
 
