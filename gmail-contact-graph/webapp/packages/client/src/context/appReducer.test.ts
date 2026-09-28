@@ -185,4 +185,66 @@ function statuses(...list: ImportStatus[]) {
   assert.equal(s.error, null);
 }
 
+// 18. A first import shows the overlay by itself, also after a page reload.
+{
+  assert.equal(initialState.importOverlayOpen, false);
+  assert.equal(statuses(importing(false)).importOverlayOpen, true);
+}
+
+// 19. A reload during a re-import leaves the overlay closed: the banner shows it.
+{
+  assert.equal(statuses(importing(true)).importOverlayOpen, false);
+  assert.equal(statuses(ready(1), importing(true)).importOverlayOpen, false);
+}
+
+// 20. During an import, opening the import shows the overlay instead of the dialog.
+{
+  let s = reducer(statuses(ready(1), importing(true)), { type: 'OPEN_IMPORT' });
+  assert.equal(s.importOverlayOpen, true);
+  assert.equal(s.importDialogOpen, false);
+  // An import started from another tab while the dialog was open closes it too.
+  s = reducer(statuses(ready(1)), { type: 'OPEN_IMPORT' });
+  s = reducer(s, { type: 'SET_IMPORT_STATUS', payload: importing(true) });
+  s = reducer(s, { type: 'OPEN_IMPORT' });
+  assert.equal(s.importDialogOpen, false);
+  assert.equal(s.importOverlayOpen, true);
+}
+
+// 21. With no import running, opening the import shows the dialog, never the overlay.
+{
+  const s = reducer(statuses(ready(1)), { type: 'OPEN_IMPORT' });
+  assert.equal(s.importDialogOpen, true);
+  assert.equal(s.importOverlayOpen, false);
+  const afterFailure = reducer(statuses(ready(1), importing(true), failed(true)), { type: 'OPEN_IMPORT' });
+  assert.equal(afterFailure.importOverlayOpen, false);
+}
+
+// 22. The overlay stays open when the import succeeds, so the ending can play.
+{
+  let s = reducer(statuses(ready(1), importing(true)), { type: 'OPEN_IMPORT' });
+  s = reducer(s, { type: 'SET_IMPORT_STATUS', payload: ready(2) });
+  assert.equal(s.importOverlayOpen, true);
+  assert.equal(s.importDialogOpen, false);
+  assert.equal(statuses(importing(false), ready(2)).importOverlayOpen, true);
+}
+
+// 23. A failed or cancelled import closes the overlay at once.
+{
+  assert.equal(statuses(importing(false), failed(false)).importOverlayOpen, false);
+  assert.equal(statuses(importing(false), { state: 'empty' }).importOverlayOpen, false);
+  const s = reducer(statuses(ready(1), importing(true)), { type: 'OPEN_IMPORT' });
+  assert.equal(reducer(s, { type: 'SET_IMPORT_STATUS', payload: failed(true) }).importOverlayOpen, false);
+}
+
+// 24. Hide (and the end of the animation) closes it; the next polls keep it closed.
+{
+  let s = reducer(statuses(ready(1), importing(true)), { type: 'OPEN_IMPORT' });
+  s = reducer(s, { type: 'CLOSE_IMPORT' });
+  assert.equal(s.importOverlayOpen, false);
+  s = reducer(s, { type: 'SET_IMPORT_STATUS', payload: importing(true) });
+  assert.equal(s.importOverlayOpen, false);
+  s = reducer(s, { type: 'SET_IMPORT_STATUS', payload: ready(2) });
+  assert.equal(s.importOverlayOpen, false, 'finished while hidden: no ending');
+}
+
 console.log('appReducer: all assertions passed');

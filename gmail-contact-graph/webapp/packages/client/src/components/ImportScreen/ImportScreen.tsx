@@ -59,6 +59,7 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
     try {
       const status = await api.startImport({ mbox, email: email.trim(), includeCalendar });
       dispatch({ type: 'SET_IMPORT_STATUS', payload: status, seq });
+      dispatch({ type: 'OPEN_IMPORT' });
     } catch (err) {
       setStartError(err instanceof Error ? err.message : 'Failed to start the import');
       load();

@@ -8,11 +8,10 @@ type Importing = Extract<ImportStatus, { state: 'importing' }>;
 
 interface ImportProgressProps {
   status: Importing;
-  /** Whole page (first import) rather than inside the dialog. */
-  fullscreen?: boolean;
 }
 
-export function ImportProgress({ status, fullscreen = false }: ImportProgressProps) {
+/** The progress card on the import overlay. */
+export function ImportProgress({ status }: ImportProgressProps) {
   const { dispatch } = useAppContext();
   const [now, setNow] = useState(() => Date.now());
   const [cancelling, setCancelling] = useState(false);
@@ -36,7 +35,7 @@ export function ImportProgress({ status, fullscreen = false }: ImportProgressPro
   const percent = progressPercent(status.progress);
 
   return (
-    <div className={`import-progress ${fullscreen ? 'fullscreen' : ''}`}>
+    <div className="import-progress overlay">
       <div className="import-title" id="import-dialog-title">Importing your mailbox</div>
       <div className="import-progress-phase">
         <span>{phaseLabel(status.phase)}</span>
@@ -60,7 +59,7 @@ export function ImportProgress({ status, fullscreen = false }: ImportProgressPro
         <div className="import-hint">The current graph stays available until the import finishes.</div>
       )}
       <div className="import-buttons">
-        {!fullscreen && (
+        {status.hasData && (
           <button type="button" className="import-btn secondary" onClick={() => dispatch({ type: 'CLOSE_IMPORT' })}>
             Hide
           </button>
