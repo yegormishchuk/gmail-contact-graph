@@ -116,10 +116,11 @@ fn writes_every_table_into_a_single_database_file() {
 
     // Contacts and mails share one file. The separate `mails.db` described in
     // the docs is never produced. `benchmarks/` holds the stage timings.
-    let files: Vec<String> = std::fs::read_dir(&run.dir)
+    let mut files: Vec<String> = std::fs::read_dir(&run.dir)
         .unwrap()
         .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
         .collect();
+    files.sort();
     assert_eq!(
         files,
         vec!["benchmarks", "contacts.db"],
