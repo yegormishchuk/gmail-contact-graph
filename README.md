@@ -161,7 +161,7 @@ make run
 `make setup` installs the webapp's dependencies, builds it, and builds the two
 parsers it runs for you (that part needs Rust; see [Install
 dependencies](#install-dependencies)). Open
-[http://localhost:5000](http://localhost:5000).
+[http://127.0.0.1:5000](http://127.0.0.1:5000).
 
 With no data yet, the webapp opens on its import screen. When the Takeout
 archive arrives, put the mail export (any name ending in `.mbox`) in
@@ -172,8 +172,8 @@ minutes; the graph opens by itself when it is done. **Re-import** in the header
 runs it again later, for a newer export, while the current graph stays up.
 
 Prefer the command line? `make process-all` in `gmail-mbox-parser/` still builds
-the same database, and adds the ranking `.txt` files — see [Step-by-step
-setup](#step-by-step-setup).
+the same database, and adds the ranking `.txt` files — see [Command-line
+pipeline](#command-line-pipeline-alternative).
 
 ## Run with Docker
 
@@ -188,7 +188,8 @@ filter, change the port, or pre-fill your address on the import screen:
 cp .env.example .env
 ```
 
-and edit `HF_API_KEY`, `PORT` or `USER_EMAIL` there.
+and edit `HF_API_KEY`, `PORT` or `USER_EMAIL` there — see
+[Configuration](#configuration) for every setting.
 
 **2. Put your exports in place.**
 
@@ -235,7 +236,8 @@ builds the images, which takes several minutes — the parsers compile SQLite fr
 source. Later runs reuse the cache.
 
 None of the three steps is cosmetic. The webapp is stopped first because it must
-not run while the database is rebuilt — see [The one rule](#the-one-rule-dont-parse-from-the-command-line-while-the-webapp-is-running).
+not run while the database is rebuilt — see [Don't parse while the webapp is
+running](#dont-parse-while-the-webapp-is-running).
 Naming `parser calendar` explicitly matters as well: `docker compose --profile
 parse up` without service names would also start the webapp, which is exactly
 the situation that rule warns about. And `--abort-on-container-failure` is what
@@ -251,8 +253,11 @@ the whole mbox as well.
 These are plain `docker compose` commands, so they work as written in Git Bash,
 PowerShell and a Linux or macOS shell alike.
 
-Want to see it work in a few seconds first? Point the stack at the synthetic
-fixture:
+<details>
+<summary>Try the Docker stack on the synthetic fixture</summary>
+
+The same fixture as in [Try it without your own mail](#try-it-without-your-own-mail),
+parsed from the command line:
 
 ```bash
 mkdir -p data/demo/Email && cp gmail-mbox-parser/tests/fixtures/sample.mbox data/demo/Email/
@@ -277,8 +282,8 @@ That builds a seven-contact graph in `data/demo/`, leaving any real
 goes under `data/demo/Email/` rather than `data/Email/` because `DATA_DIR` is
 what gets mounted: the parser always reads `$DATA_DIR/Email/$MBOX_FILE`.
 `USER_EMAIL` matters here: the fixture's invented addresses only resolve into a
-graph when you are `you@example.com`, and leave `HF_API_KEY` empty as the
-native demo above explains.
+graph when you are `you@example.com`, and leave `HF_API_KEY` empty as [Try it
+without your own mail](#try-it-without-your-own-mail) explains.
 
 **Already running the stack on your real mail?** Those commands would stop
 nothing, but they *would* re-create the `webapp` container against the fixture:
@@ -321,6 +326,8 @@ No `calendar` service in the commands above: no `.ics` files ship with the
 repo, so it would exit successfully having found nothing. Add it back —
 `parser calendar` — if you copy a real export into `data/fixture/Calendar/`.
 
+</details>
+
 ### Day to day
 
 Once the database exists, you only need the webapp:
@@ -345,29 +352,6 @@ docker compose --profile parse build   # both images
 docker compose up -d --build webapp    # or just the webapp, rebuilt in place
 ```
 
-### The one rule: don't parse from the command line while the webapp is running
-
-This is about the command-line parse only. **Re-import** in the webapp is safe
-at any time: the server writes the new data to a separate file and swaps it in
-itself.
-
-The webapp loads the whole database into memory at startup, and every time you
-exclude a contact it writes that in-memory copy back over the file. A webapp
-that started *before* a parse will therefore overwrite the freshly parsed
-database with its stale copy — silently, at the moment you next click something.
-
-That is why `docker compose stop webapp` comes first. Run the parser by hand
-while the webapp is up and it refuses:
-
-```
-ERROR: the webapp container is running and would overwrite this parse.
-Stop it first:  docker compose stop webapp
-```
-
-For the same reason, a webapp already running during a command-line parse keeps
-serving the old graph until `docker compose restart webapp` — it reads a
-database it did not import itself only at startup.
-
 ### Why only one mbox at a time
 
 The parser rebuilds the `mails` table from scratch on every run, so pointing it
@@ -377,17 +361,19 @@ lists what is actually in `data/Email/`.
 
 ### Docker settings
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `USER_EMAIL` | — | Required for the command-line parse. For the webapp, only the address pre-filled on the import screen. |
-| `MBOX_FILE` | `data.mbox` | Command-line parse only: which file in `data/Email/` to parse. |
-| `PORT` | `5000` | Host and container port, kept in sync automatically. |
-| `DATA_DIR` | `./data` | Where the exports and database live, relative to the repo root. (The native webapp resolves a relative `DATA_DIR` against `gmail-contact-graph/` instead, so for a native run pass it on the command line — `make run DATA_DIR=../data/demo` — rather than putting a Docker value in `.env`.) |
-| `FORCE_REPARSE` | `0` | `1` re-parses even when nothing changed. |
-| `HF_API_KEY` | empty | Optional AI spam filtering (non-deterministic). |
+Compose reads the same project-root `.env` as the native run; the variables are
+listed under [Configuration](#configuration). Three differ under Docker:
 
-The port is published on `127.0.0.1` only, so the container is no more exposed
-than the native server is.
+- `DATA_DIR` is a host directory relative to the repo root (default `./data`),
+  mounted into the containers. The native webapp resolves a relative `DATA_DIR`
+  against `gmail-contact-graph/` instead, so for a native run pass it on the
+  command line — `make run DATA_DIR=../data/demo` — rather than putting a Docker
+  value in `.env`.
+- `PORT` sets the host and the container port, kept in sync automatically. It
+  is published on `127.0.0.1` only, so the container is no more exposed than
+  the native server is.
+- `HOST` is fixed to `0.0.0.0` inside the container, which is safe only because
+  of that loopback-only publish.
 
 **Linux and macOS — file ownership.** Containers run as UID 1000 by default, so
 files the parser writes may not belong to you. `UID`/`GID` are shell variables
@@ -445,27 +431,20 @@ make run DATA_DIR=../data/demo
 On the import screen pick `sample.mbox`, enter `you@example.com` (every message
 in the fixture is to or from that address), and import.
 
-Or build the same demo database from the command line:
+<details>
+<summary>Or build the same demo database from the command line</summary>
 
 ```bash
 cd gmail-mbox-parser
-```
-
-```bash
 make process-all USER_EMAIL=you@example.com MBOX_DIR=tests/fixtures MBOX_FILE=sample.mbox DATA_DIR=../data/demo
-```
-
-```bash
 cd ../gmail-contact-graph
-```
-
-```bash
 make setup
-```
-
-```bash
 make run CONTACTS_DB_FILE=../data/demo/contacts.db
 ```
+
+For the Docker equivalent, see [Run with Docker](#run-with-docker).
+
+</details>
 
 Either way the result is a graph of seven contacts. Everything lands in
 `data/demo/`, so a real `data/contacts.db` you have already built is left alone
@@ -480,7 +459,62 @@ value there wins.
 The same fixture drives the end-to-end test (`cargo test --test e2e`), so it
 stays in working order.
 
-## Step-by-step setup
+## Configuration
+
+Everything is optional for a webapp import: the import screen asks for your
+address. Settings live in one project-root `.env`, copied from the template:
+
+```bash
+cp .env.example .env
+```
+
+That one file is read by both Rust parsers, both parser Makefiles, the webapp
+server and Docker Compose. A value passed on the `make` command line
+(`make run PORT=5055`) overrides `.env`; for the webapp server, a variable
+already set in the environment does too.
+
+| Variable | Default | Used by | Meaning |
+|---|---|---|---|
+| `USER_EMAIL` | — | parsers, webapp | Your Gmail address — "you" in the graph. Required for the command-line parsers; in the webapp only the default on the import screen. |
+| `HF_API_KEY` | empty | `fill_db` | Enables the optional AI spam filter — see below. |
+| `HF_MODEL` | `meta-llama/Llama-3.1-8B-Instruct` | `fill_db` | Model the AI spam filter asks. |
+| `HF_BATCH_SIZE` | `50` | `fill_db` | Contacts per request to the model. |
+| `HF_TIMEOUT` | `120` | `fill_db` | Seconds before a model request is abandoned. |
+| `DATA_DIR` | `../data` | Makefiles, webapp | Where exports and generated files live. |
+| `CONTACTS_DB_FILE` | `$DATA_DIR/contacts.db` | webapp | The database the webapp serves and imports into. |
+| `MBOX_DIR` | `$DATA_DIR/Email` | parser Makefile, webapp | Where `.mbox` files are looked for. |
+| `MBOX_FILE` | `data.mbox` | parser Makefile, Docker | Which mbox the command-line parse reads. |
+| `CALENDAR_DIR` | `$DATA_DIR/Calendar` | calendar Makefile, webapp | Where `.ics` files are looked for. |
+| `ICS_FILES` | `$CALENDAR_DIR` | calendar Makefile | Specific `.ics` files to parse instead of the whole directory. |
+| `FILL_DB_BIN`, `FILL_EVENTS_BIN` | the `target/release` builds | webapp | Parser binaries the import screen runs. |
+| `PORT` | `5000` | webapp, Docker | Server port. |
+| `HOST` | `127.0.0.1` | webapp | Bind address. Loopback keeps your mailbox off the network. |
+| `ALLOWED_ORIGINS` | empty | webapp | Comma-separated origins allowed cross-origin requests; only for a deliberate cross-origin setup. |
+| `FORCE_REPARSE` | `0` | Docker | `1` re-parses even when nothing changed. |
+| `UID`, `GID` | `1000` | Docker | Owner of the files containers write — see [Docker settings](#docker-settings). |
+
+Relative paths given to the webapp resolve against `gmail-contact-graph/`; the
+parser Makefiles resolve them against their own directory.
+
+### Optional: AI spam filtering via Hugging Face — beta
+
+With `HF_API_KEY` set, the mbox parser additionally verifies borderline contacts
+against a hosted LLM. Set it **before** parsing — it takes effect during the
+parse, and enabling it later means re-parsing the whole mbox. Only contact names
+and email addresses are sent, never subjects or bodies (see [Privacy](#privacy)).
+
+> **Beta.** This step is not deterministic. Which contacts survive depends
+> entirely on the model you point `HF_MODEL` at, and the same model can return
+> different verdicts on different runs — hosted models are also updated and
+> retired without notice. Treat the result as a suggestion, not a stable
+> classification; the webapp's manual review lets you correct it. Everything
+> else in the pipeline is deterministic and unaffected by this setting.
+
+## Command-line pipeline (alternative)
+
+Importing from the webapp ([Quick start](#quick-start)) is the main path. The
+command line builds the same `contacts.db` and additionally writes the ranking
+`.txt` files; use it for scripting, or when you want the rankings.
 
 ### 1. Download your Google data
 
@@ -500,7 +534,7 @@ Put the calendar `.ics` files in `data/Calendar/` (override with `CALENDAR_DIR=.
 
 ### 3. Configure `.env`
 
-From the repository root, copy the template and fill it in:
+From the repository root, copy the template and set your address:
 
 ```bash
 cp .env.example .env
@@ -508,33 +542,14 @@ cp .env.example .env
 
 ```env
 USER_EMAIL=you@gmail.com           # required — identifies "you" in the graph
-HF_API_KEY=                        # optional — see below
 ```
 
-A single project-root `.env` feeds all three components: both Rust parsers read
-it, and so does the webapp server. Setting `USER_EMAIL` here means you can drop
-the `USER_EMAIL=...` argument from every `make` command below.
+Setting `USER_EMAIL` here means you can drop the `USER_EMAIL=...` argument from
+every `make` command below. If you want the optional AI spam filter, set
+`HF_API_KEY` now as well — it only takes effect during step 4. All settings are
+listed under [Configuration](#configuration).
 
-**Optional: AI-powered spam filtering via Hugging Face — beta.** With
-`HF_API_KEY` set, the mbox parser additionally verifies borderline contacts
-against a hosted LLM. Set it **now** — it takes effect during step 4, and
-enabling it later means re-parsing the whole mbox.
-
-```env
-HF_API_KEY=your_huggingface_api_key
-HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
-HF_BATCH_SIZE=50
-HF_TIMEOUT=120
-```
-
-> **Beta.** This step is not deterministic. Which contacts survive depends
-> entirely on the model you point `HF_MODEL` at, and the same model can return
-> different verdicts on different runs — hosted models are also updated and
-> retired without notice. Treat the result as a suggestion, not a stable
-> classification; the webapp's manual review lets you correct it. Everything
-> else in the pipeline is deterministic and unaffected by this setting.
-
-### 4. Parse the mbox and generate databases + rankings
+### 4. Parse the mbox and generate the database + rankings
 
 ```bash
 cd gmail-mbox-parser
@@ -547,7 +562,7 @@ If your mbox file has a different name than `data.mbox`:
 make process-all MBOX_FILE=your-export.mbox
 ```
 
-This runs both `fill-db` (parses the mbox into SQLite databases) and `rankings` (generates contact ranking files). The databases land in `../data/`, the ranking files in `../data/rankings/`.
+This runs both `fill-db` (parses the mbox into the SQLite database) and `rankings` (generates contact ranking files). The database lands in `../data/contacts.db`, the ranking files in `../data/rankings/`.
 
 <details>
 <summary>Without <code>make</code></summary>
@@ -586,7 +601,7 @@ a different `CALENDAR_DIR`.
 <summary>Without <code>make</code></summary>
 
 ```bash
-cd calendar-parser
+cd ../calendar-parser
 cargo build --release --bin fill_events
 ./target/release/fill_events ../data/Calendar --db ../data/contacts.db
 ```
@@ -600,33 +615,60 @@ binary is `target\release\fill_events.exe`.
 
 ```bash
 cd ../gmail-contact-graph
-make setup    # install dependencies + build
+make setup    # install dependencies + build, including the parsers
 make run
 ```
 
-Open [http://localhost:5000](http://localhost:5000).
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
 <details>
 <summary>Without <code>make</code></summary>
 
 ```bash
-cd gmail-contact-graph/webapp
+cd ../gmail-contact-graph/webapp
 npm install
 npm run build
 npm start
 ```
 
+The parsers built in steps 4 and 5 are the ones the webapp's **Re-import**
+runs, so there is nothing else to build.
+
 </details>
 
-If `data/contacts.db` does not exist yet, the webapp opens on its import
-screen instead, and **Re-import** in the header replaces the data later without
-a restart. Manual edits (marking a contact as human, not human, or not spam)
-are carried over to a re-import of the same mailbox.
+The webapp opens on the graph built in steps 4 and 5. **Re-import** in the
+header replaces the data later without a restart. Manual edits (marking a
+contact as human, not human, or not spam) are carried over to a re-import of
+the same mailbox.
 
 The webapp auto-detects calendar data: if the `events` / `event_attendees`
 tables exist in `contacts.db`, the Calendar, Overall, and Event Groups filter
 modes light up. If you skipped step 5, only the Gmail and Domains views are
 populated.
+
+### Don't parse while the webapp is running
+
+This is about the command-line parse only, native or Docker. **Re-import** in
+the webapp is safe at any time: the server writes the new data to a separate
+file and swaps it in itself.
+
+The webapp loads the whole database into memory at startup, and every time you
+exclude a contact it writes that in-memory copy back over the file. A webapp
+that started *before* a parse will therefore overwrite the freshly parsed
+database with its stale copy — silently, at the moment you next click something.
+
+So stop the webapp first (Ctrl+C on `make run`, or `docker compose stop webapp`),
+parse, then start it again. Under Docker this is enforced: run the parser while
+the webapp container is up and it refuses:
+
+```
+ERROR: the webapp container is running and would overwrite this parse.
+Stop it first:  docker compose stop webapp
+```
+
+For the same reason, a webapp already running during a command-line parse keeps
+serving the old graph until it is restarted — it reads a database it did not
+import itself only at startup.
 
 ---
 
@@ -637,6 +679,7 @@ data/
 ├── Calendar/    # calendar exports: *.ics
 ├── Email/       # mail exports: *.mbox
 ├── rankings/    # generated *_ranking.txt files
+├── benchmarks/  # timings.jsonl — stage timings of each parse
 ├── contacts.db       # shared database, written by both parsers
 └── contacts.db.prev  # the database before the last webapp import
 ```
@@ -644,7 +687,8 @@ data/
 Inputs go in `Calendar/` and `Email/`; everything else is generated. During an
 import from the webapp the parsers write `contacts.db.new`, which replaces
 `contacts.db` only when they succeed; the previous file is kept as
-`contacts.db.prev` for manual recovery.
+`contacts.db.prev` for manual recovery. `benchmarks/` is created next to
+whichever `contacts.db` is in use.
 
 ### Output files
 
@@ -658,6 +702,7 @@ import from the webapp the parsers write `contacts.db.new`, which replaces
 | `rankings/duration_ranking.txt` | Contacts ranked by communication duration |
 | `rankings/email_length_ranking.txt` | Contacts ranked by average email length |
 | `rankings/composite_ranking.txt` | Borda-style combined ranking: rank points from the sent and received rankings, weighted 1.0 and 0.2 |
+| `benchmarks/timings.jsonl` | One JSON line per parse with the time each stage took: `"mode": "cli"` from a command-line `fill_db`, `"mode": "webapp"` from an import (adding wall time, calendar and finalize) |
 
 ## Filter modes in the webapp
 
@@ -676,13 +721,19 @@ import from the webapp the parsers write `contacts.db.new`, which replaces
 | `gmail-mbox-parser/` | `make process-all` | Parse mbox + generate rankings |
 | `gmail-mbox-parser/` | `make fill-db` | Parse mbox only |
 | `gmail-mbox-parser/` | `make rankings` | Generate rankings only |
+| `gmail-mbox-parser/` | `make build` | Build `fill_db` and the ranking tool |
+| `gmail-mbox-parser/` | `make clean` / `clean-data` / `clean-db` / `clean-all` | Remove build artifacts / ranking files / `contacts.db` / all three |
 | `calendar-parser/`   | `make fill-events` | Parse `.ics` files into `events` / `event_attendees` |
+| `calendar-parser/`   | `make build` / `make clean` | Build / remove `fill_events` |
 | `gmail-contact-graph/` | `make setup` | Install deps + build, including the parsers |
 | `gmail-contact-graph/` | `make build-parsers` | Build `fill_db` and `fill_events` for the import screen |
 | `gmail-contact-graph/` | `make run` | Start production server (port 5000) |
 | `gmail-contact-graph/` | `make dev` | Start dev servers (API:5000, Client:3000) |
+| `gmail-contact-graph/` | `make dev-server` / `make dev-client` | Start only the API server / only the Vite client |
+| `gmail-contact-graph/` | `make clean` | Remove `node_modules` and build output |
 
-The parser commands read `USER_EMAIL` from the project-root `.env` (step 3);
+Every Makefile also has `make help`. The parser commands read `USER_EMAIL` and
+the rest of the [Configuration](#configuration) from the project-root `.env`;
 pass `USER_EMAIL=...` on the command line to override it for a single run. The
 webapp asks for it on the import screen.
 
@@ -714,7 +765,8 @@ npm run lint && npm run build && npm test
 ```
 
 **`main` is protected.** Push a branch and open a pull request: direct pushes
-are rejected, and all six CI jobs must pass before a merge is possible. No
+are rejected, and the six required CI checks (the five `rust` jobs and
+`webapp`) must pass; the `docker` job runs too but does not block a merge before a merge is possible. No
 review approval is required.
 
 **Commit messages** follow [Conventional Commits](https://www.conventionalcommits.org/):
