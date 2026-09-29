@@ -115,12 +115,16 @@ fn writes_every_table_into_a_single_database_file() {
     let run = run_fill_db("shape");
 
     // Contacts and mails share one file. The separate `mails.db` described in
-    // the docs is never produced.
+    // the docs is never produced. `benchmarks/` holds the stage timings.
     let files: Vec<String> = std::fs::read_dir(&run.dir)
         .unwrap()
         .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
         .collect();
-    assert_eq!(files, vec!["contacts.db"], "unexpected output files");
+    assert_eq!(
+        files,
+        vec!["benchmarks", "contacts.db"],
+        "unexpected output files"
+    );
 
     for table in ["mails", "contacts", "contacts_filtered"] {
         assert_eq!(
@@ -356,6 +360,49 @@ fn json_progress_reports_phases_in_order_and_ends_with_done() {
     assert_eq!(done["messages"], 19);
     assert_eq!(done["contacts"], 12);
     assert_eq!(done["filtered"], 7);
+}
+
+const STAGES: [&str; 5] = ["mails", "contacts", "spam", "ai", "checkpoint"];
+
+#[test]
+fn json_done_carries_the_stage_timings_and_nothing_is_recorded() {
+    let (run, stderr) = run_fill_db_with("json_timings", "contacts.db", Some("json"), None);
+    let done = json_events(&stderr).pop().unwrap();
+    for stage in STAGES {
+        assert!(done["stages_ms"][stage].is_u64(), "no {stage} in {done}");
+    }
+    assert!(done["total_ms"].is_u64());
+    assert!(
+        !run.dir.join("benchmarks").exists(),
+        "the webapp writes the record in JSON mode"
+    );
+}
+
+#[test]
+fn text_mode_appends_a_cli_timing_record_next_to_the_database() {
+    let (run, stderr) = run_fill_db_with("text_timings", "contacts.db", None, None);
+    assert!(stderr.contains("Stage timings:"), "stderr:\n{stderr}");
+
+    let file = run.dir.join("benchmarks").join("timings.jsonl");
+    let records = std::fs::read_to_string(&file).expect("no timings file");
+    let lines: Vec<&str> = records.lines().collect();
+    assert_eq!(lines.len(), 1);
+    let record: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
+    assert_eq!(record["mode"], "cli");
+    assert_eq!(record["mbox"], "sample.mbox");
+    assert_eq!(
+        record["mbox_bytes"],
+        std::fs::metadata(fixture_path()).unwrap().len()
+    );
+    assert_eq!(record["messages"], 19);
+    assert_eq!(record["contacts"], 12);
+    assert_eq!(record["ai_enabled"], false);
+    for stage in STAGES {
+        assert!(
+            record["stages_ms"][stage].is_u64(),
+            "no {stage} in {record}"
+        );
+    }
 }
 
 #[test]

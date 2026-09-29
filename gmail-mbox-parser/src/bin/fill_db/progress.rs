@@ -5,13 +5,18 @@
 //! so the webapp can drive a progress bar. It is an environment variable rather
 //! than a flag because `parse_args` reads any argument without '@' as the DB
 //! path. Every other stderr line is left as it is in both modes.
+//!
+//! It also times each stage. In JSON mode the `done` event carries the
+//! timings and the webapp records them; in text mode they are printed as a
+//! table and appended to `benchmarks/timings.jsonl` next to the database.
 
 use std::cell::Cell;
-use std::io::Read;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use serde_json::json;
+use serde_json::{json, Map, Value};
 
 const TEXT_EVERY_MESSAGES: u64 = 5000;
 const JSON_EVERY_MESSAGES: u64 = 1000;
@@ -20,13 +25,27 @@ const JSON_MIN_INTERVAL: Duration = Duration::from_millis(250);
 pub struct Reporter {
     json: bool,
     last_json: Option<Instant>,
+    started: Instant,
+    stage: Option<(&'static str, Instant)>,
+    stages: Vec<(&'static str, Duration)>,
+    total: Duration,
+    ai_enabled: bool,
 }
 
 impl Reporter {
     pub fn new(json: bool) -> Self {
+        Reporter::starting_at(json, Instant::now())
+    }
+
+    fn starting_at(json: bool, started: Instant) -> Self {
         Reporter {
             json,
             last_json: None,
+            started,
+            stage: None,
+            stages: Vec::new(),
+            total: Duration::ZERO,
+            ai_enabled: false,
         }
     }
 
@@ -37,12 +56,20 @@ impl Reporter {
         Reporter::new(json)
     }
 
-    pub fn phase(&self, phase: &str) {
+    pub fn phase(&mut self, phase: &'static str) {
+        self.start_stage(phase, Instant::now());
         emit(self.phase_line(phase));
     }
 
-    pub fn ai_phase(&self, enabled: bool, contacts: usize) {
+    pub fn ai_phase(&mut self, enabled: bool, contacts: usize) {
+        self.ai_enabled = enabled;
+        self.start_stage("ai", Instant::now());
         emit(self.ai_phase_line(enabled, contacts));
+    }
+
+    /// Starts a timed stage that the webapp is not told about.
+    pub fn stage(&mut self, name: &'static str) {
+        self.start_stage(name, Instant::now());
     }
 
     pub fn message_parsed(&mut self, counts: MailCounts) {
@@ -53,8 +80,60 @@ impl Reporter {
         emit(self.mails_finished_line(counts, Instant::now()));
     }
 
-    pub fn done(&self, messages: u64, contacts: i64, filtered: i64) {
+    pub fn done(&mut self, messages: u64, contacts: i64, filtered: i64) {
+        self.finish(Instant::now());
         emit(self.done_line(messages, contacts, filtered));
+    }
+
+    /// The timing record of a command-line run, for `append_record`. None in
+    /// JSON mode, where the webapp writes the record.
+    pub fn record_line(
+        &self,
+        mbox_path: &str,
+        mbox_bytes: u64,
+        messages: u64,
+        contacts: i64,
+    ) -> Option<String> {
+        let mbox = Path::new(mbox_path)
+            .file_name()
+            .map_or(mbox_path.into(), |n| n.to_string_lossy());
+        (!self.json).then(|| {
+            json!({
+                "mode": "cli",
+                "at": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                "mbox": mbox,
+                "mbox_bytes": mbox_bytes,
+                "messages": messages,
+                "contacts": contacts,
+                "ai_enabled": self.ai_enabled,
+                "stages_ms": self.stages_ms(),
+                "fill_db_total_ms": millis(self.total),
+            })
+            .to_string()
+        })
+    }
+
+    fn start_stage(&mut self, name: &'static str, now: Instant) {
+        self.end_stage(now);
+        self.stage = Some((name, now));
+    }
+
+    fn end_stage(&mut self, now: Instant) {
+        if let Some((name, start)) = self.stage.take() {
+            self.stages.push((name, now.duration_since(start)));
+        }
+    }
+
+    fn finish(&mut self, now: Instant) {
+        self.end_stage(now);
+        self.total = now.duration_since(self.started);
+    }
+
+    fn stages_ms(&self) -> Map<String, Value> {
+        self.stages
+            .iter()
+            .map(|(name, d)| (name.to_string(), millis(*d).into()))
+            .collect()
     }
 
     fn phase_line(&self, phase: &str) -> Option<String> {
@@ -111,11 +190,57 @@ impl Reporter {
     }
 
     fn done_line(&self, messages: u64, contacts: i64, filtered: i64) -> Option<String> {
-        self.json.then(|| {
-            json!({ "event": "done", "messages": messages, "contacts": contacts, "filtered": filtered })
-                .to_string()
-        })
+        if !self.json {
+            let mut table = String::from("Stage timings:");
+            for (name, d) in self.stages.iter().chain([&("total", self.total)]) {
+                table.push_str(&format!("\n  {:<12} {:>8.3} s", name, d.as_secs_f64()));
+            }
+            return Some(table);
+        }
+        Some(
+            json!({
+                "event": "done",
+                "messages": messages,
+                "contacts": contacts,
+                "filtered": filtered,
+                "stages_ms": self.stages_ms(),
+                "total_ms": millis(self.total),
+            })
+            .to_string(),
+        )
     }
+}
+
+/// Where `append_record` writes: `benchmarks/timings.jsonl` beside the database.
+fn records_file(db_path: &str) -> PathBuf {
+    Path::new(db_path)
+        .parent()
+        .unwrap_or(Path::new(""))
+        .join("benchmarks")
+        .join("timings.jsonl")
+}
+
+/// Appends a timing record. A failure is reported but does not fail the run.
+pub fn append_record(db_path: &str, line: &str) {
+    let file = records_file(db_path);
+    let result = file
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|_| {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&file)
+        })
+        .and_then(|mut f| writeln!(f, "{line}"));
+    match result {
+        Ok(()) => eprintln!("Timings appended to {}", file.display()),
+        Err(e) => eprintln!("Could not write timings to {}: {}", file.display(), e),
+    }
+}
+
+fn millis(d: Duration) -> u64 {
+    d.as_millis() as u64
 }
 
 /// Counts the bytes read from the inner reader.
@@ -201,7 +326,8 @@ mod tests {
         assert_eq!(r.phase_line("mails"), None);
         assert_eq!(r.ai_phase_line(true, 3), None);
         assert_eq!(r.mails_finished_line(counts(7), now), None);
-        assert_eq!(r.done_line(1, 2, 3), None);
+        let done = r.done_line(1, 2, 3).unwrap();
+        assert!(done.starts_with("Stage timings:"), "{done}");
     }
 
     #[test]
@@ -271,5 +397,85 @@ mod tests {
         assert_eq!(done["messages"], 19);
         assert_eq!(done["contacts"], 12);
         assert_eq!(done["filtered"], 7);
+    }
+
+    /// A run through every stage: 100 ms of mails, 50 of contacts, 10 of
+    /// spam, 240 of ai and 50 of checkpoint.
+    fn timed_run(json: bool) -> Reporter {
+        let t0 = Instant::now();
+        let ms = |n| t0 + Duration::from_millis(n);
+        let mut r = Reporter::starting_at(json, t0);
+        r.start_stage("mails", ms(0));
+        r.start_stage("contacts", ms(100));
+        r.start_stage("spam", ms(150));
+        r.start_stage("ai", ms(160));
+        r.start_stage("checkpoint", ms(400));
+        r.finish(ms(450));
+        r
+    }
+
+    #[test]
+    fn each_stage_runs_until_the_next_one_starts() {
+        let done = parse(&timed_run(true).done_line(19, 12, 7).unwrap());
+        assert_eq!(
+            done["stages_ms"],
+            serde_json::json!({ "mails": 100, "contacts": 50, "spam": 10, "ai": 240, "checkpoint": 50 })
+        );
+        assert_eq!(done["total_ms"], 450);
+    }
+
+    #[test]
+    fn text_mode_ends_with_a_table_of_stage_timings() {
+        let table = timed_run(false).done_line(19, 12, 7).unwrap();
+        assert!(!table.starts_with('{'), "not a table:\n{table}");
+        let rows: Vec<&str> = table.lines().map(str::trim).collect();
+        assert_eq!(
+            rows,
+            [
+                "Stage timings:",
+                "mails           0.100 s",
+                "contacts        0.050 s",
+                "spam            0.010 s",
+                "ai              0.240 s",
+                "checkpoint      0.050 s",
+                "total           0.450 s",
+            ]
+        );
+    }
+
+    #[test]
+    fn text_mode_writes_a_cli_timing_record() {
+        let mut r = timed_run(false);
+        r.ai_enabled = true;
+        let line = r
+            .record_line("../data/Email/all.mbox", 2048, 19, 12)
+            .expect("no record in text mode");
+        let v = parse(&line);
+        assert_eq!(v["mode"], "cli");
+        assert_eq!(v["mbox"], "all.mbox");
+        assert_eq!(v["mbox_bytes"], 2048);
+        assert_eq!(v["messages"], 19);
+        assert_eq!(v["contacts"], 12);
+        assert_eq!(v["ai_enabled"], true);
+        assert_eq!(v["stages_ms"]["ai"], 240);
+        assert_eq!(v["fill_db_total_ms"], 450);
+        assert!(v["at"].as_str().is_some_and(|at| at.ends_with('Z')));
+    }
+
+    #[test]
+    fn json_mode_leaves_the_record_to_the_webapp() {
+        assert_eq!(timed_run(true).record_line("x.mbox", 1, 1, 1), None);
+    }
+
+    #[test]
+    fn records_go_to_benchmarks_next_to_the_database() {
+        assert_eq!(
+            records_file("../data/contacts.db"),
+            Path::new("../data/benchmarks/timings.jsonl")
+        );
+        assert_eq!(
+            records_file("contacts.db"),
+            Path::new("benchmarks/timings.jsonl")
+        );
     }
 }
