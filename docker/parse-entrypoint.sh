@@ -85,7 +85,7 @@ case "${1:-}" in
   calendar)
     [ -f "$DB_PATH" ] || die "$DB_PATH does not exist. Run the mail parser first."
 
-    # The calendar step is optional (README: "5. (Optional) Parse calendar
+    # The calendar step is optional (docs/cli.md: "3. (Optional) Parse calendar
     # events"), so an empty or absent Calendar directory is a skip, not a
     # failure. fill_events itself exits 1 in that case, which would abort the
     # whole pipeline for everyone who never exported a calendar.
