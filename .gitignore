@@ -46,7 +46,8 @@ scripts/
 # Agent tooling / local assistant config
 .claude/
 .superpowers/
-docs/
+**/docs/plans/
+**/docs/superpowers/
 CLAUDE.md
 # Throwaway data directory used by the docker CI smoke job.
 ci-data/

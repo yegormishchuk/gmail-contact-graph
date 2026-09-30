@@ -90,4 +90,4 @@ more exposed than it is natively.
 The database must already exist; the container refuses to start otherwise and
 points you at the parsers. It is read once at startup, so after a re-parse run
 `docker compose restart webapp`. See
-[Run with Docker](../README.md#run-with-docker).
+[docs/cli.md](../docs/cli.md#docker).
