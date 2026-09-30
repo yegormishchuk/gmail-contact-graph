@@ -1,24 +1,15 @@
 #!/bin/sh
-# Holds /app/data/.webapp.lock for as long as the server runs, so the parser
-# entrypoint can refuse to overwrite the database underneath a live webapp
-# (see docker/parse-entrypoint.sh and server/src/db/index.ts:30-34).
+# Holds /app/data/.webapp.lock for as long as the server runs, so the CLI
+# parser entrypoint can refuse to rebuild the database underneath a live
+# webapp (see docker/parse-entrypoint.sh). Imports started from the UI need no
+# such guard: the server runs those parsers itself, into a separate file.
+#
+# Neither USER_EMAIL nor contacts.db is required: without a database the
+# webapp opens on its import screen.
 set -eu
 
 DATA_DIR="${DATA_DIR:-/app/data}"
 LOCK="$DATA_DIR/.webapp.lock"
-
-if [ -z "${USER_EMAIL:-}" ]; then
-    echo "ERROR: USER_EMAIL is not set." >&2
-    echo "Copy .env.example to .env in the project root and fill in USER_EMAIL." >&2
-    exit 1
-fi
-
-DB_FILE="${CONTACTS_DB_FILE:-$DATA_DIR/contacts.db}"
-if [ ! -f "$DB_FILE" ]; then
-    echo "ERROR: $DB_FILE not found. Run the parsers first:" >&2
-    echo "  docker compose --profile parse up --abort-on-container-failure parser calendar" >&2
-    exit 1
-fi
 
 cleanup() { rm -f "$LOCK"; }
 # EXIT, not just the end of the script: under `set -e` a server that dies with

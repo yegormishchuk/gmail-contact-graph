@@ -1,17 +1,24 @@
 # Two ways to run this stack.
 #
-#   docker compose up -d webapp   -- serve an already-parsed database
+#   docker compose up -d webapp   -- then open http://127.0.0.1:5000
+#
+# The usual one. The webapp image carries the parsers: with no database it
+# opens on an import screen that lists the .mbox files in data/Email, runs the
+# parse and swaps the result in; "Re-import" repeats that later without a
+# restart.
 #
 #   docker compose stop webapp
 #   docker compose --profile parse up --abort-on-container-failure parser calendar
-#   docker compose up -d webapp    -- parse everything, then serve
+#   docker compose up -d webapp    -- parse from the command line, then serve
 #
-# The parse is three commands rather than a single `docker compose up` because
-# the webapp must be STOPPED while the database is rebuilt and started
-# afterwards: it holds the whole database in memory and writes it back
-# wholesale on any exclude-contact action (server/src/db/index.ts:30-34), so a
-# webapp left running across a parse silently overwrites the fresh data with
-# its snapshot.
+# The CLI path, for scripting or for the ranking .txt files. It is three
+# commands rather than a single `docker compose up` because the webapp must be
+# STOPPED while the CLI parsers rebuild the database and started afterwards: it
+# holds the whole database in memory and writes it back wholesale on any
+# exclude-contact action (saveDatabase in server/src/db/index.ts), so a webapp
+# left running across a parse silently overwrites the fresh data with its
+# snapshot. Imports from the UI are safe: the server writes to a separate file
+# and swaps it in itself.
 #
 # The parse services sit behind a profile rather than depends_on/required:false
 # -- `required: false` means "do not fail if absent", not "never start".
@@ -96,6 +103,7 @@ services:
       # outside the container. The published port below is still loopback-only
       # on the host, so the mailbox is not exposed to the network.
       HOST: "0.0.0.0"
+      # Optional here: only the default address offered on the import screen.
       USER_EMAIL: "${USER_EMAIL:-}"
       # Same passthrough reason as the parser service: env_file reaches inside
       # the container but the host shell does not, while the `ports` mapping
@@ -106,10 +114,8 @@ services:
       # Empty is safe: config.ts reads `process.env.PORT || '5000'`.
       PORT: "${PORT:-}"
       # Pinned for the same reason as the parser service: a DATA_DIR in .env
-      # would otherwise reach the entrypoint, which would look for contacts.db
-      # under a host path and report it missing on a perfectly good mount.
-      # config.ts derives its own path from the directory layout and ignores
-      # this variable; the entrypoint's lock file does not.
+      # is a HOST path, and both the entrypoint (for its lock file) and
+      # config.ts (for contacts.db and the import folders) read this variable.
       DATA_DIR: /app/data
     # Interpolated from the root .env by compose itself (a different mechanism
     # from env_file, which only reaches inside the container). Keeps the
@@ -118,15 +124,17 @@ services:
       - "127.0.0.1:${PORT:-5000}:${PORT:-5000}"
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
-      # Read-write on purpose: the exclude-contact endpoints write contacts.db.
+      # Read-write on purpose: imports and the exclude-contact endpoints write
+      # contacts.db.
       - ${DATA_DIR:-./data}:/app/data
     healthcheck:
       # node:22-bookworm-slim has neither curl nor wget; Node 22 has fetch.
       #
-      # /api/contacts, not /api/health: the latter answers 200 without touching
-      # a single table, so a database left half-built by a failed parse still
-      # reports healthy while every real endpoint returns 500.
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||5000)+'/api/contacts').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # /api/import/status: it answers 200 in every state, including before
+      # the first import, when the data endpoints answer 409 by design. A
+      # failed import never touches the working database, so there is no
+      # half-built state for a data endpoint to catch.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||5000)+'/api/import/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5

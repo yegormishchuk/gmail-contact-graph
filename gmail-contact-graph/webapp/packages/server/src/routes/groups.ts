@@ -1,7 +1,6 @@
 import { Router } from 'express';
-import initSqlJs from 'sql.js';
-import { readFileSync, existsSync } from 'fs';
-import { config } from '../config.js';
+import { getDatabase } from '../db/index.js';
+import { getUserEmail } from '../db/meta.js';
 
 const router = Router();
 
@@ -11,21 +10,15 @@ interface MessageRow {
   to: string;
 }
 
-router.get('/message-groups', async (req, res) => {
-  if (!existsSync(config.CONTACTS_DB_FILE)) {
-    return res.json({ total_groups: 0, groups: {} });
-  }
-
+router.get('/message-groups', (req, res) => {
   try {
-    const SQL = await initSqlJs();
-    const buffer = readFileSync(config.CONTACTS_DB_FILE);
-    const db = new SQL.Database(buffer);
+    const db = getDatabase();
 
     // Fetch all rows that share a (from, subject) pair where the user is involved.
     // The mails table stores one row per (from, to) pair, so a message sent to
     // N recipients produces N rows — only one of which has "to" = myEmail.
     // Joining on (from, subject) recovers all the other recipients.
-    const myEmail = config.MY_EMAIL.toLowerCase();
+    const myEmail = getUserEmail();
     const stmt = db.prepare(`
       SELECT m."from", m."to", m.subject
       FROM mails m
@@ -57,7 +50,6 @@ router.get('/message-groups', async (req, res) => {
       if (recipient && recipient !== myEmail) groups[subject].add(recipient);
     }
     stmt.free();
-    db.close();
 
     // Filter to groups with 2+ unique recipients
     const filteredGroups = Object.fromEntries(

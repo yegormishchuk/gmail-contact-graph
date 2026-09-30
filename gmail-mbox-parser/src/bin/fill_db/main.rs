@@ -3,6 +3,7 @@ mod db;
 mod meetings;
 mod models;
 mod parsing;
+mod progress;
 mod spam;
 
 use std::collections::HashMap;
@@ -14,6 +15,7 @@ use rusqlite::{params, Connection};
 
 use gmail_mbox_parser::hf::{ContactForVerification, HFClient, HFConfig};
 use models::{ContactStats, EmailMessage, ParseState};
+use progress::{CountingReader, MailCounts, Reporter};
 use spam::is_spam_contact;
 
 // ---------------------------------------------------------------------------
@@ -91,27 +93,49 @@ async fn main() {
         }
     }
 
+    let mut reporter = Reporter::from_env();
+
     // Phase 1: Fill mails table
-    let contact_stats = fill_mails_db(mbox_path, &user_email, db_path);
+    reporter.phase("mails");
+    let (contact_stats, msg_count) = fill_mails_db(mbox_path, &user_email, db_path, &mut reporter);
 
     // Phase 2: Fill contacts table from accumulated statistics
+    reporter.phase("contacts");
     fill_contacts_db(&contact_stats, db_path);
 
     // Phase 3: Mark non-spam contacts (basic spam filter)
+    reporter.phase("spam");
     let candidates = fill_candidates_db(db_path);
 
     // Phase 4: AI verification and fill filtered contacts table
     if !candidates.is_empty() {
-        fill_filtered_with_ai(db_path, candidates).await;
+        fill_filtered_with_ai(db_path, candidates, &mut reporter).await;
     } else {
+        reporter.ai_phase(false, 0);
         eprintln!("No candidates for AI verification.");
     }
 
     // Merge WAL into the main DB file so non-WAL readers (e.g. sql.js in the
     // webapp) see the latest state instead of a stale pre-WAL snapshot.
+    reporter.stage("checkpoint");
     let conn = Connection::open(db_path).expect("failed to open database");
     conn.query_row("PRAGMA wal_checkpoint(TRUNCATE);", [], |_| Ok(()))
         .expect("wal_checkpoint failed");
+
+    let contacts = count_rows(&conn, "contacts");
+    reporter.done(msg_count, contacts, count_rows(&conn, "contacts_filtered"));
+
+    let mbox_bytes = std::fs::metadata(mbox_path).map(|m| m.len()).unwrap_or(0);
+    if let Some(record) = reporter.record_line(mbox_path, mbox_bytes, msg_count, contacts) {
+        progress::append_record(db_path, &record);
+    }
+}
+
+/// Row count of `table`, or 0 if it does not exist: `contacts_filtered` is
+/// never created when no contact passes the basic spam filter.
+fn count_rows(conn: &Connection, table: &str) -> i64 {
+    conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+        .unwrap_or(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -122,11 +146,14 @@ fn fill_mails_db(
     mbox_path: &str,
     user_email: &str,
     db_path: &str,
-) -> HashMap<String, ContactStats> {
+    reporter: &mut Reporter,
+) -> (HashMap<String, ContactStats>, u64) {
     let conn = Connection::open(db_path).expect("failed to open database");
     db::setup_mails_db(&conn);
 
     let file = File::open(mbox_path).expect("failed to open mbox file");
+    let total_bytes = file.metadata().map(|m| m.len()).unwrap_or(0);
+    let (file, bytes_read) = CountingReader::new(file);
     let reader = BufReader::with_capacity(1024 * 1024, file);
 
     let mut state = ParseState::Seeking;
@@ -191,12 +218,13 @@ fn fill_mails_db(
                         skipped_count += 1;
                     }
                     msg_count += 1;
-                    if msg_count.is_multiple_of(5000) {
-                        eprintln!(
-                            "[progress] {} messages, {} rows, {} skipped",
-                            msg_count, row_count, skipped_count
-                        );
-                    }
+                    reporter.message_parsed(MailCounts {
+                        bytes: bytes_read.get(),
+                        total_bytes,
+                        messages: msg_count,
+                        rows: row_count,
+                        skipped: skipped_count,
+                    });
                     msg = EmailMessage::default();
                     header_name.clear();
                     header_value.clear();
@@ -223,12 +251,19 @@ fn fill_mails_db(
     drop(stmt);
     conn.execute_batch("COMMIT").unwrap();
 
+    reporter.mails_finished(MailCounts {
+        bytes: bytes_read.get(),
+        total_bytes,
+        messages: msg_count,
+        rows: row_count,
+        skipped: skipped_count,
+    });
     eprintln!(
         "Mails DB: {} messages, {} rows inserted, {} skipped.",
         msg_count, row_count, skipped_count
     );
 
-    contact_stats
+    (contact_stats, msg_count)
 }
 
 // ---------------------------------------------------------------------------
@@ -396,11 +431,17 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
 // Phase 4: AI verification and fill filtered contacts table
 // ---------------------------------------------------------------------------
 
-async fn fill_filtered_with_ai(db_path: &str, candidates: Vec<ContactCandidate>) {
+async fn fill_filtered_with_ai(
+    db_path: &str,
+    candidates: Vec<ContactCandidate>,
+    reporter: &mut Reporter,
+) {
     eprintln!("\n=== Phase 4: AI Verification ===");
 
     // Check if HF_API_KEY is set
-    let config = match HFConfig::from_env() {
+    let config = HFConfig::from_env();
+    reporter.ai_phase(config.is_ok(), candidates.len());
+    let config = match config {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Skipping AI verification: {}", e);

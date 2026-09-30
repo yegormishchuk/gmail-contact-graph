@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { useGraphData } from './hooks/useGraphData';
 import { Graph } from './components/Graph';
@@ -8,11 +8,42 @@ import { RankingPanel } from './components/RankingPanel';
 import { Legend } from './components/Legend';
 import { Tooltip } from './components/Tooltip';
 import { StatsPage } from './components/StatsPage';
-import { IntroSequence } from './components/IntroSequence';
+import { ImportOverlay } from './components/ImportOverlay';
+import { ImportScreen } from './components/ImportScreen';
+import { ImportBanner } from './components/ImportBanner';
+import { ImportDialog } from './components/ImportDialog';
+import { useImportStatus } from './hooks/useImportStatus';
 
 function AppContent() {
-  const { state } = useAppContext();
+  const { state, dispatch } = useAppContext();
+  useImportStatus();
   const { loading, error } = useGraphData();
+  const status = state.importStatus;
+
+  if (!status) {
+    return (
+      <div className="container">
+        <div className="loading">
+          {state.importStatusError
+            ? `Can't reach the server (${state.importStatusError}). Retrying…`
+            : 'Loading…'}
+        </div>
+      </div>
+    );
+  }
+
+  // Nothing to show yet: the first import, from choosing a file to its end.
+  if (status.state === 'empty' || (status.state === 'failed' && !status.hasData)) {
+    return (
+      <div className="container import-page">
+        <ImportScreen />
+      </div>
+    );
+  }
+  // The import overlay shows this one (state.importOverlayOpen is forced on).
+  if (status.state === 'importing' && !status.hasData) {
+    return <div className="container import-page" />;
+  }
 
   if (loading) {
     return (
@@ -25,7 +56,14 @@ function AppContent() {
   if (error) {
     return (
       <div className="container">
-        <div className="loading">Error: {error}</div>
+        <ImportBanner />
+        <ImportDialog />
+        <div className="loading empty-state">
+          <p>Error: {error}</p>
+          <button className="import-btn primary" onClick={() => dispatch({ type: 'OPEN_IMPORT' })}>
+            Import again
+          </button>
+        </div>
       </div>
     );
   }
@@ -33,6 +71,8 @@ function AppContent() {
   if (state.rawData?.stats.totalContacts === 0) {
     return (
       <div className="container">
+        <ImportBanner />
+        <ImportDialog />
         <div className="loading empty-state">
           <p className="empty-state-title">No contacts to show</p>
           <p>
@@ -42,9 +82,12 @@ function AppContent() {
           <p>Please check that:</p>
           <ul>
             <li>the <code>.mbox</code> file in <code>data/Email/</code> is the right Gmail export</li>
-            <li><code>USER_EMAIL</code> in <code>.env</code> is the Gmail address that mailbox belongs to</li>
+            <li>the email you imported with is the Gmail address that mailbox belongs to</li>
           </ul>
-          <p>Then re-run <code>make process-all</code> and restart the webapp.</p>
+          <p>Then import again.</p>
+          <button className="import-btn primary" onClick={() => dispatch({ type: 'OPEN_IMPORT' })}>
+            Import again
+          </button>
         </div>
       </div>
     );
@@ -53,6 +96,8 @@ function AppContent() {
   return (
     <div className="container">
       <Header />
+      <ImportBanner />
+      <ImportDialog />
       <div
         id="graph-container"
         className={state.activeTab === 'stats' ? 'graph-tab-hidden' : ''}
@@ -68,13 +113,18 @@ function AppContent() {
   );
 }
 
-function App() {
-  const [showIntro, setShowIntro] = useState(!localStorage.getItem('intro_seen'));
+// Beside AppContent, so it lives on while the page under it switches from
+// the first-import screen to the graph.
+function Overlay() {
+  const { state } = useAppContext();
+  return state.importOverlayOpen ? <ImportOverlay /> : null;
+}
 
+function App() {
   return (
     <AppProvider>
       <AppContent />
-      {showIntro && <IntroSequence onComplete={() => setShowIntro(false)} />}
+      <Overlay />
     </AppProvider>
   );
 }

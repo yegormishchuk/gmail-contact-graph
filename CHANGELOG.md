@@ -9,6 +9,101 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-30
+
+The webapp now builds the graph itself: put a Gmail `.mbox` in `data/Email/`,
+open the app and import it from the browser, with progress, cancel and
+re-import, and your manual contact edits carried over. The command-line
+pipeline still works and is documented in `docs/cli.md`.
+
+This release changes the schema (`meta`, `user_overrides`), the HTTP API
+(import endpoints, `409` without a database, `415` for non-JSON edits) and
+the configuration (`USER_NAME` is gone).
+
+### Added
+
+- `fill_db` and `fill_events` print machine-readable progress when
+  `PROGRESS_FORMAT=json` is set: one JSON object per stderr line for each phase
+  (`mails`, `contacts`, `spam`, `ai`, `calendar`), byte progress through the
+  mbox, and a final `done` with counts. Without the variable the output is
+  unchanged.
+- The server starts without `contacts.db` instead of exiting. `/api/health`
+  answers as usual; every data endpoint, including the contact edits and
+  `/api/message-groups` (which used to answer an empty result), answers
+  `409 {"state":"empty"}` until there is a database. At start it also removes
+  leftovers of an interrupted import (`contacts.db.new*`, `contacts.db.swap`)
+  and, when a swap was interrupted between its two renames, restores
+  `contacts.db.prev`. A `contacts.db` you deleted yourself stays deleted.
+- A `meta` table in `contacts.db` records the mailbox owner's email. When it
+  is present it identifies the owner everywhere: the centre of the email and
+  calendar graphs, message groups, event groups, and the default display
+  name. Databases without it fall back to `USER_EMAIL` as before.
+- `DATA_DIR` sets the data directory for the server (default `../data`).
+- Marking a contact clear or not human, and restoring one, is also recorded in
+  a `user_overrides` table, so a later import of the same mailbox can apply
+  the edits again. Only the latest action per contact is kept. Edits made
+  before this version were not recorded and will not carry over.
+- An import API: `GET /api/import/sources` lists the `.mbox` files in
+  `data/Email` and the `.ics` count in `data/Calendar`; `POST /api/import`
+  runs `fill_db` (and `fill_events`) into `contacts.db.new` and, when they
+  succeed, swaps the result in without a restart, carrying the manual edits
+  over when the mailbox owner's email is the same; `GET /api/import/status`
+  reports the phase and progress; `POST /api/import/cancel` stops it. A failed or cancelled import leaves the
+  current data untouched. The parser paths can be set with `FILL_DB_BIN` and
+  `FILL_EVENTS_BIN`, the source folders with `MBOX_DIR` and `CALENDAR_DIR`.
+
+- The webapp imports a mailbox itself. With no data yet it opens on an import
+  screen: pick an `.mbox` from `data/Email`, confirm your Gmail address
+  (the calendar is included when there are `.ics` files in `data/Calendar`),
+  and follow the progress; the graph opens when the import is done.
+  **Re-import** in the header runs another import while the current graph
+  stays usable: a strip under the header shows the progress, and its
+  **Details** open the progress with a cancel button. Contact edits are
+  disabled until it ends.
+- The import screen has an optional name field for the centre node. It is
+  stored as `meta.user_name` in the imported database and prefilled on the
+  next import; left blank, the local part of the email is used.
+- An import plays the contact animation from the moment you click
+  **Import**: a placeholder loop while the parser works, then your real
+  contacts and the spam cleanup when it finishes. It replaces the one-time
+  intro that played on page load.
+- `make setup` in `gmail-contact-graph/` also builds the parsers the import
+  screen runs (`make build-parsers`); without Rust it warns and carries on.
+- Stage timings. `fill_db` times each stage (`mails`, `contacts`, `spam`,
+  `ai`, `checkpoint`). From the command line it prints them as a table and
+  appends a `"mode": "cli"` record to `benchmarks/timings.jsonl` next to the
+  database. With `PROGRESS_FORMAT=json` they go in the `done` event instead,
+  and a successful webapp import logs them and appends a `"mode": "webapp"`
+  record with the parser's wall time, the calendar parser, the finalize step
+  and the total. Runs of the same mbox can be compared from that one file.
+
+### Changed
+
+- The webapp Docker image now includes `fill_db` and `fill_events`, so
+  `docker compose up -d webapp` is enough: import from the UI. The webapp no
+  longer requires `USER_EMAIL` or an existing `contacts.db` to start, and its
+  healthcheck uses `/api/import/status`. The `parse` profile still works as
+  the command-line path; an import from the webapp drops its
+  `.parse-stamp`, so the next command-line parse does not skip as "up to
+  date" over data it did not produce.
+- The README is reorganised around the webapp import: a Docker quick start on
+  the bundled sample mailbox, running without Docker, using the app, privacy,
+  a Takeout download guide, one Configuration section listing every `.env`
+  variable, and troubleshooting. The command-line pipeline moves to
+  `docs/cli.md` and the per-platform dependency installs to `docs/install.md`.
+- The contact edit endpoints, like the new import ones, accept only
+  `Content-Type: application/json` and answer 415 otherwise, so a page from
+  another site cannot send them without a CORS preflight.
+- `/api/message-groups` reads the database the server already has in memory
+  instead of reopening the file on every request.
+- The three npm packages and three Rust crates now declare 0.3.0, tracking the
+  release tag.
+
+### Removed
+
+- `USER_NAME`. The centre node's name now comes from the import screen (see
+  above); the variable is no longer read, so remove it from your `.env`.
+
 ## [0.2.2] - 2026-09-15
 
 Selecting a contact now lets you narrow the graph to one of their groups, and
@@ -195,7 +290,8 @@ Takeout export to an interactive graph in the browser.
   Everything else in the pipeline is deterministic.
 - Requires Rust 1.87+ and Node.js 20.19+ (or 22+).
 
-[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.0
 [0.2.2]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.2
 [0.2.1]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.1
 [0.2.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.0

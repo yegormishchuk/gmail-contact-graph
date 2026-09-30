@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAppContext } from '../../context/AppContext';
+import { useAppContext, editsLocked } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
 import { buildOverallGraph } from '../../utils/buildOverallGraph';
@@ -17,6 +17,7 @@ interface GroupRankItem {
 
 export function RankingPanel() {
   const { state, dispatch } = useAppContext();
+  const locked = editsLocked(state);
   const [searchQuery, setSearchQuery] = useState('');
 
   const { rawData, excludedContacts, rankingTab, panelVisible } = state;
@@ -344,8 +345,9 @@ export function RankingPanel() {
               {!usesCalendarNodes && (!isOverallMode || gmailEmails.has(contact.email.toLowerCase())) && (
                 <button
                   className="ranking-delete"
-                  title="Remove contact"
+                  title={locked ? 'Not while an import is running' : 'Remove contact'}
                   onClick={(e) => handleDelete(contact.email, e)}
+                  disabled={locked}
                 >
                   🗑
                 </button>
@@ -403,6 +405,8 @@ export function RankingPanel() {
                 <button
                   className="spam-restore"
                   onClick={(e) => handleRestore(contact.email, e)}
+                  disabled={locked}
+                  title={locked ? 'Not while an import is running' : undefined}
                 >
                   not spam
                 </button>

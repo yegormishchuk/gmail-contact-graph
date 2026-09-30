@@ -8,6 +8,9 @@ import type {
   CalendarGraphData,
   CalendarStats,
   EventGroups,
+  ImportSources,
+  ImportStatus,
+  StartImportRequest,
 } from '@gmail-graph/shared';
 
 const API_BASE = '/api';
@@ -21,9 +24,30 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     },
   });
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const body = await response.json().catch(() => null);
+    if (response.status === 409 && typeof body?.state === 'string' && !body.error) {
+      throw new ApiStateError(body.state);
+    }
+    throw new ApiError(response.status, typeof body?.error === 'string' ? body.error : `API error: ${response.status}`);
   }
   return response.json();
+}
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+/**
+ * A data endpoint answered 409 because there is no database to read yet
+ * (state 'empty' or 'importing'). The import status poll decides what to show,
+ * so callers loading data can ignore it.
+ */
+export class ApiStateError extends ApiError {
+  constructor(public state: string) {
+    super(409, `No data yet (${state})`);
+  }
 }
 
 export const api = {
@@ -60,5 +84,18 @@ export const api = {
     fetchJson<ApiSuccessResponse>('/contacts/restore', {
       method: 'POST',
       body: JSON.stringify({ email }),
+    }),
+
+  getImportStatus: () => fetchJson<ImportStatus>('/import/status'),
+  getImportSources: () => fetchJson<ImportSources>('/import/sources'),
+  startImport: (request: StartImportRequest) =>
+    fetchJson<ImportStatus>('/import', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+  cancelImport: () =>
+    fetchJson<ImportStatus>('/import/cancel', {
+      method: 'POST',
+      body: '{}',
     }),
 };

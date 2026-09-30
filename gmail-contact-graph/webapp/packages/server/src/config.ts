@@ -6,7 +6,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Paths relative to project root
 const PROJECT_ROOT = path.resolve(__dirname, '../../../../');
-const DATA_DIR = path.resolve(PROJECT_ROOT, '../data');
 
 // Load the single project-root .env (one level up from PROJECT_ROOT, alongside
 // the Rust parsers). Existing process.env values take precedence.
@@ -30,7 +29,20 @@ if (fs.existsSync(ENV_FILE)) {
   }
 }
 
+// Relative values resolve against PROJECT_ROOT (the gmail-contact-graph
+// directory), which is where `make run` is invoked from; see CONTACTS_DB_FILE.
+const DATA_DIR = path.resolve(PROJECT_ROOT, process.env.DATA_DIR || '../data');
+const REPO_ROOT = path.resolve(PROJECT_ROOT, '..');
+const EXE = process.platform === 'win32' ? '.exe' : '';
+
+function fromEnvPath(name: string, fallback: string): string {
+  const value = process.env[name];
+  return value ? path.resolve(PROJECT_ROOT, value) : fallback;
+}
+
 export const config = {
+  DATA_DIR,
+
   // The parsers write every table — contacts, mails, events, event_attendees —
   // into this one file.
   //
@@ -42,8 +54,20 @@ export const config = {
     ? path.resolve(PROJECT_ROOT, process.env.CONTACTS_DB_FILE)
     : path.join(DATA_DIR, 'contacts.db'),
 
-  MY_EMAIL: (process.env.USER_EMAIL || '').toLowerCase(),
-  MY_NAME: process.env.USER_NAME || (process.env.USER_EMAIL || '').split('@')[0] || 'Me',
+  // Where the import screen lists sources from (same defaults as the Makefiles).
+  MBOX_DIR: fromEnvPath('MBOX_DIR', path.join(DATA_DIR, 'Email')),
+  CALENDAR_DIR: fromEnvPath('CALENDAR_DIR', path.join(DATA_DIR, 'Calendar')),
+
+  // The parsers the server runs for an import: built in place by `make build`
+  // natively, installed in /usr/local/bin in the Docker image.
+  FILL_DB_BIN: fromEnvPath('FILL_DB_BIN', path.join(REPO_ROOT, 'gmail-mbox-parser', 'target', 'release', 'fill_db' + EXE)),
+  FILL_EVENTS_BIN: fromEnvPath('FILL_EVENTS_BIN', path.join(REPO_ROOT, 'calendar-parser', 'target', 'release', 'fill_events' + EXE)),
+
+  // Fallbacks for databases without a meta table; use getUserEmail() and
+  // getUserName() from db/meta.ts, which prefer the email the import recorded.
+  ENV_USER_EMAIL: (process.env.USER_EMAIL || '').trim().toLowerCase(),
+  // As written, not lowercased: 'John.Doe@…' names the centre node 'John.Doe'.
+  ENV_USER_EMAIL_LOCAL: (process.env.USER_EMAIL || '').trim().split('@')[0],
 
   // Server
   PORT: parseInt(process.env.PORT || '5000', 10),

@@ -1,0 +1,281 @@
+import assert from 'node:assert/strict';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { ImportStatus } from '@gmail-graph/shared';
+
+// Set before config.ts is loaded; the project .env never overrides these.
+const dir = mkdtempSync(path.join(tmpdir(), 'gcg-import-'));
+const emailDir = path.join(dir, 'Email');
+const calendarDir = path.join(dir, 'Calendar');
+const dbFile = path.join(dir, 'contacts.db');
+mkdirSync(emailDir);
+mkdirSync(calendarDir);
+process.env.DATA_DIR = dir;
+process.env.CONTACTS_DB_FILE = dbFile;
+process.env.USER_EMAIL = '';
+// Real parsers must never send test data to Hugging Face.
+process.env.HF_API_KEY = '';
+// Node stands in for fill_db: the "mbox" it is given is a script (below).
+process.env.FILL_DB_BIN = process.execPath;
+process.env.FILL_EVENTS_BIN = path.join(dir, 'no-fill_events');
+
+const { config } = await import('../config.js');
+const { initDatabase, getDatabase, hasDatabase } = await import('../db/index.js');
+const { markContactNotHuman } = await import('../db/queries.js');
+const { startImport, cancelImport, getImportStatus, currentSource } = await import('./importer.js');
+const { isImporting } = await import('./state.js');
+const { getSources } = await import('./sources.js');
+const { getUserName } = await import('../db/meta.js');
+
+const REPO = fileURLToPath(new URL('../../../../../../', import.meta.url));
+const EXE = process.platform === 'win32' ? '.exe' : '';
+const REAL_FILL_DB = path.join(REPO, 'gmail-mbox-parser', 'target', 'release', 'fill_db' + EXE);
+const REAL_FILL_EVENTS = path.join(REPO, 'calendar-parser', 'target', 'release', 'fill_events' + EXE);
+const FIXTURE = path.join(REPO, 'gmail-mbox-parser', 'tests', 'fixtures', 'sample.mbox');
+
+// Stand-in parsers: Node runs these files as CommonJS whatever the extension.
+writeFileSync(path.join(emailDir, 'fail.mbox'), `
+  console.error('reading mbox');
+  console.error('boom: not an mbox file');
+  process.exit(3);
+`);
+writeFileSync(path.join(emailDir, 'ok.mbox'), `
+  require('fs').writeFileSync(process.argv[3], 'not really a database');
+`);
+// Run as fill_events: node is given CALENDAR_DIR and runs its index.js.
+writeFileSync(path.join(calendarDir, 'index.js'), `
+  console.error(JSON.stringify({ event: 'phase', phase: 'calendar' }));
+  setInterval(() => {}, 1000);
+`);
+writeFileSync(path.join(emailDir, 'hang.mbox'), `
+  const db = process.argv[3];
+  require('fs').writeFileSync(db, 'partial');
+  console.error(JSON.stringify({ event: 'phase', phase: 'mails' }));
+  console.error(JSON.stringify({ event: 'progress', phase: 'mails', bytes: 50, total_bytes: 100, messages: 1000 }));
+  setInterval(() => {}, 1000);
+`);
+
+async function settle(): Promise<ImportStatus> {
+  for (let i = 0; i < 600; i++) {
+    const s = getImportStatus();
+    if (s.state !== 'importing') return s;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error('import did not finish within 30 s');
+}
+
+async function until(check: () => boolean) {
+  for (let i = 0; i < 600 && !check(); i++) await new Promise((r) => setTimeout(r, 25));
+  assert.ok(check(), 'condition not reached');
+}
+
+function rejects(action: () => unknown, status: number, pattern: RegExp) {
+  assert.throws(action, (err: { status?: number; message: string }) => {
+    assert.equal(err.status, status);
+    assert.match(err.message, pattern);
+    return true;
+  });
+}
+
+function leftovers(): string[] {
+  return readdirSync(dir).filter((f) => /\.(new|swap)/.test(f));
+}
+
+const TIMINGS = path.join(dir, 'benchmarks', 'timings.jsonl');
+
+function timingRecords(): Record<string, unknown>[] {
+  if (!existsSync(TIMINGS)) return [];
+  return readFileSync(TIMINGS, 'utf8').trim().split(/\r?\n/).map((l) => JSON.parse(l));
+}
+
+function count(sql: string): number {
+  return Number(getDatabase().exec(sql)[0].values[0][0]);
+}
+
+try {
+  await initDatabase();
+  assert.deepEqual(getImportStatus(), { state: 'empty' });
+
+  // 1. Requests rejected before anything starts.
+  {
+    rejects(() => startImport({ mbox: '../contacts.db', email: 'me@x.com' }), 400, /No file/);
+    rejects(() => startImport({ mbox: 'missing.mbox', email: 'me@x.com' }), 400, /No file/);
+    rejects(() => startImport({ email: 'me@x.com' }), 400, /mbox file name is required/);
+    rejects(() => startImport({ mbox: 'fail.mbox', email: 'nobody' }), 400, /email/);
+    rejects(() => startImport(null), 400, /mbox file name is required/);
+    // A calendar that cannot be imported is refused, not silently dropped.
+    rejects(() => startImport({ mbox: 'fail.mbox', email: 'me@x.com', includeCalendar: true }), 400, /No \.ics files/);
+    rejects(() => cancelImport(), 409, /No import/);
+
+    config.FILL_DB_BIN = path.join(dir, 'no-fill_db');
+    rejects(() => startImport({ mbox: 'fail.mbox', email: 'me@x.com' }), 500, /make build-parser/);
+    config.FILL_DB_BIN = process.execPath;
+    assert.deepEqual(getImportStatus(), { state: 'empty' });
+  }
+
+  // 2. A parser that fails: its stderr explains why, nothing is left behind.
+  {
+    const s = startImport({ mbox: 'fail.mbox', email: ' Me@X.com ', includeCalendar: false });
+    assert.equal(s.state, 'importing');
+    assert.equal(isImporting(), true);
+    const done = await settle();
+    assert.equal(done.state, 'failed');
+    if (done.state === 'failed') {
+      assert.equal(done.error, 'boom: not an mbox file');
+      assert.deepEqual(done.log, ['reading mbox', 'boom: not an mbox file']);
+      assert.equal(done.hasData, false);
+    }
+    assert.equal(isImporting(), false);
+    assert.equal(hasDatabase(), false);
+    assert.deepEqual(leftovers(), []);
+  }
+
+  // 3. Cancel: the parser is stopped, then its output removed.
+  {
+    startImport({ mbox: 'hang.mbox', email: 'me@x.com' });
+    await until(() => existsSync(dbFile + '.new'));
+    await until(() => (getImportStatus() as { progress?: number }).progress === 0.425);
+
+    // One import at a time.
+    rejects(() => startImport({ mbox: 'fail.mbox', email: 'me@x.com' }), 409, /already running/);
+
+    assert.equal(cancelImport().state, 'importing', 'still importing until the parser exits');
+    const done = await settle();
+    assert.equal(done.state, 'failed');
+    if (done.state === 'failed') assert.equal(done.error, 'cancelled');
+    assert.deepEqual(leftovers(), []);
+  }
+
+  // 4. A parser that cannot be started at all.
+  {
+    config.FILL_DB_BIN = path.join(emailDir, 'fail.mbox');
+    startImport({ mbox: 'fail.mbox', email: 'me@x.com' });
+    const done = await settle();
+    assert.equal(done.state, 'failed');
+    if (done.state === 'failed') assert.ok(done.error.length > 0);
+    assert.deepEqual(leftovers(), []);
+    config.FILL_DB_BIN = process.execPath;
+  }
+
+  // 5. Cancel while the calendar parser runs.
+  {
+    writeFileSync(path.join(calendarDir, 'cal.ics'), '');
+    config.FILL_EVENTS_BIN = path.join(dir, 'no-fill_events');
+    rejects(() => startImport({ mbox: 'ok.mbox', email: 'me@x.com', includeCalendar: true }), 400, /fill_events/);
+
+    config.FILL_EVENTS_BIN = process.execPath;
+    startImport({ mbox: 'ok.mbox', email: 'me@x.com', includeCalendar: true });
+    await until(() => (getImportStatus() as { progress?: number }).progress === 0.97);
+    cancelImport();
+    const done = await settle();
+    assert.equal(done.state, 'failed');
+    if (done.state === 'failed') assert.equal(done.error, 'cancelled');
+    assert.deepEqual(leftovers(), []);
+    assert.equal(hasDatabase(), false);
+    rmSync(path.join(calendarDir, 'cal.ics'));
+    config.FILL_EVENTS_BIN = path.join(dir, 'no-fill_events');
+  }
+
+  if (!existsSync(REAL_FILL_DB)) {
+    console.log(`importer.test: fill_db not built at ${REAL_FILL_DB}; skipping the real imports`);
+  } else {
+    config.FILL_DB_BIN = REAL_FILL_DB;
+    copyFileSync(FIXTURE, path.join(emailDir, 'sample.mbox'));
+
+    // 6. A real import becomes the working database.
+    {
+      startImport({ mbox: 'sample.mbox', email: 'You@Example.com', name: '  Your Name ', includeCalendar: false });
+      const done = await settle();
+      assert.equal(done.state, 'ready', JSON.stringify(done));
+      assert.equal(getUserName(), 'Your Name');
+      assert.equal(getSources(currentSource()).defaultName, 'Your Name');
+      if (done.state === 'ready') {
+        assert.equal(done.userEmail, 'you@example.com');
+        assert.equal(done.source, 'sample.mbox');
+        const listed = getSources(currentSource()).mbox.find((f) => f.name === 'sample.mbox');
+        assert.equal(listed?.current, true, 'the imported file is marked current');
+        assert.ok(done.importedAt && Date.now() - done.importedAt < 60_000);
+      }
+      assert.equal(count(`SELECT COUNT(*) FROM contacts`), 12);
+      assert.equal(count(`SELECT COUNT(*) FROM contacts_filtered`), 7);
+      assert.ok(existsSync(dbFile));
+      assert.equal(existsSync(dbFile + '.prev'), false, 'nothing to keep on the first import');
+      assert.deepEqual(leftovers(), []);
+      assert.equal(count(`SELECT COUNT(*) FROM sqlite_master WHERE name = 'events'`), 0);
+
+      // Only this successful import left a timing record, next to contacts.db.
+      const records = timingRecords();
+      assert.equal(records.length, 1);
+      const r = records[0] as Record<string, number & string & Record<string, number>>;
+      assert.equal(r.mode, 'webapp');
+      assert.equal(r.mbox, 'sample.mbox');
+      assert.equal(r.mbox_bytes, readFileSync(FIXTURE).length);
+      assert.equal(r.messages, 19);
+      assert.equal(r.contacts, 12);
+      assert.equal(r.ai_enabled, false);
+      assert.deepEqual(Object.keys(r.stages_ms).sort(), ['ai', 'checkpoint', 'contacts', 'mails', 'spam']);
+      assert.ok(r.fill_db_wall_ms >= r.fill_db_total_ms, 'the wall time includes the process start');
+      assert.equal(r.calendar_ms, null);
+      assert.equal(typeof r.finalize_ms, 'number');
+      assert.ok(r.total_ms >= r.fill_db_wall_ms + r.finalize_ms);
+      assert.match(r.at, /Z$/);
+    }
+
+    // 7. A failed import leaves the working data alone.
+    {
+      const before = readFileSync(dbFile);
+      config.FILL_DB_BIN = process.execPath;
+      startImport({ mbox: 'fail.mbox', email: 'you@example.com' });
+      const done = await settle();
+      assert.equal(done.state, 'failed');
+      if (done.state === 'failed') assert.equal(done.hasData, true);
+      assert.deepEqual(readFileSync(dbFile), before);
+      assert.equal(count(`SELECT COUNT(*) FROM contacts`), 12);
+      assert.equal(timingRecords().length, 1, 'a failed import is not recorded');
+      config.FILL_DB_BIN = REAL_FILL_DB;
+    }
+
+    // 8. Re-importing the same mailbox keeps a manual edit; the old file is kept.
+    {
+      markContactNotHuman('alice@example.com');
+      // Left by a command-line parse (docker/parse-entrypoint.sh): it would
+      // call the replaced database up to date on the next CLI run.
+      writeFileSync(path.join(dir, '.parse-stamp'), 'data.mbox 1 2 you@example.com');
+      startImport({ mbox: 'sample.mbox', email: 'you@example.com' });
+      assert.equal((await settle()).state, 'ready');
+      assert.equal(getUserName(), 'you', 'no name given: the local part of the email');
+      assert.equal(existsSync(path.join(dir, '.parse-stamp')), false, 'the CLI parse stamp is dropped');
+      assert.equal(count(`SELECT COUNT(*) FROM contacts_filtered`), 6);
+      assert.equal(count(`SELECT COUNT(*) FROM user_overrides WHERE email = 'alice@example.com'`), 1);
+      assert.ok(existsSync(dbFile + '.prev'));
+    }
+
+    // 9. Another mailbox owner: the edit does not carry over.
+    {
+      startImport({ mbox: 'sample.mbox', email: 'someone-else@example.com' });
+      assert.equal((await settle()).state, 'ready');
+      assert.equal(count(`SELECT COUNT(*) FROM user_overrides`), 0);
+    }
+
+    // 10. With .ics files and fill_events built, the calendar is imported too.
+    if (existsSync(REAL_FILL_EVENTS)) {
+      config.FILL_EVENTS_BIN = REAL_FILL_EVENTS;
+      writeFileSync(path.join(calendarDir, 'cal.ics'), 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n');
+      startImport({ mbox: 'sample.mbox', email: 'you@example.com', includeCalendar: true });
+      assert.equal((await settle()).state, 'ready');
+      assert.equal(count(`SELECT COUNT(*) FROM sqlite_master WHERE name IN ('events', 'event_attendees')`), 2);
+      assert.equal(typeof timingRecords().at(-1)?.calendar_ms, 'number');
+
+      // Unticked: no calendar tables in the new data.
+      startImport({ mbox: 'sample.mbox', email: 'you@example.com', includeCalendar: false });
+      assert.equal((await settle()).state, 'ready');
+      assert.equal(count(`SELECT COUNT(*) FROM sqlite_master WHERE name = 'events'`), 0);
+    }
+  }
+
+  console.log('importer.test: all assertions passed');
+} finally {
+  rmSync(dir, { recursive: true, force: true });
+}

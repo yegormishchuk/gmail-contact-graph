@@ -1,4 +1,5 @@
 import { getDatabase, saveDatabase } from './index.js';
+import { applyOverride, hasContact, recordOverride } from './overrides.js';
 import type { ContactFiltered, ExcludedContact, Contact } from '@gmail-graph/shared';
 
 export interface DbContact {
@@ -79,38 +80,28 @@ export function loadSpamStats(): { excludedCount: number; excludedTotal: number 
   return { excludedCount: row.count as number, excludedTotal: row.total as number };
 }
 
+// Only addresses that are contacts are journaled, so a stray request cannot
+// leave an edit behind to hit a matching contact in some later import.
+
 export function markContactClear(email: string): void {
   const db = getDatabase();
-  db.run('UPDATE contacts_filtered SET not_clear = 0 WHERE contact_id = (SELECT id FROM contacts WHERE email = ?)', [email]);
+  applyOverride(db, email, 'clear');
+  if (hasContact(db, email)) recordOverride(db, email, 'clear');
   saveDatabase();
 }
 
 export function markContactNotHuman(email: string): void {
   const db = getDatabase();
-  db.run('DELETE FROM contacts_filtered WHERE contact_id = (SELECT id FROM contacts WHERE email = ?)', [email]);
+  applyOverride(db, email, 'not_human');
+  if (hasContact(db, email)) recordOverride(db, email, 'not_human');
   saveDatabase();
 }
 
+/** False when the contact did not pass the basic spam filter. */
 export function restoreContact(email: string): boolean {
   const db = getDatabase();
-
-  const stmt = db.prepare(`
-    SELECT id FROM contacts WHERE email = ? AND not_spam = 1
-  `);
-  stmt.bind([email]);
-
-  if (!stmt.step()) {
-    stmt.free();
-    return false;
-  }
-
-  const row = stmt.getAsObject() as unknown as { id: number };
-  stmt.free();
-
-  db.run(`
-    INSERT OR REPLACE INTO contacts_filtered (contact_id, not_clear) VALUES (?, 0)
-  `, [row.id]);
-
+  if (!applyOverride(db, email, 'restore')) return false;
+  recordOverride(db, email, 'restore');
   saveDatabase();
   return true;
 }
