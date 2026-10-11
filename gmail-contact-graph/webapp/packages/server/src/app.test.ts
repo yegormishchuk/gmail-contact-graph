@@ -86,6 +86,8 @@ try {
 
     // The import API works without a database.
     assert.deepEqual(await get('/api/import/status'), { status: 200, body: { state: 'empty' } });
+    // Demo mode off: no demo flag above, and no replay.
+    assert.equal((await get('/api/demo/replay')).status, 404);
     const sources = await get('/api/import/sources');
     assert.equal(sources.status, 200);
     assert.deepEqual(sources.body.mbox, []);
