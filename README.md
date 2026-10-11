@@ -18,6 +18,9 @@ centre. Everything runs locally.
 **[See it running →](https://yegormishchuk.dev/blog/gmail_project)** — a write-up
 about the project, with a video walkthrough of the graph.
 
+**[Try the live demo →](LIVE_DEMO_URL)** — the whole app on a generated
+mailbox, no real email. See [docs/demo.md](docs/demo.md).
+
 ## Quick start
 
 See the graph in a few minutes on a synthetic mailbox that ships with the repo
@@ -198,6 +201,7 @@ on the `make` command line (`make run PORT=5055`) overrides it.
 | `ALLOWED_ORIGINS` | empty | Comma-separated origins allowed cross-origin requests; only for a deliberate cross-origin setup. |
 | `UID`, `GID` | `1000` | Docker only: owner of the files containers write — see [Troubleshooting](#troubleshooting). |
 | `HF_API_KEY`, `HF_MODEL`, `HF_BATCH_SIZE`, `HF_TIMEOUT` | — | The AI spam filter, below. |
+| `DEMO_MODE` | — | `1` serves the read-only demo on the generated mailbox — see [docs/demo.md](docs/demo.md). |
 
 Relative paths resolve against `gmail-contact-graph/` for a native run. Under
 Docker, `DATA_DIR` is instead the host directory mounted into the container,
