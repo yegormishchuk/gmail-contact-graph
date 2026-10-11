@@ -229,3 +229,52 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose --profile parse down -v --remove-orphans
+
+  demo-smoke:
+    name: demo (build + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Same image and cache as the docker job: the demo is the webapp image
+      # with DEMO_MODE=1, as Railway runs it.
+      - name: Build the webapp image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/webapp.Dockerfile
+          tags: gmail-contact-graph/webapp
+          load: true
+          cache-from: type=gha,scope=webapp
+          cache-to: type=gha,scope=webapp,mode=max
+
+      # No volume and no DATA_DIR, as on Railway. --wait returns once the
+      # healthcheck passes, which is after the boot import: the server only
+      # listens once the demo data is in.
+      - name: Start the demo
+        run: docker compose --profile demo up -d --no-build --wait demo
+
+      - name: Smoke-test the demo API
+        run: |
+          api=http://127.0.0.1:5099/api
+          curl -fsS "$api/import/status" | jq -e '.demo == true and .state == "ready"'
+          curl -fsS "$api/demo/replay" | jq -e '(.steps | length > 0) and .durationMs == 8000'
+          curl -fsS "$api/graph" | jq -e '.nodes | length > 50'
+          curl -fsS "$api/calendar-stats" | jq -e '.totalMeetings > 0'
+          curl -fsS "$api/import/sources" | jq -e '.mbox | map(.name) == ["sample.mbox"]'
+          # Read-only: edits and imports are refused.
+          for path in contacts/mark-clear import; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+              -H 'Content-Type: application/json' -d '{}' "$api/$path")
+            test "$code" = 403 || { echo "POST $path: $code, expected 403" >&2; exit 1; }
+          done
+
+      - name: Container logs
+        if: failure()
+        run: docker compose --profile demo logs --no-color demo
+
+      - name: Tear down
+        if: always()
+        run: docker compose --profile demo down
