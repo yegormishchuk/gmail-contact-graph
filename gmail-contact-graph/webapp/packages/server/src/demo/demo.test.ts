@@ -1,16 +1,18 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Set before config.ts is loaded; the project .env never overrides these.
+// DATA_DIR and CONTACTS_DB_FILE stand for a real database, which the demo
+// must leave alone: it never uses them.
 const dir = mkdtempSync(path.join(tmpdir(), 'gcg-demo-'));
 process.env.DEMO_MODE = '1';
 process.env.DATA_DIR = dir;
-delete process.env.CONTACTS_DB_FILE;
+process.env.CONTACTS_DB_FILE = path.join(dir, 'mine.db');
 delete process.env.MBOX_DIR;
 delete process.env.CALENDAR_DIR;
 // Demo mode must ignore a key, wherever it comes from.
@@ -24,9 +26,11 @@ const { createApp } = await import('../app.js');
 const { initDatabase } = await import('../db/index.js');
 const { bootDemo } = await import('./boot.js');
 
+const DEMO_DATA = path.join(tmpdir(), 'gmail-contact-graph-demo');
+
 /** config.DATA_DIR as a fresh process resolves it, with DATA_DIR unset. */
 function defaultDataDir(demo: boolean): string {
-  const env = { ...process.env, DATA_DIR: '', DEMO_MODE: demo ? '1' : '' };
+  const env = { ...process.env, DATA_DIR: '', CONTACTS_DB_FILE: '', DEMO_MODE: demo ? '1' : '' };
   return execFileSync(process.execPath, [
     '--import', 'tsx', '--input-type=module',
     '-e', `const { config } = await import('./src/config.ts'); console.log(config.DATA_DIR);`,
@@ -52,17 +56,17 @@ async function post(url: string, body: unknown) {
 }
 
 try {
-  // 1. Demo defaults: the generated data in demo/, its own database folder,
-  //    no AI filter, and the calendar's "now" pinned.
+  // 1. Demo defaults: the generated data in demo/, its own database folder
+  //    whatever DATA_DIR says, no AI filter, and the calendar's "now" pinned.
   {
     assert.equal(config.DEMO_MODE, true);
     assert.equal(config.MBOX_DIR, path.join(REPO, 'demo', 'Email'));
     assert.equal(config.CALENDAR_DIR, path.join(REPO, 'demo', 'Calendar'));
-    assert.equal(config.CONTACTS_DB_FILE, path.join(dir, 'contacts.db'));
+    assert.equal(config.DATA_DIR, DEMO_DATA);
+    assert.equal(config.CONTACTS_DB_FILE, path.join(DEMO_DATA, 'contacts.db'));
     assert.equal(process.env.HF_API_KEY, '');
     assert.equal(process.env.FILL_EVENTS_NOW, '2026-10-01');
-    // Nowhere under data/, where it could replace a database of yours.
-    assert.equal(defaultDataDir(true), path.join(tmpdir(), 'gmail-contact-graph-demo'));
+    assert.equal(defaultDataDir(true), DEMO_DATA);
     assert.equal(defaultDataDir(false), path.join(REPO, 'data'));
   }
 
@@ -107,6 +111,8 @@ try {
         status: 403, body: { error: 'Not available in the demo' },
       }, url);
     }
+
+    assert.deepEqual(readdirSync(dir), [], 'nothing written where DATA_DIR points');
 
     // 6. A failed import fails the boot, so a broken deploy never serves.
     //    Node stands in for fill_db and chokes on the mbox it is given.

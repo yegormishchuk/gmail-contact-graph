@@ -3,6 +3,8 @@
 *
 !gmail-contact-graph/webapp
 !docker/webapp-entrypoint.sh
+!demo/Email/sample.mbox
+!demo/Calendar/sample.ics
 !gmail-mbox-parser/Cargo.toml
 !gmail-mbox-parser/Cargo.lock
 !gmail-mbox-parser/src

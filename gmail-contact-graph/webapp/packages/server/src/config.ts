@@ -42,11 +42,14 @@ if (DEMO_MODE) {
 
 // Relative values resolve against PROJECT_ROOT (the gmail-contact-graph
 // directory), which is where `make run` is invoked from; see CONTACTS_DB_FILE.
-// The demo rebuilds its database on every start, in the system temp
-// directory: anywhere under data/ it could replace a database of yours.
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(PROJECT_ROOT, process.env.DATA_DIR)
-  : DEMO_MODE ? path.join(os.tmpdir(), 'gmail-contact-graph-demo') : path.resolve(PROJECT_ROOT, '../data');
+//
+// The demo rebuilds its database on every start, always in the system temp
+// directory: DATA_DIR and CONTACTS_DB_FILE (from .env, or pinned by the
+// compose webapp service) point at a database of yours, which a demo import
+// would replace.
+const DATA_DIR = DEMO_MODE
+  ? path.join(os.tmpdir(), 'gmail-contact-graph-demo')
+  : path.resolve(PROJECT_ROOT, process.env.DATA_DIR || '../data');
 const REPO_ROOT = path.resolve(PROJECT_ROOT, '..');
 const DEMO_DIR = path.join(REPO_ROOT, 'demo');
 const EXE = process.platform === 'win32' ? '.exe' : '';
@@ -66,7 +69,7 @@ export const config = {
   // directory, which is where `make run` is invoked from. Leaving it to the
   // process working directory would resolve it against packages/server, since
   // that is where npm runs the start script.
-  CONTACTS_DB_FILE: process.env.CONTACTS_DB_FILE
+  CONTACTS_DB_FILE: process.env.CONTACTS_DB_FILE && !DEMO_MODE
     ? path.resolve(PROJECT_ROOT, process.env.CONTACTS_DB_FILE)
     : path.join(DATA_DIR, 'contacts.db'),
 
