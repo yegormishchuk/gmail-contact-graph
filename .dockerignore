@@ -11,3 +11,5 @@ data/
 .git/
 .env
 *.mbox
+# The hosted demo's generated mailbox, which the webapp image carries.
+!demo/Email/*.mbox

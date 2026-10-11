@@ -102,6 +102,14 @@ COPY --from=build /app/gmail-contact-graph/webapp/packages/client/dist ./package
 COPY docker/webapp-entrypoint.sh /usr/local/bin/webapp-entrypoint.sh
 RUN chmod +x /usr/local/bin/webapp-entrypoint.sh
 
+# The hosted demo's generated mailbox, imported at start with DEMO_MODE=1
+# (config.ts finds it at REPO_ROOT/demo; see docs/demo.md).
+COPY demo/Email/ /app/demo/Email/
+COPY demo/Calendar/ /app/demo/Calendar/
+# Writable by node without a volume (the demo, Railway): the entrypoint
+# keeps its lock file here. A mounted volume replaces it as before.
+RUN mkdir -p /app/data && chown node:node /app/data
+
 WORKDIR /app/gmail-contact-graph/webapp/packages/server
 USER node
 ENTRYPOINT ["/usr/local/bin/webapp-entrypoint.sh"]
