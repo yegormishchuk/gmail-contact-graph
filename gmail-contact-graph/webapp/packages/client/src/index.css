@@ -1741,6 +1741,41 @@ header {
   white-space: nowrap;
 }
 
+/* The demo banner sits above every page, which fills the rest of the window. */
+.app-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-frame-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.app-frame-content > .container {
+  height: 100%;
+}
+
+.demo-banner {
+  flex-wrap: wrap;
+  background: rgba(96, 165, 250, 0.08);
+  border-bottom-color: rgba(96, 165, 250, 0.25);
+}
+
+.demo-banner a.import-link {
+  text-decoration: none;
+}
+
+.demo-banner a.import-link:hover {
+  text-decoration: underline;
+}
+
+.import-input[readonly] {
+  color: #aaa;
+  cursor: default;
+}
+
 .header-import {
   margin-left: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);

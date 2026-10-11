@@ -12,6 +12,7 @@ import { ImportOverlay } from './components/ImportOverlay';
 import { ImportScreen } from './components/ImportScreen';
 import { ImportBanner } from './components/ImportBanner';
 import { ImportDialog } from './components/ImportDialog';
+import { DemoBanner } from './components/DemoBanner';
 import { useImportStatus } from './hooks/useImportStatus';
 
 function AppContent() {
@@ -123,7 +124,12 @@ function Overlay() {
 function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <div className="app-frame">
+        <DemoBanner />
+        <div className="app-frame-content">
+          <AppContent />
+        </div>
+      </div>
       <Overlay />
     </AppProvider>
   );

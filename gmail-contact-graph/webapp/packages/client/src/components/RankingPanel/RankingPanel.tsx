@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAppContext, editsLocked } from '../../context/AppContext';
+import { useAppContext, editsLockedReason } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
 import { buildOverallGraph } from '../../utils/buildOverallGraph';
@@ -17,7 +17,8 @@ interface GroupRankItem {
 
 export function RankingPanel() {
   const { state, dispatch } = useAppContext();
-  const locked = editsLocked(state);
+  const lockedReason = editsLockedReason(state);
+  const locked = lockedReason !== null;
   const [searchQuery, setSearchQuery] = useState('');
 
   const { rawData, excludedContacts, rankingTab, panelVisible } = state;
@@ -243,6 +244,7 @@ export function RankingPanel() {
 
   const handleDelete = async (email: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (locked) return;
     try {
       await api.markNotHuman(email);
       dispatch({ type: 'REMOVE_CONTACT', payload: email });
@@ -253,6 +255,7 @@ export function RankingPanel() {
 
   const handleRestore = async (email: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (locked) return;
     try {
       await api.restore(email);
       window.location.reload();
@@ -345,7 +348,7 @@ export function RankingPanel() {
               {!usesCalendarNodes && (!isOverallMode || gmailEmails.has(contact.email.toLowerCase())) && (
                 <button
                   className="ranking-delete"
-                  title={locked ? 'Not while an import is running' : 'Remove contact'}
+                  title={lockedReason ?? 'Remove contact'}
                   onClick={(e) => handleDelete(contact.email, e)}
                   disabled={locked}
                 >
@@ -406,7 +409,7 @@ export function RankingPanel() {
                   className="spam-restore"
                   onClick={(e) => handleRestore(contact.email, e)}
                   disabled={locked}
-                  title={locked ? 'Not while an import is running' : undefined}
+                  title={lockedReason ?? undefined}
                 >
                   not spam
                 </button>
