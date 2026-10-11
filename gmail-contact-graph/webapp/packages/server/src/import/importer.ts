@@ -8,7 +8,7 @@ import { getDatabase, getSqlJs, hasDatabase, swapDatabase } from '../db/index.js
 import { getMeta, getUserEmail, setMeta } from '../db/meta.js';
 import { carryOverOverrides } from '../db/overrides.js';
 import { ensureSchema } from '../db/schema.js';
-import { ProgressTracker } from './progress.js';
+import { ProgressTracker, type ProgressListener } from './progress.js';
 import { countIcs, listMbox, resolveMbox, type SourceRef } from './sources.js';
 import { setImporting } from './state.js';
 import { recordImportTimings } from './timings.js';
@@ -72,7 +72,8 @@ export function currentSource(): SourceRef | null {
   }
 }
 
-export function startImport(body: unknown): ImportStatus {
+/** `onProgress` is told every progress snapshot of this import (see demo/boot.ts). */
+export function startImport(body: unknown, onProgress?: ProgressListener): ImportStatus {
   if (job) throw new ImportRequestError(409, 'An import is already running.');
 
   const req = (body ?? {}) as Partial<StartImportRequest>;
@@ -111,7 +112,7 @@ export function startImport(body: unknown): ImportStatus {
       `${newDbFile()} is still in use, probably by a parser from an earlier run. Try again once it exits.`);
   }
   failure = null;
-  const current: Job = { tracker: new ProgressTracker(), startedAt: Date.now(), log: [], child: null, cancelled: false };
+  const current: Job = { tracker: new ProgressTracker(onProgress), startedAt: Date.now(), log: [], child: null, cancelled: false };
   job = current;
   setImporting(true);
   run(current, mboxPath, email, name, withCalendar, source).catch((err) => {
