@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -29,10 +30,25 @@ if (fs.existsSync(ENV_FILE)) {
   }
 }
 
+// The public demo: serves the generated mailbox in demo/, read-only.
+const DEMO_MODE = process.env.DEMO_MODE === '1';
+if (DEMO_MODE) {
+  // Deterministic and offline. An empty value, not a missing one: the parsers
+  // load ../.env themselves and would pick a key up from there.
+  process.env.HF_API_KEY = '';
+  // The date demo/Calendar ends on; see demo/README.md.
+  process.env.FILL_EVENTS_NOW = '2026-10-01';
+}
+
 // Relative values resolve against PROJECT_ROOT (the gmail-contact-graph
 // directory), which is where `make run` is invoked from; see CONTACTS_DB_FILE.
-const DATA_DIR = path.resolve(PROJECT_ROOT, process.env.DATA_DIR || '../data');
+// The demo rebuilds its database on every start, in the system temp
+// directory: anywhere under data/ it could replace a database of yours.
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(PROJECT_ROOT, process.env.DATA_DIR)
+  : DEMO_MODE ? path.join(os.tmpdir(), 'gmail-contact-graph-demo') : path.resolve(PROJECT_ROOT, '../data');
 const REPO_ROOT = path.resolve(PROJECT_ROOT, '..');
+const DEMO_DIR = path.join(REPO_ROOT, 'demo');
 const EXE = process.platform === 'win32' ? '.exe' : '';
 
 function fromEnvPath(name: string, fallback: string): string {
@@ -55,8 +71,14 @@ export const config = {
     : path.join(DATA_DIR, 'contacts.db'),
 
   // Where the import screen lists sources from (same defaults as the Makefiles).
-  MBOX_DIR: fromEnvPath('MBOX_DIR', path.join(DATA_DIR, 'Email')),
-  CALENDAR_DIR: fromEnvPath('CALENDAR_DIR', path.join(DATA_DIR, 'Calendar')),
+  MBOX_DIR: fromEnvPath('MBOX_DIR', path.join(DEMO_MODE ? DEMO_DIR : DATA_DIR, 'Email')),
+  CALENDAR_DIR: fromEnvPath('CALENDAR_DIR', path.join(DEMO_MODE ? DEMO_DIR : DATA_DIR, 'Calendar')),
+
+  DEMO_MODE,
+  DEMO_OWNER_EMAIL: 'you@example.com',
+  DEMO_MBOX: 'sample.mbox',
+  /** How long a visitor's replayed import takes. */
+  DEMO_REPLAY_MS: 8000,
 
   // The parsers the server runs for an import: built in place by `make build`
   // natively, installed in /usr/local/bin in the Docker image.

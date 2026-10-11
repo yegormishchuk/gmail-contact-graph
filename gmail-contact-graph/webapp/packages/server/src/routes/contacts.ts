@@ -9,7 +9,7 @@ import {
   loadAllContacts,
 } from '../db/queries.js';
 import { clearCache } from './graph.js';
-import { requireIdle, requireJson } from '../middleware/guards.js';
+import { rejectInDemo, requireIdle, requireJson } from '../middleware/guards.js';
 
 const router = Router();
 
@@ -40,7 +40,7 @@ router.get('/contacts/all', (req, res) => {
   res.json(result);
 });
 
-router.post('/contacts/mark-clear', requireJson, requireIdle, (req, res) => {
+router.post('/contacts/mark-clear', rejectInDemo, requireJson, requireIdle, (req, res) => {
   const { email } = req.body;
   if (typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email required' });
@@ -51,7 +51,7 @@ router.post('/contacts/mark-clear', requireJson, requireIdle, (req, res) => {
   res.json({ success: true, email });
 });
 
-router.post('/contacts/mark-not-human', requireJson, requireIdle, (req, res) => {
+router.post('/contacts/mark-not-human', rejectInDemo, requireJson, requireIdle, (req, res) => {
   const { email } = req.body;
   if (typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email required' });
@@ -62,7 +62,7 @@ router.post('/contacts/mark-not-human', requireJson, requireIdle, (req, res) => 
   res.json({ success: true, email });
 });
 
-router.post('/contacts/restore', requireJson, requireIdle, (req, res) => {
+router.post('/contacts/restore', rejectInDemo, requireJson, requireIdle, (req, res) => {
   const { email } = req.body;
   if (typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email required' });
