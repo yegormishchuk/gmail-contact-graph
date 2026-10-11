@@ -8,7 +8,7 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveTime, Utc};
 use rusqlite::Connection;
 
 use db::{
@@ -65,7 +65,14 @@ async fn main() {
     setup_events_db(&conn);
     setup_event_attendees_table(&conn);
 
-    let now = Utc::now();
+    let now = match parse_now_override(env::var("FILL_EVENTS_NOW").ok().as_deref()) {
+        Ok(Some(now)) => now,
+        Ok(None) => Utc::now(),
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    };
     let today_cutoff = now.timestamp();
     let cutoff_min = (now - Duration::days(730)).timestamp();
 
@@ -157,6 +164,22 @@ fn json_progress_enabled() -> bool {
     env::var("PROGRESS_FORMAT")
         .map(|v| v.trim().eq_ignore_ascii_case("json"))
         .unwrap_or(false)
+}
+
+/// `FILL_EVENTS_NOW` replaces the current time, which decides the 730-day
+/// window events are kept from and how far recurring events are expanded. The
+/// webapp demo sets it, so its fixed calendar gives the same data every year.
+/// A date (`2026-10-01`, midnight UTC) or an RFC 3339 timestamp.
+fn parse_now_override(value: Option<&str>) -> Result<Option<DateTime<Utc>>, String> {
+    let Some(raw) = value.map(str::trim).filter(|v| !v.is_empty()) else {
+        return Ok(None);
+    };
+    if let Ok(date) = NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
+        return Ok(Some(date.and_time(NaiveTime::MIN).and_utc()));
+    }
+    DateTime::parse_from_rfc3339(raw)
+        .map(|t| Some(t.with_timezone(&Utc)))
+        .map_err(|_| format!("FILL_EVENTS_NOW: expected YYYY-MM-DD or RFC 3339, got {raw:?}"))
 }
 
 fn parse_args(args: Vec<String>) -> (Vec<String>, String, Option<String>) {
@@ -256,6 +279,31 @@ mod tests {
         assert_eq!(files, vec!["a.ics"]);
         assert_eq!(db, "out.db");
         assert_eq!(user.as_deref(), Some("me@x.com"));
+    }
+
+    #[test]
+    fn now_override_unset_or_blank_is_none() {
+        assert_eq!(parse_now_override(None), Ok(None));
+        assert_eq!(parse_now_override(Some("  ")), Ok(None));
+    }
+
+    #[test]
+    fn now_override_date_is_midnight_utc() {
+        let now = parse_now_override(Some("2026-10-01")).unwrap().unwrap();
+        assert_eq!(now.to_rfc3339(), "2026-10-01T00:00:00+00:00");
+    }
+
+    #[test]
+    fn now_override_accepts_rfc3339() {
+        let now = parse_now_override(Some("2026-10-01T12:30:00+02:00"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(now.to_rfc3339(), "2026-10-01T10:30:00+00:00");
+    }
+
+    #[test]
+    fn now_override_rejects_garbage() {
+        assert!(parse_now_override(Some("yesterday")).is_err());
     }
 
     #[test]
