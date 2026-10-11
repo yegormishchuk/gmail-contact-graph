@@ -49,6 +49,8 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
   }, [calendarPossible]);
 
   const failure = state.importStatus?.state === 'failed' ? state.importStatus : null;
+  // The hosted demo: one generated mailbox, its owner fixed, no server paths to show.
+  const demo = state.importStatus?.demo === true;
   const emailValid = email.trim().includes('@');
   const canStart = !!sources?.parserAvailable && !!mbox && emailValid && !starting;
 
@@ -104,10 +106,12 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
           <div className="import-section">
             <div className="import-label">
               <span id="import-mbox-label">Mailbox file</span>
-              <button type="button" className="import-link" onClick={load}>Refresh list</button>
+              {!demo && <button type="button" className="import-link" onClick={load}>Refresh list</button>}
             </div>
             <div className="import-hint">
-              Put a Gmail <code>.mbox</code> export (Google Takeout, unzipped) in <code>{sources.mboxDir}</code>
+              {demo
+                ? 'A generated mailbox: made-up people and companies, no real email.'
+                : <>Put a Gmail <code>.mbox</code> export (Google Takeout, unzipped) in <code>{sources.mboxDir}</code></>}
             </div>
             {sources.mbox.length === 0 ? (
               <div className="import-empty">No .mbox files there yet.</div>
@@ -138,9 +142,12 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
               type="email"
               value={email}
               placeholder="you@gmail.com"
+              readOnly={demo}
               onChange={(e) => setEmail(e.target.value)}
             />
-            <span className="import-hint">The address this mailbox belongs to: it is the centre of the graph.</span>
+            <span className="import-hint">
+              {demo ? 'Demo mailbox owner.' : 'The address this mailbox belongs to: it is the centre of the graph.'}
+            </span>
           </label>
 
           <label className="import-section">
@@ -163,14 +170,17 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
               onChange={(e) => setIncludeCalendar(e.target.checked)}
             />
             <span>
-              Calendar ({sources.icsCount} .ics {sources.icsCount === 1 ? 'file' : 'files'} in <code>{sources.calendarDir}</code>)
+              Calendar ({sources.icsCount} .ics {sources.icsCount === 1 ? 'file' : 'files'}
+              {!demo && <> in <code>{sources.calendarDir}</code></>})
               {sources.icsCount > 0 && !sources.calendarParserAvailable && ' — calendar parser not built'}
             </span>
           </label>
 
-          <div className="import-hint">
-            AI spam filter: {sources.aiEnabled ? 'on' : 'off (set HF_API_KEY in .env to enable it)'}
-          </div>
+          {!demo && (
+            <div className="import-hint">
+              AI spam filter: {sources.aiEnabled ? 'on' : 'off (set HF_API_KEY in .env to enable it)'}
+            </div>
+          )}
         </>
       )}
 
