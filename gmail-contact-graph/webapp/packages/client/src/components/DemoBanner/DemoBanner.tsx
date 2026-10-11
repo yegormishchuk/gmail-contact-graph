@@ -26,7 +26,7 @@ export function DemoBanner() {
         Demo with a generated mailbox — no real email. Your import lives in this browser; editing contacts is disabled.
       </span>
       <a className="import-link" href={REPO_URL} target="_blank" rel="noreferrer">GitHub</a>
-      <a className="import-link" href={`${REPO_URL}/blob/main/docs/install.md`} target="_blank" rel="noreferrer">
+      <a className="import-link" href={`${REPO_URL}#quick-start`} target="_blank" rel="noreferrer">
         Run it on your own mailbox
       </a>
       <button className="import-link" onClick={reset}>Reset demo</button>
