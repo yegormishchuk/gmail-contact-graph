@@ -4,7 +4,11 @@
 # the image carries fill_db and fill_events. They are built exactly as in
 # docker/parsers.Dockerfile (see there for the manifest-stub caching and the
 # OpenSSL notes); generate_rankings is left out, the webapp does not read the
-# ranking files. Keep the two builds in step when either changes.
+# ranking files. Keep the two builds in step when either changes,
+# except for the cargo registry cache mounts, left out here: Railway, which
+# builds this image for the hosted demo (docs/demo.md), rejects a cache mount
+# without an id in its own service-specific format. The manifest-stub layers
+# still cache the dependency builds.
 FROM rust:1.87-bookworm AS parsers
 RUN apt-get update && apt-get install -y --no-install-recommends \
         pkg-config libssl-dev \
@@ -16,22 +20,18 @@ COPY gmail-mbox-parser/Cargo.toml gmail-mbox-parser/Cargo.lock ./
 RUN mkdir -p src/bin/fill_db \
     && : > src/lib.rs \
     && echo 'fn main(){}' > src/bin/fill_db/main.rs
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    cargo build --release --bin fill_db
+RUN cargo build --release --bin fill_db
 COPY gmail-mbox-parser/src ./src
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    touch src/lib.rs src/bin/fill_db/main.rs \
+RUN touch src/lib.rs src/bin/fill_db/main.rs \
     && cargo build --release --bin fill_db \
     && cp target/release/fill_db /out/fill_db
 
 WORKDIR /build/calendar-parser
 COPY calendar-parser/Cargo.toml calendar-parser/Cargo.lock ./
 RUN mkdir -p src/bin/fill_events && echo 'fn main(){}' > src/bin/fill_events/main.rs
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    cargo build --release --bin fill_events
+RUN cargo build --release --bin fill_events
 COPY calendar-parser/src ./src
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    touch src/bin/fill_events/main.rs \
+RUN touch src/bin/fill_events/main.rs \
     && cargo build --release --bin fill_events \
     && cp target/release/fill_events /out/fill_events
 
