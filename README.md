@@ -18,7 +18,7 @@ centre. Everything runs locally.
 **[See it running →](https://yegormishchuk.dev/blog/gmail_project)** — a write-up
 about the project, with a video walkthrough of the graph.
 
-**[Try the live demo →](LIVE_DEMO_URL)** — the whole app on a generated
+**[Try the live demo →](https://gmail-contact-graph.up.railway.app/)** — the whole app on a generated
 mailbox, no real email. See [docs/demo.md](docs/demo.md).
 
 ## Quick start
