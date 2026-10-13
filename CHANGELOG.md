@@ -9,6 +9,46 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-12
+
+A public, read-only demo: the whole app on a generated mailbox, deployed
+on Railway. Every visitor imports it in their own browser and can look
+around without a Gmail export. Nothing changes unless `DEMO_MODE=1` is set.
+
+### Added
+
+- `DEMO_MODE=1` runs the webapp as a read-only demo on the generated
+  mailbox and calendar in `demo/` (made-up people on reserved domains). The
+  server imports them with the real parsers when it starts, before it
+  listens, and serves that one database to everyone. Contact edits and
+  imports answer `403`. The import status carries `demo: true`.
+- In the demo each visitor's import runs in their browser: the import
+  recorded at start is replayed over about 8 seconds
+  (`GET /api/demo/replay`), and what they imported, with which name and
+  whether with the calendar, is kept in their `localStorage`. Visitors do
+  not affect each other. A banner links the repository and the README
+  quick start, and **Reset demo** returns to the empty import screen.
+- Demo mode ignores `HF_API_KEY` and keeps its database in the system temp
+  directory, whatever `DATA_DIR` and `CONTACTS_DB_FILE` say, so it never
+  imports over your own database.
+- `docker compose --profile demo up --build demo` runs the demo locally on
+  port 5099, with no `data/` volume and no `.env`.
+- `railway.json` deploys the demo on Railway; see `docs/demo.md`. A
+  `demo-smoke` CI job starts the image the way Railway runs it.
+- `fill_events` reads an optional `FILL_EVENTS_NOW` (`YYYY-MM-DD` or
+  RFC 3339) in place of the current time, which decides the 730-day window
+  of kept events and how far recurring events are expanded. The demo pins it,
+  so its calendar gives the same data every year.
+
+### Changed
+
+- The webapp image carries `demo/` and has a `/app/data` that the `node`
+  user can write without a volume.
+- The webapp image no longer uses cargo cache mounts (`RUN --mount=type=cache`),
+  which Railway rejects. Dependency builds are still cached in layers; a
+  local rebuild after a `Cargo.lock` change downloads the crates again.
+  `docker/parsers.Dockerfile` keeps them.
+
 ## [0.3.0] - 2026-09-30
 
 The webapp now builds the graph itself: put a Gmail `.mbox` in `data/Email/`,
@@ -290,7 +330,8 @@ Takeout export to an interactive graph in the browser.
   Everything else in the pipeline is deterministic.
 - Requires Rust 1.87+ and Node.js 20.19+ (or 22+).
 
-[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.1
 [0.3.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.0
 [0.2.2]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.2
 [0.2.1]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.1
