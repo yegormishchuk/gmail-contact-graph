@@ -5,6 +5,7 @@ import { graphConfig } from '../utils/graphConfig';
 import { getNodeRadius } from '../utils/filterData';
 import type { GroupHoverData } from '../utils/groupTypes';
 import { getSelectedGroups, shouldDimNonMembers, shouldDrawRope, MIN_GROUP_SIZE, type FilterType } from '../utils/selectedGroups';
+import { placeRopeLabels, LABEL_CHAR_WIDTH, LABEL_PADDING } from '../utils/ropeLabels';
 export type { GroupHoverData };
 
 const MIN_MSG_GROUP_SIZE = MIN_GROUP_SIZE;
@@ -12,6 +13,14 @@ const MIN_MSG_GROUP_SIZE = MIN_GROUP_SIZE;
 interface RopeLink {
   source: GraphNode;
   target: GraphNode;
+}
+
+/** Bound to each rope label: its rope's edges, rank, and the edge it sits on. */
+interface RopeLabel {
+  links: RopeLink[];
+  rank: number;
+  width: number;
+  edge: number | null;
 }
 
 interface UseD3SimulationOptions {
@@ -754,18 +763,13 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         .attr('y1', d => d.source.y || 0)
         .attr('x2', d => d.target.x || 0)
         .attr('y2', d => d.target.y || 0);
-      domainLinksGroupRef.current?.selectAll<SVGTextElement, RopeLink>('text')
-        .attr('x', d => ((d.source.x || 0) + (d.target.x || 0)) / 2)
-        .attr('y', d => ((d.source.y || 0) + (d.target.y || 0)) / 2 - 4);
-
       groupLinksGroupRef.current?.selectAll<SVGLineElement, RopeLink>('line')
         .attr('x1', d => d.source.x || 0)
         .attr('y1', d => d.source.y || 0)
         .attr('x2', d => d.target.x || 0)
         .attr('y2', d => d.target.y || 0);
-      groupLinksGroupRef.current?.selectAll<SVGTextElement, RopeLink>('text')
-        .attr('x', d => ((d.source.x || 0) + (d.target.x || 0)) / 2)
-        .attr('y', d => ((d.source.y || 0) + (d.target.y || 0)) / 2 - 4);
+
+      layoutRopeLabels([domainLinksGroupRef.current, groupLinksGroupRef.current]);
     });
 
     // Cleanup
@@ -789,8 +793,10 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
     // ── Fade-out and remove previous ropes ───────────────────────────────────
     domainLinksGroupRef.current.selectAll<SVGElement, unknown>('*')
+      .classed('rope-label', false)
       .transition('rope-out').duration(200).style('opacity', 0).remove();
     groupLinksGroupRef.current.selectAll<SVGElement, unknown>('*')
+      .classed('rope-label', false)
       .transition('rope-out').duration(200).style('opacity', 0).remove();
 
     // ── Animate all contact nodes back to their natural state ─────────────────
@@ -826,6 +832,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       messageGroups: options.messageGroups,
       eventGroups: options.eventGroups,
       filterType: options.filterType,
+      visibleEmails: new Set(nodeMap.keys()),
     });
 
     // Isolating narrows the list to one group; colours are already baked in, so
@@ -833,7 +840,8 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     const isolated = options.isolatedGroupId
       ? allGroups.find(g => g.id === options.isolatedGroupId)
       : undefined;
-    const groups = isolated ? [isolated] : allGroups;
+    // A busy contact draws only its top-ranked groups; the panel isolates the rest.
+    const groups = isolated ? [isolated] : allGroups.filter(g => g.drawn);
 
     // Track visible group members for dimming logic
     const allVisibleMemberEmails = new Set<string>();
@@ -857,7 +865,14 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       return;
     }
 
-    groups.forEach(group => {
+    // An org that lost its slot still marks its members, as a large group would.
+    const undrawnOrg = isolated ? undefined : allGroups.find(g => g.kind === 'domain' && !g.drawn);
+    undrawnOrg?.memberEmails.filter(e => nodeMap.has(e)).forEach(email => {
+      allVisibleMemberEmails.add(email);
+      largeBorderColors.set(email, [...(largeBorderColors.get(email) ?? []), undrawnOrg.color]);
+    });
+
+    groups.forEach((group, rank) => {
       const { memberEmails, color, label, kind } = group;
       const visibleMembers = memberEmails.filter(e => nodeMap.has(e));
       visibleMembers.forEach(e => allVisibleMemberEmails.add(e));
@@ -866,7 +881,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       const layer = kind === 'domain' ? domainLinksGroupRef.current! : groupLinksGroupRef.current!;
 
       if (shouldDrawRope(visibleMembers.length)) {
-        drawRope(layer, visibleMembers, nodeMap, color, label);
+        drawRope(layer, visibleMembers, nodeMap, color, label, rank);
       } else {
         // Too many members on screen to rope without a hairball — mark them by border instead.
         visibleMembers.forEach(email => {
@@ -875,6 +890,9 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         });
       }
     });
+
+    // A settled simulation fires no ticks, so place the new labels now.
+    layoutRopeLabels([domainLinksGroupRef.current!, groupLinksGroupRef.current!]);
 
     highlightGroupMembers(nodesGroupRef.current!, allVisibleMemberEmails, largeBorderColors, selectedEmail, Boolean(isolated));
 
@@ -1015,7 +1033,8 @@ function drawRope(
   memberEmails: string[],
   nodeMap: Map<string, GraphNode>,
   color: string,
-  label: string
+  label: string,
+  rank: number,
 ) {
   const members = memberEmails
     .map(e => nodeMap.get(e))
@@ -1053,11 +1072,17 @@ function drawRope(
       .attr('stroke-opacity', 0.78);
   });
 
-  // Label fades in after all lines have appeared
-  const first = linkData[0];
+  // Label fades in after all lines have appeared; layoutRopeLabels positions it.
   const truncated = label.length > 22 ? label.substring(0, 20) + '…' : label;
+  const datum: RopeLabel = {
+    links: linkData,
+    rank,
+    width: truncated.length * LABEL_CHAR_WIDTH + LABEL_PADDING,
+    edge: null,
+  };
   group.append('text')
-    .datum(first)
+    .datum(datum)
+    .attr('class', 'rope-label')
     .attr('fill', color)
     .attr('font-size', '11px')
     .attr('font-weight', '600')
@@ -1065,14 +1090,46 @@ function drawRope(
     .attr('pointer-events', 'none')
     .style('text-shadow', '0 1px 4px rgba(0,0,0,0.9)')
     .style('opacity', '0')
-    .attr('x', ((first.source.x || 0) + (first.target.x || 0)) / 2)
-    .attr('y', ((first.source.y || 0) + (first.target.y || 0)) / 2 - 4)
     .text(truncated)
     .transition()
     .duration(350)
     .delay(linkData.length * 55 + 120)
     .ease(d3.easeCubicOut)
     .style('opacity', '1');
+}
+
+/**
+ * Puts every live rope label on a free edge of its rope, in rank order across
+ * both layers. A label with no free edge is hidden; its rope stays drawn.
+ */
+function layoutRopeLabels(
+  layers: (d3.Selection<SVGGElement, unknown, null, undefined> | null)[],
+) {
+  const labels = layers
+    .flatMap(layer => (layer ? layer.selectAll<SVGTextElement, RopeLabel>('text.rope-label').nodes() : []))
+    .map(el => ({ el, d: d3.select<SVGTextElement, RopeLabel>(el).datum() }))
+    .sort((a, b) => a.d.rank - b.d.rank);
+
+  const edges = placeRopeLabels(labels.map(({ d }) => ({
+    edges: d.links.map(l => ({
+      x1: l.source.x || 0,
+      y1: l.source.y || 0,
+      x2: l.target.x || 0,
+      y2: l.target.y || 0,
+    })),
+    width: d.width,
+    current: d.edge,
+  })));
+
+  labels.forEach(({ el, d }, i) => {
+    d.edge = edges[i];
+    const text = d3.select(el).attr('visibility', d.edge === null ? 'hidden' : 'visible');
+    if (d.edge === null) return;
+    const link = d.links[d.edge];
+    text
+      .attr('x', ((link.source.x || 0) + (link.target.x || 0)) / 2)
+      .attr('y', ((link.source.y || 0) + (link.target.y || 0)) / 2 - 4);
+  });
 }
 
 function blendColors(colors: string[]): string {
