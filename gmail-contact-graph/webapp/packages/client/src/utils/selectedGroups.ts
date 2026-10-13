@@ -90,6 +90,15 @@ export function ranksGroups(filterType: FilterType): boolean {
   return filterType === 'overall' || filterType === 'gmail';
 }
 
+/**
+ * Whether a panel row shows its group's colour: true while the graph shows the
+ * group — drawn, isolated, or an undrawn org, whose members keep org borders.
+ * Other hidden groups are greyed until isolated.
+ */
+export function showsGroupColor(group: SelectedGroup, isolated: boolean): boolean {
+  return group.drawn || isolated || group.kind === 'domain';
+}
+
 /** Groups containing `email` with enough members, largest first. */
 function membershipsOf(
   source: Record<string, string[]> | undefined,

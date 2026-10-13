@@ -2,7 +2,7 @@ import React, { useRef, useLayoutEffect, useState, useCallback, useEffect, useMe
 import { useAppContext, editsLockedReason } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
-import { getSelectedGroups, supportsIsolation, ranksGroups, type SelectedGroup } from '../../utils/selectedGroups';
+import { getSelectedGroups, supportsIsolation, ranksGroups, showsGroupColor, type SelectedGroup } from '../../utils/selectedGroups';
 import { useFilteredGraphData } from '../../hooks/useFilteredGraphData';
 
 function formatDurationSec(seconds: number | null | undefined): string {
@@ -167,7 +167,7 @@ export function Tooltip() {
         key={group.id}
         type="button"
         className={`group-row${active ? ' group-row-active' : ''}`}
-        style={{ color: group.drawn || active ? group.color : HIDDEN_ROW_COLOR, opacity: muted ? 0.45 : 1 }}
+        style={{ color: showsGroupColor(group, active) ? group.color : HIDDEN_ROW_COLOR, opacity: muted ? 0.45 : 1 }}
         aria-pressed={active}
         title={active ? 'Show all connections again' : `Show only ${group.label}`}
         onClick={() => handleIsolate(group.id)}

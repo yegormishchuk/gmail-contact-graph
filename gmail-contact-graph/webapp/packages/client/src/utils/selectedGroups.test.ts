@@ -7,6 +7,7 @@ import {
   ROPE_MAX_SIZE,
   MAX_DRAWN_GROUPS,
   ranksGroups,
+  showsGroupColor,
   type SelectedGroup,
 } from './selectedGroups.js';
 import { graphConfig } from './graphConfig.js';
@@ -415,6 +416,18 @@ const visible = (perGroup: Record<string, number>) =>
   assert.equal(ids(r)[0], 'evt:Thread0');
   assert.equal(r[0].color, graphConfig.groupColors[0]);
   assert.ok(r.every(g => g.drawn));
+}
+
+// 25. A panel row shows its colour while the graph shows the group: drawn,
+//     isolated, or an undrawn org (its members keep org borders). Other hidden
+//     groups are greyed until isolated.
+{
+  const g = (kind: SelectedGroup['kind'], drawn: boolean) =>
+    ({ id: 'x', kind, label: 'x', memberEmails: [], count: 3, color: '#000', drawn }) as SelectedGroup;
+  assert.equal(showsGroupColor(g('message', true), false), true);
+  assert.equal(showsGroupColor(g('message', false), false), false);
+  assert.equal(showsGroupColor(g('event', false), true), true);
+  assert.equal(showsGroupColor(g('domain', false), false), true);
 }
 
 console.log('selectedGroups: all assertions passed');
