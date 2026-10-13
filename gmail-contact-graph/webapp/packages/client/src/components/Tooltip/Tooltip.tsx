@@ -1,8 +1,9 @@
-import React, { useRef, useLayoutEffect, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useLayoutEffect, useState, useCallback, useEffect, useMemo } from 'react';
 import { useAppContext, editsLockedReason } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
-import { getSelectedGroups, supportsIsolation, type SelectedGroup } from '../../utils/selectedGroups';
+import { getSelectedGroups, supportsIsolation, ranksGroups, showsGroupColor, type SelectedGroup } from '../../utils/selectedGroups';
+import { useFilteredGraphData } from '../../hooks/useFilteredGraphData';
 
 function formatDurationSec(seconds: number | null | undefined): string {
   if (!seconds || seconds <= 0) return '—';
@@ -14,6 +15,8 @@ function formatDurationSec(seconds: number | null | undefined): string {
 }
 
 const OFFSET = 14;
+/** Groups the graph doesn't draw until isolated. */
+const HIDDEN_ROW_COLOR = '#8a8f98';
 
 export function Tooltip() {
   const { state, dispatch } = useAppContext();
@@ -28,6 +31,13 @@ export function Tooltip() {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: -9999, top: -9999 });
   const [showAllGroups, setShowAllGroups] = useState(false);
+  // Rank against the nodes the graph draws, so the panel and graph agree on
+  // which groups are drawn and in what colour.
+  const filteredData = useFilteredGraphData();
+  const visibleEmails = useMemo(
+    () => new Set(filteredData?.nodes.map(n => n.email.toLowerCase()) ?? []),
+    [filteredData],
+  );
 
   useEffect(() => {
     setShowAllGroups(false);
@@ -98,6 +108,7 @@ export function Tooltip() {
     messageGroups,
     eventGroups,
     filterType: state.filters.filterType,
+    visibleEmails,
   });
 
   const canIsolate = supportsIsolation(state.filters.filterType);
@@ -116,6 +127,19 @@ export function Tooltip() {
 
   const visibleGroups = collapse(contactGroups);
   const visibleEventGroups = collapse(eventContactGroups);
+
+  // Overall and gmail show one ranked list: the drawn groups (and the org,
+  // whose borders stay on the graph) always, the rest behind "+N more".
+  const ranked = ranksGroups(state.filters.filterType);
+  const shownGroups = allGroups.filter(g => g.drawn || g.kind === 'domain');
+  const hiddenGroups = allGroups.filter(g => !g.drawn && g.kind !== 'domain');
+  const isolatedHidden = hiddenGroups.find(g => g.id === isolatedGroupId);
+  const listedHidden = showAllGroups ? hiddenGroups : isolatedHidden ? [isolatedHidden] : [];
+
+  const rowText = (g: SelectedGroup) =>
+    g.kind === 'domain' ? `${g.label} (${g.count} contacts)`
+      : g.kind === 'message' ? `"${g.label}" (${g.count} recipients)`
+        : `"${g.label}" (${g.count} attendees)`;
 
   const handleClose = () => {
     dispatch({ type: 'SELECT_NODE', payload: null });
@@ -143,7 +167,7 @@ export function Tooltip() {
         key={group.id}
         type="button"
         className={`group-row${active ? ' group-row-active' : ''}`}
-        style={{ color: group.color, opacity: muted ? 0.45 : 1 }}
+        style={{ color: showsGroupColor(group, active) ? group.color : HIDDEN_ROW_COLOR, opacity: muted ? 0.45 : 1 }}
         aria-pressed={active}
         title={active ? 'Show all connections again' : `Show only ${group.label}`}
         onClick={() => handleIsolate(group.id)}
@@ -185,32 +209,48 @@ export function Tooltip() {
       <div className="tooltip-name">{selectedNode.name}</div>
       <div className="tooltip-email">{selectedNode.email}</div>
 
-      {domainGroup && (
-        <div className="tooltip-org visible">
-          {groupRow(domainGroup, `${domainGroup.label} (${domainGroup.count} contacts)`)}
-        </div>
-      )}
-
-      {contactGroups.length > 0 && (
-        <div className="tooltip-groups visible">
-          {visibleGroups.map(group => groupRow(group, `"${group.label}" (${group.count} recipients)`))}
-          {(showAllGroups ? contactGroups.length > 2 : visibleGroups.length < contactGroups.length) && (
-            <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
-              {showAllGroups ? 'Show less' : `+${contactGroups.length - visibleGroups.length} more groups`}
-            </button>
+      {ranked ? (
+        allGroups.length > 0 && (
+          <div className="tooltip-groups visible">
+            {shownGroups.map(group => groupRow(group, rowText(group)))}
+            {listedHidden.map(group => groupRow(group, rowText(group)))}
+            {hiddenGroups.length > 0 && (showAllGroups || listedHidden.length < hiddenGroups.length) && (
+              <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
+                {showAllGroups ? 'Show less' : `+${hiddenGroups.length - listedHidden.length} more groups`}
+              </button>
+            )}
+          </div>
+        )
+      ) : (
+        <>
+          {domainGroup && (
+            <div className="tooltip-org visible">
+              {groupRow(domainGroup, `${domainGroup.label} (${domainGroup.count} contacts)`)}
+            </div>
           )}
-        </div>
-      )}
 
-      {eventContactGroups.length > 0 && (
-        <div className="tooltip-groups visible">
-          {visibleEventGroups.map(group => groupRow(group, `"${group.label}" (${group.count} attendees)`))}
-          {(showAllGroups ? eventContactGroups.length > 2 : visibleEventGroups.length < eventContactGroups.length) && (
-            <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
-              {showAllGroups ? 'Show less' : `+${eventContactGroups.length - visibleEventGroups.length} more events`}
-            </button>
+          {contactGroups.length > 0 && (
+            <div className="tooltip-groups visible">
+              {visibleGroups.map(group => groupRow(group, `"${group.label}" (${group.count} recipients)`))}
+              {(showAllGroups ? contactGroups.length > 2 : visibleGroups.length < contactGroups.length) && (
+                <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
+                  {showAllGroups ? 'Show less' : `+${contactGroups.length - visibleGroups.length} more groups`}
+                </button>
+              )}
+            </div>
           )}
-        </div>
+
+          {eventContactGroups.length > 0 && (
+            <div className="tooltip-groups visible">
+              {visibleEventGroups.map(group => groupRow(group, `"${group.label}" (${group.count} attendees)`))}
+              {(showAllGroups ? eventContactGroups.length > 2 : visibleEventGroups.length < eventContactGroups.length) && (
+                <button className="show-more-btn" onClick={() => setShowAllGroups(v => !v)}>
+                  {showAllGroups ? 'Show less' : `+${eventContactGroups.length - visibleEventGroups.length} more events`}
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {isOverallMode && (

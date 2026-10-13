@@ -13,7 +13,7 @@ export const graphConfig = {
   groupColors: [
     '#00e5ff', // cyan
     '#ff6b9d', // pink
-    '#ffd60a', // yellow
+    '#60a5fa', // blue (not yellow: too close to domainColor)
     '#a78bfa', // lavender
     '#10b981', // emerald
     '#f97316', // orange
