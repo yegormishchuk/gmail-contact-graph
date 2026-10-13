@@ -85,4 +85,23 @@ import { ProgressTracker } from './progress.js';
   });
 }
 
+// 8. A listener sees every snapshot as it changes, once per event, with the
+//    AI phase's detail already set. Text lines and done events change nothing.
+{
+  const seen: unknown[] = [];
+  const t = new ProgressTracker((s) => seen.push(s));
+  t.feed('{"event":"phase","phase":"mails"}');
+  t.feed('{"event":"progress","phase":"mails","bytes":50,"total_bytes":100,"messages":10}');
+  t.feed('{"event":"phase","phase":"ai","enabled":false,"contacts":7}');
+  t.feed('{"event":"done","messages":19,"contacts":12,"filtered":7,"stages_ms":{},"total_ms":1}');
+  t.feed('Contacts table: 12 contacts inserted.');
+  t.setPhase('finalizing');
+  assert.deepEqual(seen, [
+    { phase: 'mails', progress: 0, detail: '' },
+    { phase: 'mails', progress: 0.425, detail: '10 messages' },
+    { phase: 'ai', progress: 0.88, detail: 'AI filter off: 7 contacts kept as unclear' },
+    { phase: 'finalizing', progress: 0.99, detail: '' },
+  ]);
+}
+
 console.log('progress.test: all assertions passed');

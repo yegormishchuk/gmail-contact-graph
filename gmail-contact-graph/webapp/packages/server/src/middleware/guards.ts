@@ -1,4 +1,5 @@
 import type { RequestHandler } from 'express';
+import { config } from '../config.js';
 import { hasDatabase } from '../db/index.js';
 import { isImporting } from '../import/state.js';
 
@@ -21,6 +22,12 @@ export const requireJson: RequestHandler = (req, res, next) => {
   const type = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
   if (type === 'application/json') return next();
   res.status(415).json({ error: 'Content-Type must be application/json' });
+};
+
+/** The demo is read-only: no edits, and visitors' imports are replayed in the browser. */
+export const rejectInDemo: RequestHandler = (req, res, next) => {
+  if (!config.DEMO_MODE) return next();
+  res.status(403).json({ error: 'Not available in the demo' });
 };
 
 /** Edits are refused while an import runs, instead of being lost by it. */

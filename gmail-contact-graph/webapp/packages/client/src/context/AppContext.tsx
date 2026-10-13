@@ -143,10 +143,16 @@ function nextDataVersion(current: string | null, status: ImportStatus): string |
   }
 }
 
-/** Contact edits are refused by the server while an import runs. */
-export function editsLocked(state: AppState): boolean {
-  return state.importStatus?.state === 'importing';
+/**
+ * Why contact edits are off, or null when they are on: the demo is read-only,
+ * and the server refuses edits while an import runs.
+ */
+export function editsLockedReason(state: AppState): string | null {
+  if (state.importStatus?.demo) return 'Not available in the demo';
+  if (state.importStatus?.state === 'importing') return 'Not while an import is running';
+  return null;
 }
+
 
 /** A first import always shows the overlay; an import that ends without new data closes it. */
 function nextOverlayOpen(open: boolean, status: ImportStatus): boolean {

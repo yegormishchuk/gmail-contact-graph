@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { reducer, initialState, editsLocked } from './AppContext.js';
+import { reducer, initialState, editsLockedReason } from './AppContext.js';
 import type { GraphNode, ImportStatus } from '@gmail-graph/shared';
 
 function node(email: string): GraphNode {
@@ -137,10 +137,19 @@ function statuses(...list: ImportStatus[]) {
 
 // 12. Edits are locked while an import runs.
 {
-  assert.equal(editsLocked(statuses(ready(1))), false);
-  assert.equal(editsLocked(statuses(importing(true))), true);
-  assert.equal(editsLocked(statuses(importing(true), failed(true))), false);
-  assert.equal(editsLocked(initialState), false);
+  assert.equal(editsLockedReason(statuses(ready(1))), null);
+  assert.equal(editsLockedReason(statuses(importing(true))), 'Not while an import is running');
+  assert.equal(editsLockedReason(statuses(importing(true), failed(true))), null);
+  assert.equal(editsLockedReason(initialState), null);
+}
+
+// 12b. The demo is read-only, and says why.
+{
+  const demo = { ...ready(1), demo: true };
+  assert.equal(editsLockedReason(statuses(demo)), 'Not available in the demo');
+  assert.equal(editsLockedReason(statuses({ ...importing(true), demo: true })), 'Not available in the demo');
+  assert.equal(editsLockedReason(statuses(importing(true))), 'Not while an import is running');
+  assert.equal(editsLockedReason(statuses(ready(1))), null);
 }
 
 // 13. The import dialog closes when the import it shows succeeds, not when it fails.

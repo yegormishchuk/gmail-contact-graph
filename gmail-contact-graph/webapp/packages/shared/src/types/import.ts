@@ -3,7 +3,7 @@
 
 export type ImportPhase = 'mails' | 'contacts' | 'spam' | 'ai' | 'calendar' | 'finalizing';
 
-export type ImportStatus =
+export type ImportStatus = (
   // No working database yet.
   | { state: 'empty' }
   | {
@@ -31,7 +31,11 @@ export type ImportStatus =
       log: string[];
       failedAt: number;
       hasData: boolean;
-    };
+    }
+) & {
+  /** Set by a server in demo mode (DEMO_MODE=1): the import is replayed in the browser. */
+  demo?: boolean;
+};
 
 export interface MboxFile {
   name: string;
@@ -65,4 +69,13 @@ export interface StartImportRequest {
   /** Shown on the centre node; blank means the local part of the email. */
   name?: string;
   includeCalendar: boolean;
+}
+
+/**
+ * The demo's import, recorded once when the server starts and replayed by
+ * each visitor's browser: the status at `atMs` holds until the next step.
+ */
+export interface DemoReplay {
+  durationMs: number;
+  steps: Array<{ atMs: number; phase: ImportPhase; progress: number | null; detail: string }>;
 }

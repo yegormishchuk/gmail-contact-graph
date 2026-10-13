@@ -19,6 +19,11 @@ type ParserEvent =
   | { event: 'progress'; phase: string; bytes: number; total_bytes: number; messages: number }
   | { event: 'done'; messages?: number; contacts?: number; stages_ms?: Record<string, number>; total_ms?: number };
 
+export type ProgressSnapshot = { phase: ImportPhase; progress: number | null; detail: string };
+
+/** Told each new snapshot; the demo records an import with it. */
+export type ProgressListener = (snapshot: ProgressSnapshot) => void;
+
 /** What fill_db reported about its own run, for the timing record. */
 export interface FillDbTimings {
   messages: number;
@@ -44,6 +49,8 @@ export class ProgressTracker {
   private aiEnabled = false;
   private timings: FillDbTimings | null = null;
 
+  constructor(private readonly listener?: ProgressListener) {}
+
   /**
    * Reads one stderr line. Returns true if it was progress output (a JSON
    * event or a text `[progress]` line), which does not belong in the log.
@@ -59,7 +66,7 @@ export class ProgressTracker {
     this.sawJson = true;
 
     if (event.event === 'phase' && isPhase(event.phase)) {
-      this.setPhase(event.phase);
+      this.enterPhase(event.phase);
       if (event.phase === 'ai') {
         this.aiEnabled = event.enabled === true;
         const n = (event.contacts ?? 0).toLocaleString('en-US');
@@ -67,10 +74,12 @@ export class ProgressTracker {
           ? `Checking ${n} contacts with AI`
           : `AI filter off: ${n} contacts kept as unclear`;
       }
+      this.notify();
     } else if (event.event === 'progress' && event.phase === 'mails') {
       const fraction = event.total_bytes > 0 ? Math.min(event.bytes / event.total_bytes, 1) : 0;
       this.progress = fraction * PHASE_START.contacts;
       this.detail = `${event.messages.toLocaleString('en-US')} messages`;
+      this.notify();
     } else if (event.event === 'done' && event.stages_ms) {
       // Only fill_db's done has timings; fill_events' done has none.
       this.timings = {
@@ -90,17 +99,26 @@ export class ProgressTracker {
   }
 
   setPhase(phase: ImportPhase): void {
-    this.phase = phase;
-    this.progress = PHASE_START[phase];
-    this.detail = '';
+    this.enterPhase(phase);
+    this.notify();
   }
 
-  snapshot(): { phase: ImportPhase; progress: number | null; detail: string } {
+  snapshot(): ProgressSnapshot {
     return {
       phase: this.phase,
       progress: this.sawJson ? this.progress : null,
       detail: this.detail,
     };
+  }
+
+  private enterPhase(phase: ImportPhase): void {
+    this.phase = phase;
+    this.progress = PHASE_START[phase];
+    this.detail = '';
+  }
+
+  private notify(): void {
+    this.listener?.(this.snapshot());
   }
 }
 

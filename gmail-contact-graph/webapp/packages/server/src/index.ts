@@ -2,10 +2,17 @@ import { config } from './config.js';
 import { initDatabase } from './db/index.js';
 import { createApp } from './app.js';
 import { stopParser } from './import/importer.js';
+import { bootDemo } from './demo/boot.js';
 
 async function startServer() {
   const db = await initDatabase();
   console.log(db ? 'Database initialized' : `No database yet at ${config.CONTACTS_DB_FILE}; waiting for an import`);
+
+  if (config.DEMO_MODE) {
+    console.log(`Demo mode: importing ${config.DEMO_MBOX} from ${config.MBOX_DIR}`);
+    const replay = await bootDemo();
+    console.log(`Demo ready: ${replay.steps.length} replay steps`);
+  }
 
   createApp().listen(config.PORT, config.HOST, () => {
     console.log(`Server running on http://${config.HOST}:${config.PORT}`);

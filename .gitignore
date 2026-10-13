@@ -11,6 +11,8 @@ data/Email/*
 data/rankings/*
 !data/rankings/.gitkeep
 *.mbox
+# The hosted demo's generated mailbox (see demo/README.md)
+!demo/Email/*.mbox
 
 # Credentials and tokens - NEVER commit these!
 credentials.json

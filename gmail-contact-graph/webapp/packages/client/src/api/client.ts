@@ -7,11 +7,17 @@ import type {
   ApiSuccessResponse,
   CalendarGraphData,
   CalendarStats,
+  DemoReplay,
   EventGroups,
   ImportSources,
   ImportStatus,
   StartImportRequest,
 } from '@gmail-graph/shared';
+import {
+  cancelDemoImport, completedDemoImport, demoStatus, memoryStorage, resetDemoImport, startDemoImport,
+  type DemoRun, type DemoStorage,
+} from '../demo/demoImport';
+import { NO_CALENDAR_STATS, NO_EVENT_GROUPS, withCenterName, withoutCalendar } from '../demo/demoData';
 
 const API_BASE = '/api';
 
@@ -50,8 +56,87 @@ export class ApiStateError extends ApiError {
   }
 }
 
+// The hosted demo (a server with DEMO_MODE=1, which says so in its import
+// status). The server's data is shared and read-only; each visitor's import
+// is replayed in the browser (demo/demoImport.ts) and the answers adjusted to
+// the name and calendar choice it was made with.
+
+let demoMode = false;
+let demoReplay: Promise<DemoReplay> | null = null;
+let storage: DemoStorage | null = null;
+
+// The flow still completes if the recorded replay cannot be had.
+const FALLBACK_REPLAY: DemoReplay = {
+  durationMs: 8000,
+  steps: [{ atMs: 0, phase: 'mails', progress: null, detail: '' }],
+};
+
+/** Whether the server is the hosted demo; known after the first import status. */
+export function isDemo(): boolean {
+  return demoMode;
+}
+
+/** Forgets this browser's demo imports: back to the empty import screen. */
+export function resetDemo(): void {
+  resetDemoImport(demoStorage());
+}
+
+function replay(): Promise<DemoReplay> {
+  demoReplay ??= fetchJson<DemoReplay>('/demo/replay').catch((err) => {
+    console.error('Failed to load the demo replay:', err);
+    return FALLBACK_REPLAY;
+  });
+  return demoReplay;
+}
+
+// localStorage, unless the browser refuses it (blocked site data, some
+// private modes): then the demo lasts as long as the page.
+function demoStorage(): DemoStorage {
+  if (!storage) {
+    try {
+      localStorage.setItem('demo_probe', '1');
+      localStorage.removeItem('demo_probe');
+      storage = localStorage;
+    } catch {
+      storage = memoryStorage();
+    }
+  }
+  return storage;
+}
+
+/** The demo import the data shown comes from; null outside the demo. */
+async function demoData(): Promise<DemoRun | null> {
+  if (!demoMode) return null;
+  return completedDemoImport(demoStorage(), await replay(), Date.now());
+}
+
+async function getImportStatus(): Promise<ImportStatus> {
+  const status = await fetchJson<ImportStatus>('/import/status');
+  if (!status.demo) return status;
+  demoMode = true;
+  // Only once the server has its data does the visitor's own import count.
+  if (status.state !== 'ready') return status;
+  return demoStatus(demoStorage(), await replay(), Date.now());
+}
+
+async function getGraph(): Promise<GraphData> {
+  const [graph, demo] = await Promise.all([fetchJson<GraphData>('/graph'), demoData()]);
+  return demo ? withCenterName(graph, demo.name) : graph;
+}
+
+async function getCalendarGraph(): Promise<CalendarGraphData> {
+  const [graph, demo] = await Promise.all([fetchJson<CalendarGraphData>('/calendar-graph'), demoData()]);
+  if (!demo) return graph;
+  return withCenterName(demo.includeCalendar ? graph : withoutCalendar(graph), demo.name);
+}
+
+async function withoutDemoCalendar<T>(url: string, empty: T): Promise<T> {
+  const demo = await demoData();
+  return demo && !demo.includeCalendar ? empty : fetchJson<T>(url);
+}
+
 export const api = {
-  getGraph: () => fetchJson<GraphData>('/graph'),
+  getGraph,
   getDomains: () => fetchJson<DomainGroups>('/domains'),
   getMessageGroups: () => fetchJson<MessageGroups>('/message-groups').then(data => {
     console.debug(`[message-groups] found ${data.total_groups} groups`);
@@ -62,9 +147,9 @@ export const api = {
   }),
   getExcludedContacts: () => fetchJson<ExcludedContact[]>('/excluded-contacts'),
   getSpamStats: () => fetchJson<SpamStats>('/spam-stats'),
-  getCalendarGraph: () => fetchJson<CalendarGraphData>('/calendar-graph'),
-  getCalendarStats: () => fetchJson<CalendarStats>('/calendar-stats'),
-  getEventGroups: () => fetchJson<EventGroups>('/event-groups'),
+  getCalendarGraph,
+  getCalendarStats: () => withoutDemoCalendar<CalendarStats>('/calendar-stats', NO_CALENDAR_STATS),
+  getEventGroups: () => withoutDemoCalendar<EventGroups>('/event-groups', NO_EVENT_GROUPS),
   getAllContacts: () =>
     fetchJson<{ contacts: { name: string; email: string }[]; excludedEmails: string[] }>('/contacts/all'),
 
@@ -86,16 +171,20 @@ export const api = {
       body: JSON.stringify({ email }),
     }),
 
-  getImportStatus: () => fetchJson<ImportStatus>('/import/status'),
+  getImportStatus,
   getImportSources: () => fetchJson<ImportSources>('/import/sources'),
-  startImport: (request: StartImportRequest) =>
-    fetchJson<ImportStatus>('/import', {
+  startImport: async (request: StartImportRequest) => {
+    if (demoMode) return startDemoImport(demoStorage(), await replay(), request, Date.now());
+    return fetchJson<ImportStatus>('/import', {
       method: 'POST',
       body: JSON.stringify(request),
-    }),
-  cancelImport: () =>
-    fetchJson<ImportStatus>('/import/cancel', {
+    });
+  },
+  cancelImport: async () => {
+    if (demoMode) return cancelDemoImport(demoStorage(), await replay(), Date.now());
+    return fetchJson<ImportStatus>('/import/cancel', {
       method: 'POST',
       body: '{}',
-    }),
+    });
+  },
 };

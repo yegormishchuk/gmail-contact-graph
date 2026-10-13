@@ -1,10 +1,8 @@
 import React, { useRef, useLayoutEffect, useState, useCallback, useEffect } from 'react';
-import { useAppContext, editsLocked } from '../../context/AppContext';
+import { useAppContext, editsLockedReason } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
 import { getSelectedGroups, supportsIsolation, type SelectedGroup } from '../../utils/selectedGroups';
-
-const LOCKED_TITLE = 'Not while an import is running';
 
 function formatDurationSec(seconds: number | null | undefined): string {
   if (!seconds || seconds <= 0) return '—';
@@ -19,7 +17,8 @@ const OFFSET = 14;
 
 export function Tooltip() {
   const { state, dispatch } = useAppContext();
-  const locked = editsLocked(state);
+  const lockedReason = editsLockedReason(state);
+  const locked = lockedReason !== null;
   const { selectedNode, selectedNodePosition, domains, messageGroups, eventGroups, isolatedGroupId } = state;
   const isCalendarMode = state.filters.filterType === 'calendar' || state.filters.filterType === 'eventGroups';
   const isOverallMode = state.filters.filterType === 'overall';
@@ -155,6 +154,7 @@ export function Tooltip() {
   };
 
   const handleMarkHuman = async () => {
+    if (locked) return;
     try {
       await api.markClear(selectedNode.email);
       dispatch({ type: 'MARK_CONTACT_CLEAR', payload: selectedNode.email });
@@ -164,6 +164,7 @@ export function Tooltip() {
   };
 
   const handleMarkNotHuman = async () => {
+    if (locked) return;
     try {
       await api.markNotHuman(selectedNode.email);
       dispatch({ type: 'REMOVE_CONTACT', payload: selectedNode.email });
@@ -313,7 +314,7 @@ export function Tooltip() {
               style={{ display: 'block' }}
               onClick={handleMarkHuman}
               disabled={locked}
-              title={locked ? LOCKED_TITLE : undefined}
+              title={lockedReason ?? undefined}
             >
               It's a human
             </button>
@@ -322,7 +323,7 @@ export function Tooltip() {
             className="mark-not-human-btn"
             onClick={handleMarkNotHuman}
             disabled={locked}
-            title={locked ? LOCKED_TITLE : undefined}
+            title={lockedReason ?? undefined}
           >
             Not a human
           </button>
