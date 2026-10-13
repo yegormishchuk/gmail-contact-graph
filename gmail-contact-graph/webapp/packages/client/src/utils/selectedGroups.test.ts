@@ -430,4 +430,15 @@ const visible = (perGroup: Record<string, number>) =>
   assert.equal(showsGroupColor(g('domain', false), false), true);
 }
 
+// 26. No group colour can be mistaken for the org's: an undrawn org marks its
+//     members with domainColor borders next to the drawn groups' ropes.
+{
+  const rgb = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  const org = rgb(graphConfig.domainColor);
+  for (const color of graphConfig.groupColors) {
+    const distance = Math.hypot(...rgb(color).map((v, i) => v - org[i]));
+    assert.ok(distance > 60, `${color} is too close to the org colour ${graphConfig.domainColor}`);
+  }
+}
+
 console.log('selectedGroups: all assertions passed');
