@@ -9,6 +9,8 @@ export const MIN_DOMAIN_SIZE = 2;
 export const MAX_EVENT_GROUPS = 8;
 /** Above this many on-graph members a rope turns into a hairball, so borders mark the group instead. */
 export const ROPE_MAX_SIZE = 8;
+/** A busy contact draws only this many groups at once; the rest are isolated one at a time. */
+export const MAX_DRAWN_GROUPS = 4;
 
 export type FilterType =
   | 'overall'
@@ -30,6 +32,8 @@ export interface SelectedGroup {
   memberEmails: string[];
   count: number;
   color: string;
+  /** Whether the graph draws it without isolation (see MAX_DRAWN_GROUPS). */
+  drawn: boolean;
 }
 
 interface Params {
@@ -38,6 +42,8 @@ interface Params {
   messageGroups: MessageGroups | null;
   eventGroups: EventGroups | null;
   filterType: FilterType;
+  /** Lower-cased emails of every node on the graph. Enables ranking and the cap. */
+  visibleEmails?: Set<string>;
 }
 
 const palette = (i: number) => graphConfig.groupColors[i % graphConfig.groupColors.length];
@@ -75,6 +81,15 @@ export function supportsIsolation(filterType: FilterType): boolean {
   return filterType === 'overall' || filterType === 'gmail' || filterType === 'calendar';
 }
 
+/**
+ * Whether a mode ranks a selected contact's groups and caps how many are drawn.
+ * Calendar colours borders by event group with its own cap, and the cluster
+ * modes draw no per-contact connections at all.
+ */
+export function ranksGroups(filterType: FilterType): boolean {
+  return filterType === 'overall' || filterType === 'gmail';
+}
+
 /** Groups containing `email` with enough members, largest first. */
 function membershipsOf(
   source: Record<string, string[]> | undefined,
@@ -88,9 +103,10 @@ function membershipsOf(
 }
 
 /**
- * The ordered list of groups drawn for a selected contact: org first, then
- * message groups, then event groups — matching both the rope draw order and the
- * order of rows in the detail panel.
+ * The ordered list of groups for a selected contact, read by both the graph and
+ * the detail panel. By default: org first, then message groups, then event
+ * groups. In overall and gmail mode with `visibleEmails`, the list is ranked by
+ * members on the graph and only the top MAX_DRAWN_GROUPS are `drawn`.
  */
 export function getSelectedGroups({
   email,
@@ -98,6 +114,7 @@ export function getSelectedGroups({
   messageGroups,
   eventGroups,
   filterType,
+  visibleEmails,
 }: Params): SelectedGroup[] {
   const selected = email.toLowerCase();
   // The cluster modes list what their single-contact counterpart lists.
@@ -118,6 +135,7 @@ export function getSelectedGroups({
         memberEmails: users.map(u => u.email.toLowerCase()),
         count: users.length,
         color: graphConfig.domainColor,
+        drawn: true,
       });
     }
   }
@@ -132,6 +150,7 @@ export function getSelectedGroups({
       memberEmails: g.memberEmails,
       count: g.memberEmails.length,
       color: palette(i),
+      drawn: true,
     });
   });
 
@@ -148,9 +167,24 @@ export function getSelectedGroups({
           count: g.memberEmails.length,
           // Offset past the message groups so event colours never collide.
           color: palette(i + msgGroups.length),
+          drawn: true,
         });
       });
   }
 
-  return result;
+  if (!visibleEmails || !ranksGroups(filterType)) return result;
+
+  // Rank by members actually on the graph, so the drawn slots go to the groups
+  // that draw something. Ties: bigger group, then the original order.
+  const ranked = result
+    .map((g, index) => ({ g, index, visible: g.memberEmails.filter(e => visibleEmails.has(e)).length }))
+    .sort((a, b) => b.visible - a.visible || b.g.count - a.g.count || a.index - b.index);
+
+  // Colours follow rank so the drawn groups never share a palette slot.
+  let slot = 0;
+  return ranked.map(({ g }, rank) => ({
+    ...g,
+    drawn: rank < MAX_DRAWN_GROUPS,
+    color: g.kind === 'domain' ? g.color : palette(slot++),
+  }));
 }

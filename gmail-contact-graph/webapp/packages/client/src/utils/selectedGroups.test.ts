@@ -5,6 +5,8 @@ import {
   shouldDimNonMembers,
   shouldDrawRope,
   ROPE_MAX_SIZE,
+  MAX_DRAWN_GROUPS,
+  ranksGroups,
   type SelectedGroup,
 } from './selectedGroups.js';
 import { graphConfig } from './graphConfig.js';
@@ -261,6 +263,158 @@ const ids = (gs: SelectedGroup[]) => gs.map(g => g.id);
   assert.equal(shouldDrawRope(ROPE_MAX_SIZE), true);
   assert.equal(shouldDrawRope(ROPE_MAX_SIZE + 1), false);
   assert.equal(shouldDrawRope(3), true);
+}
+
+// 16. Without visibleEmails every group is drawn and keeps today's order.
+{
+  const r = getSelectedGroups({
+    email: 'alice@nd.edu',
+    domains: domains({ 'nd.edu': ['alice@nd.edu', 'bob@nd.edu'] }),
+    messageGroups: groups({ Thread: ['alice@nd.edu', 'bob@nd.edu', 'carol@nd.edu'] }),
+    eventGroups: null,
+    filterType: 'gmail',
+  });
+  assert.deepEqual(ids(r), ['domain:@nd.edu', 'msg:Thread']);
+  assert.ok(r.every(g => g.drawn));
+}
+
+// 17. Only overall and gmail rank — the other modes keep their own layout.
+{
+  assert.equal(ranksGroups('overall'), true);
+  assert.equal(ranksGroups('gmail'), true);
+  assert.equal(ranksGroups('calendar'), false);
+  assert.equal(ranksGroups('messageGroups'), false);
+  assert.equal(ranksGroups('organizations'), false);
+  assert.equal(ranksGroups('eventGroups'), false);
+}
+
+// A contact in six message groups, Thread0 biggest. visible() puts the first
+// `n` members of each group on the graph.
+const sixThreads: Record<string, string[]> = {};
+for (let i = 0; i < 6; i++) {
+  const members = ['alice@x.com'];
+  for (let j = 0; j < 10 - i; j++) members.push(`t${i}_${j}@x.com`);
+  sixThreads[`Thread${i}`] = members;
+}
+const visible = (perGroup: Record<string, number>) =>
+  new Set([
+    'alice@x.com',
+    ...Object.entries(perGroup).flatMap(([label, n]) => sixThreads[label].slice(1, 1 + n)),
+  ]);
+
+// 18. With visibleEmails, groups rank by members on the graph and only the
+//     top MAX_DRAWN_GROUPS are drawn — the smallest group can outrank the biggest.
+{
+  const r = getSelectedGroups({
+    email: 'alice@x.com',
+    domains: null,
+    messageGroups: groups(sixThreads),
+    eventGroups: null,
+    filterType: 'gmail',
+    visibleEmails: visible({ Thread5: 4, Thread4: 3, Thread3: 2, Thread2: 1 }),
+  });
+  assert.equal(MAX_DRAWN_GROUPS, 4);
+  assert.deepEqual(ids(r), [
+    'msg:Thread5', 'msg:Thread4', 'msg:Thread3', 'msg:Thread2', 'msg:Thread0', 'msg:Thread1',
+  ]);
+  assert.deepEqual(r.map(g => g.drawn), [true, true, true, true, false, false]);
+}
+
+// 19. Ties in visible count go to the bigger group, then to the original order —
+//     the panel and the graph must agree on every run.
+{
+  const r = getSelectedGroups({
+    email: 'alice@x.com',
+    domains: null,
+    messageGroups: groups(sixThreads),
+    eventGroups: null,
+    filterType: 'gmail',
+    visibleEmails: new Set(['alice@x.com']),
+  });
+  assert.deepEqual(ids(r), [
+    'msg:Thread0', 'msg:Thread1', 'msg:Thread2', 'msg:Thread3', 'msg:Thread4', 'msg:Thread5',
+  ]);
+}
+
+// 20. Colours follow rank, so the drawn groups always get distinct palette slots.
+{
+  const r = getSelectedGroups({
+    email: 'alice@x.com',
+    domains: null,
+    messageGroups: groups(sixThreads),
+    eventGroups: null,
+    filterType: 'gmail',
+    visibleEmails: visible({ Thread5: 4, Thread4: 3, Thread3: 2, Thread2: 1 }),
+  });
+  assert.deepEqual(r.map(g => g.color), graphConfig.groupColors.slice(0, 6));
+}
+
+// 21. The org competes like any group: it can lose its slot, and keeps the
+//     domain colour either way. Palette slots skip it.
+{
+  const r = getSelectedGroups({
+    email: 'alice@x.com',
+    domains: domains({ 'x.com': ['alice@x.com', 'zed@x.com'] }),
+    messageGroups: groups(sixThreads),
+    eventGroups: null,
+    filterType: 'gmail',
+    visibleEmails: visible({ Thread5: 4, Thread4: 3, Thread3: 2, Thread2: 1 }),
+  });
+  const org = r.find(g => g.kind === 'domain')!;
+  assert.equal(org.drawn, false);
+  assert.equal(org.color, graphConfig.domainColor);
+  assert.equal(r.filter(g => g.drawn).length, MAX_DRAWN_GROUPS);
+  assert.deepEqual(
+    r.filter(g => g.kind !== 'domain').map(g => g.color),
+    graphConfig.groupColors.slice(0, 6),
+  );
+}
+
+// 22. Overall mode ranks message and event groups in one list.
+{
+  const r = getSelectedGroups({
+    email: 'alice@x.com',
+    domains: null,
+    messageGroups: groups({ Thread: ['alice@x.com', 'bob@x.com', 'carol@x.com'] }),
+    eventGroups: groups({ Standup: ['alice@x.com', 'dan@x.com', 'eve@x.com'] }),
+    filterType: 'overall',
+    visibleEmails: new Set(['alice@x.com', 'dan@x.com', 'eve@x.com']),
+  });
+  assert.deepEqual(ids(r), ['evt:Standup', 'msg:Thread']);
+  assert.deepEqual(r.map(g => g.color), graphConfig.groupColors.slice(0, 2));
+}
+
+// 23. Four or fewer groups: all drawn.
+{
+  const r = getSelectedGroups({
+    email: 'alice@x.com',
+    domains: domains({ 'x.com': ['alice@x.com', 'zed@x.com'] }),
+    messageGroups: groups({
+      A: ['alice@x.com', 'b@x.com', 'c@x.com'],
+      B: ['alice@x.com', 'd@x.com', 'e@x.com'],
+      C: ['alice@x.com', 'f@x.com', 'g@x.com'],
+    }),
+    eventGroups: null,
+    filterType: 'gmail',
+    visibleEmails: new Set(['alice@x.com']),
+  });
+  assert.equal(r.length, 4);
+  assert.ok(r.every(g => g.drawn));
+}
+
+// 24. Calendar mode ignores visibleEmails: order, colours and drawn stay as today.
+{
+  const r = getSelectedGroups({
+    email: 'alice@x.com',
+    domains: null,
+    messageGroups: null,
+    eventGroups: groups(sixThreads),
+    filterType: 'calendar',
+    visibleEmails: visible({ Thread5: 4 }),
+  });
+  assert.equal(ids(r)[0], 'evt:Thread0');
+  assert.equal(r[0].color, graphConfig.groupColors[0]);
+  assert.ok(r.every(g => g.drawn));
 }
 
 console.log('selectedGroups: all assertions passed');
