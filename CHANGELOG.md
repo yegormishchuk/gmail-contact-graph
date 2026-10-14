@@ -9,6 +9,28 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-14
+
+A contact in many groups no longer turns the graph into a tangle of ropes
+and overlapping labels.
+
+### Changed
+
+- In overall and gmail mode a selected contact's groups are ranked by how
+  many of their members are on the graph, and only the top 4 are drawn. The
+  rest stay in the detail panel, greyed, behind **+N more groups**; clicking
+  one isolates it as before. The org keeps its colour in the panel even when
+  it isn't among the 4, since its members keep their org borders.
+- The detail panel lists the drawn groups first, in the graph's order and
+  colours, as one list instead of separate org, message and event lists.
+  Calendar and the cluster modes are unchanged.
+- Group colours follow rank, so the drawn groups never share a colour.
+- Rope labels no longer overlap: each label sits on a free edge of its rope
+  and keeps it while the graph moves; a label with no free edge is hidden,
+  and its rope stays.
+- The yellow group colour is now blue; it was hard to tell from the org's
+  amber.
+
 ## [0.3.1] - 2026-10-12
 
 A public, read-only demo: the whole app on a generated mailbox, deployed
@@ -330,7 +352,8 @@ Takeout export to an interactive graph in the browser.
   Everything else in the pipeline is deterministic.
 - Requires Rust 1.87+ and Node.js 20.19+ (or 22+).
 
-[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.2
 [0.3.1]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.1
 [0.3.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.0
 [0.2.2]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.2.2
