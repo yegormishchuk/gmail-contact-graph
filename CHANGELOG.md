@@ -9,6 +9,36 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-22
+
+The webapp works on a phone: the panels get out of the way, and the graph
+moves by touch.
+
+### Added
+
+- On screens up to 768px wide the ranking, filters and legend panels start
+  hidden. A toolbar (**Ranking**, **Filters**, **Legend**) opens one at a
+  time, full width; tapping its button again or empty graph closes it.
+- On a phone a contact's details open as a sheet along the bottom instead
+  of a draggable box next to the tap. It steps aside while a panel is open.
+- On a phone the graph zooms out to fit the screen once its layout has
+  formed, unless you've already moved it, and can zoom out further (to
+  0.15) than on desktop.
+- On touch screens, tapping a group cell in the cluster modes also shows
+  its summary, which on desktop needs hover. The ranking delete and spam
+  restore buttons are always visible.
+
+### Changed
+
+- A finger that moves a few pixels while tapping still selects the node
+  instead of starting a pan.
+- The graph stays centred when its area resizes, such as when a phone
+  rotates or a banner appears.
+- The header, banners, import screen, import dialog, import progress and
+  statistics tab are tighter on a phone: the statistics are one column,
+  import buttons stack full width, and long `.mbox` names wrap. Text fields
+  use 16px, so iOS no longer zooms in when one is focused.
+
 ## [0.3.2] - 2026-10-14
 
 A contact in many groups no longer turns the graph into a tangle of ropes
@@ -352,7 +382,8 @@ Takeout export to an interactive graph in the browser.
   Everything else in the pipeline is deterministic.
 - Requires Rust 1.87+ and Node.js 20.19+ (or 22+).
 
-[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.3
 [0.3.2]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.2
 [0.3.1]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.1
 [0.3.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.0
