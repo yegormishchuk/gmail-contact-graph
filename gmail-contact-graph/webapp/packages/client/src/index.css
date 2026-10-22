@@ -1870,6 +1870,43 @@ header {
     height: 40px;
     font-size: 22px;
   }
+
+  /* Under 16px, iOS zooms the page in when a text field is focused. */
+  input[type="text"],
+  input[type="email"] {
+    font-size: 16px;
+  }
+
+  .stats-page {
+    padding: 12px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .import-page > .import-screen,
+  .import-dialog,
+  .import-progress.overlay {
+    padding: 16px;
+  }
+
+  .import-progress.overlay {
+    bottom: 16px;
+  }
+
+  .import-buttons {
+    flex-direction: column-reverse;
+  }
+
+  .import-buttons .import-btn {
+    width: 100%;
+  }
+
+  .import-file-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 /* Touch screens have no hover, so show the buttons hover reveals. */
