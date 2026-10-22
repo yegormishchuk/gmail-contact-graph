@@ -6,9 +6,17 @@ import { getNodeRadius } from '../utils/filterData';
 import type { GroupHoverData } from '../utils/groupTypes';
 import { getSelectedGroups, shouldDimNonMembers, shouldDrawRope, MIN_GROUP_SIZE, type FilterType } from '../utils/selectedGroups';
 import { placeRopeLabels, LABEL_CHAR_WIDTH, LABEL_PADDING } from '../utils/ropeLabels';
+import { fitTransform } from '../utils/fitTransform';
+import { isMobileScreen, hasNoHover } from './useIsMobile';
 export type { GroupHoverData };
 
 const MIN_MSG_GROUP_SIZE = MIN_GROUP_SIZE;
+/** A finger moving less than this (px) still taps a node rather than panning. */
+const TAP_CLICK_DISTANCE = 6;
+/** A phone fits far fewer nodes, so it may zoom out further than desktop's 0.3. */
+const MOBILE_MIN_SCALE = 0.15;
+/** Simulation alpha at which the layout has formed enough to fit it on a phone. */
+const FIT_ALPHA = 0.3;
 
 interface RopeLink {
   source: GraphNode;
@@ -88,6 +96,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
       const zoom = d3.zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 3])
+        .clickDistance(TAP_CLICK_DISTANCE)
         .on('zoom', (event) => {
           transformRef.current = event.transform;
           g.attr('transform', event.transform.toString());
@@ -494,6 +503,8 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           g.selectAll<SVGGElement, unknown>('.group-cell')
             .style('opacity', null)
             .style('pointer-events', null);
+          // Touch screens show the summary while expanded (see the click handler).
+          if (wasExpanded && hasNoHover() && options.onGroupHover) options.onGroupHover(null);
           if (wasExpanded && resetCamera) {
             transformRef.current = initialTransform;
             svg.transition().duration(450).call(zoom.transform, initialTransform);
@@ -545,6 +556,10 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
               collapse(true);
             } else {
               expand();
+              // No hover on touch screens, so the tap that opens a cell shows its summary.
+              if (hasNoHover() && options.onGroupHover) {
+                options.onGroupHover(groupHoverData, { x: event.clientX, y: event.clientY });
+              }
             }
           });
       }); // end cells.forEach
@@ -598,7 +613,8 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
 
     // Setup zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.3, 3])
+      .scaleExtent([isMobileScreen() ? MOBILE_MIN_SCALE : 0.3, 3])
+      .clickDistance(TAP_CLICK_DISTANCE)
       .on('zoom', (event) => {
         transformRef.current = event.transform;
         g.attr('transform', event.transform.toString());
@@ -632,6 +648,21 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       .force('y', d3.forceY(centerY).strength(graphConfig.centerStrength));
 
     simulationRef.current = simulation;
+
+    // A phone shows only part of the graph at desktop scale, so zoom out to
+    // fit it once the layout has formed, unless the user has moved it already.
+    if (isMobileScreen() && transformRef.current === d3.zoomIdentity) {
+      let moved = false;
+      zoom.on('start.fit', (event) => { if (event.sourceEvent) moved = true; });
+      simulation.on('tick.fit', () => {
+        if (simulation.alpha() > FIT_ALPHA) return;
+        simulation.on('tick.fit', null);
+        if (moved) return;
+        const circles = nodes.map(n => ({ x: n.x || 0, y: n.y || 0, r: getNodeRadius(n, maxScore) }));
+        const { x, y, k } = fitTransform(circles, width, height, MOBILE_MIN_SCALE, 1);
+        svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(k));
+      });
+    }
 
     // Fix center node position
     nodes.forEach(node => {
@@ -937,6 +968,26 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
         const rect = svgEl.getBoundingClientRect();
         onFound({ x: rect.left + vw / 2, y: rect.top + vh / 2 });
       });
+  }, [options.svgRef]);
+
+  // Keep the graph centred when its box resizes (a phone rotating, a banner
+  // appearing), without restarting the layout.
+  useEffect(() => {
+    const svgEl = options.svgRef.current;
+    if (!svgEl) return;
+    let width = svgEl.clientWidth;
+    let height = svgEl.clientHeight;
+    const observer = new ResizeObserver(() => {
+      const dw = svgEl.clientWidth - width;
+      const dh = svgEl.clientHeight - height;
+      width = svgEl.clientWidth;
+      height = svgEl.clientHeight;
+      if ((dw === 0 && dh === 0) || !zoomRef.current) return;
+      const k = d3.zoomTransform(svgEl).k;
+      d3.select(svgEl).call(zoomRef.current.translateBy, dw / 2 / k, dh / 2 / k);
+    });
+    observer.observe(svgEl);
+    return () => observer.disconnect();
   }, [options.svgRef]);
 
   const focusNode = useCallback((
