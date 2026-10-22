@@ -3,6 +3,7 @@ import { useAppContext, editsLockedReason } from '../../context/AppContext';
 import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
 import { buildOverallGraph } from '../../utils/buildOverallGraph';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import type { GraphNode } from '@gmail-graph/shared';
 import type { GroupHoverData } from '../../utils/groupTypes';
 
@@ -20,6 +21,7 @@ export function RankingPanel() {
   const lockedReason = editsLockedReason(state);
   const locked = lockedReason !== null;
   const [searchQuery, setSearchQuery] = useState('');
+  const isMobile = useIsMobile();
 
   const { rawData, excludedContacts, rankingTab, panelVisible } = state;
   const filterType = state.filters.filterType;
@@ -48,7 +50,10 @@ export function RankingPanel() {
     }
   }, [filterType]);
 
-  if (!panelVisible) {
+  // On a phone the toolbar opens the panel (see MobileToolbar).
+  if (isMobile && state.mobilePanel !== 'ranking') return null;
+
+  if (!isMobile && !panelVisible) {
     return (
       <button
         className="ranking-show-btn"
@@ -287,7 +292,7 @@ export function RankingPanel() {
     : 'Filter';
 
   return (
-    <div className="ranking-panel">
+    <div className={`ranking-panel ${isMobile ? 'mobile-sheet' : ''}`}>
       <div className="ranking-header">
         <div className="ranking-tabs">
           <button
@@ -314,7 +319,7 @@ export function RankingPanel() {
         <button
           className="ranking-toggle"
           title="Hide panel"
-          onClick={() => dispatch({ type: 'TOGGLE_PANEL' })}
+          onClick={() => dispatch(isMobile ? { type: 'SET_MOBILE_PANEL', payload: null } : { type: 'TOGGLE_PANEL' })}
         >
           −
         </button>

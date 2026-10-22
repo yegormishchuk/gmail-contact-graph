@@ -1794,3 +1794,88 @@ header {
   flex-wrap: wrap;
   gap: 8px 16px;
 }
+
+/* ── Phone-sized screens (see hooks/useIsMobile.ts) ──────────────────────── */
+
+@media (max-width: 768px) {
+  header {
+    padding: 10px 12px;
+  }
+
+  h1 {
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+  }
+
+  .import-banner {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .mobile-toolbar {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    z-index: 20;
+  }
+
+  .mobile-toolbar .header-tab {
+    flex: 1;
+    height: 36px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid rgba(0, 214, 143, 0.15);
+    backdrop-filter: blur(10px);
+  }
+
+  .mobile-toolbar .header-tab.active {
+    background: rgba(0, 214, 143, 0.15);
+  }
+
+  /* The one open panel, full width under the toolbar. */
+  #graph-container .mobile-sheet {
+    top: 52px;
+    left: 8px;
+    right: 8px;
+    bottom: auto;
+    width: auto;
+    min-width: 0;
+    max-height: 60%;
+    overflow-y: auto;
+    z-index: 20;
+  }
+
+  /* Contact details: a sheet along the bottom. */
+  .tooltip.tooltip-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    max-width: none;
+    max-height: 50vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    animation: none;
+  }
+
+  .tooltip-sheet .tooltip-name {
+    padding-right: 40px;
+  }
+
+  .tooltip-sheet .tooltip-close {
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+  }
+}
+
+/* Touch screens have no hover, so show the buttons hover reveals. */
+@media (hover: none) {
+  .ranking-item .ranking-delete,
+  .spam-item .spam-restore {
+    display: block;
+  }
+}

@@ -12,6 +12,8 @@ import type {
 } from '@gmail-graph/shared';
 import type { GroupHoverData } from '../utils/groupTypes';
 
+export type MobilePanel = 'ranking' | 'controls' | 'legend';
+
 // State
 interface AppState {
   rawData: GraphData | null;
@@ -39,6 +41,8 @@ interface AppState {
   selectedGroupPosition: { x: number; y: number } | null;
   rankingTab: 'ranking' | 'filtered' | 'spam';
   panelVisible: boolean;
+  /** The one panel open on a phone-sized screen (see useIsMobile); ignored on desktop. */
+  mobilePanel: MobilePanel | null;
   activeTab: 'graph' | 'stats';
 
   loading: boolean;
@@ -86,6 +90,7 @@ export const initialState: AppState = {
   selectedGroupPosition: null,
   rankingTab: 'ranking',
   panelVisible: true,
+  mobilePanel: null,
   activeTab: 'graph',
   loading: true,
   error: null,
@@ -122,6 +127,7 @@ type Action =
   | { type: 'SELECT_GROUP'; payload: GroupHoverData | null; position?: { x: number; y: number } | null }
   | { type: 'SET_RANKING_TAB'; payload: 'ranking' | 'filtered' | 'spam' }
   | { type: 'TOGGLE_PANEL' }
+  | { type: 'SET_MOBILE_PANEL'; payload: MobilePanel | null }
   | { type: 'SET_TAB'; payload: 'graph' | 'stats' }
   | { type: 'REMOVE_CONTACT'; payload: string }
   | { type: 'RESTORE_CONTACT'; payload: ExcludedContact }
@@ -186,11 +192,13 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, filters: { ...state.filters, searchQuery: action.payload } };
     case 'SELECT_NODE':
       // A new contact has its own groups, so any isolation starts over.
+      // On a phone its details take the place of the open panel.
       return {
         ...state,
         selectedNode: action.payload,
         selectedNodePosition: action.position ?? null,
         isolatedGroupId: null,
+        mobilePanel: action.payload ? null : state.mobilePanel,
       };
     case 'ISOLATE_GROUP':
       // Clicking the isolated group again restores every connection.
@@ -204,6 +212,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, rankingTab: action.payload };
     case 'TOGGLE_PANEL':
       return { ...state, panelVisible: !state.panelVisible };
+    case 'SET_MOBILE_PANEL':
+      return { ...state, mobilePanel: action.payload };
     case 'SET_TAB':
       return { ...state, activeTab: action.payload };
     case 'REMOVE_CONTACT': {

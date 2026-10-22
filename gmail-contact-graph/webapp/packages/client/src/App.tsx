@@ -13,12 +13,15 @@ import { ImportScreen } from './components/ImportScreen';
 import { ImportBanner } from './components/ImportBanner';
 import { ImportDialog } from './components/ImportDialog';
 import { DemoBanner } from './components/DemoBanner';
+import { MobileToolbar } from './components/MobileToolbar';
+import { useIsMobile } from './hooks/useIsMobile';
 import { useImportStatus } from './hooks/useImportStatus';
 
 function AppContent() {
   const { state, dispatch } = useAppContext();
   useImportStatus();
   const { loading, error } = useGraphData();
+  const isMobile = useIsMobile();
   const status = state.importStatus;
 
   if (!status) {
@@ -107,6 +110,7 @@ function AppContent() {
         <RankingPanel />
         <Controls />
         <Legend />
+        {isMobile && <MobileToolbar />}
         {state.selectedNode && <Tooltip />}
       </div>
       {state.activeTab === 'stats' && <StatsPage />}
