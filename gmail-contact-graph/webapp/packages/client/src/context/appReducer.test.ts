@@ -256,4 +256,26 @@ function statuses(...list: ImportStatus[]) {
   assert.equal(s.importOverlayOpen, false, 'finished while hidden: no ending');
 }
 
+// 25. Mobile panels start closed, and opening one replaces the open one.
+{
+  assert.equal(initialState.mobilePanel, null);
+  let s = reducer(initialState, { type: 'SET_MOBILE_PANEL', payload: 'ranking' });
+  assert.equal(s.mobilePanel, 'ranking');
+  s = reducer(s, { type: 'SET_MOBILE_PANEL', payload: 'legend' });
+  assert.equal(s.mobilePanel, 'legend');
+  s = reducer(s, { type: 'SET_MOBILE_PANEL', payload: null });
+  assert.equal(s.mobilePanel, null);
+}
+
+// 26. Selecting a contact closes the mobile panel so its details show;
+// deselecting leaves the panels alone.
+{
+  let s = reducer(initialState, { type: 'SET_MOBILE_PANEL', payload: 'controls' });
+  s = reducer(s, { type: 'SELECT_NODE', payload: node('a@x.com') });
+  assert.equal(s.mobilePanel, null);
+  s = reducer(s, { type: 'SET_MOBILE_PANEL', payload: 'controls' });
+  s = reducer(s, { type: 'SELECT_NODE', payload: null });
+  assert.equal(s.mobilePanel, 'controls');
+}
+
 console.log('appReducer: all assertions passed');

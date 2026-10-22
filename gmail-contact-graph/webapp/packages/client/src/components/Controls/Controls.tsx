@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import type { GraphData, DomainGroups, MessageGroups, CalendarGraphData, EventGroups } from '@gmail-graph/shared';
 
 const MIN_GROUP_SIZE = 3;
@@ -40,6 +41,7 @@ function countQualifyingGroups(
 export function Controls() {
   const { state, dispatch } = useAppContext();
   const [searchQuery, setSearchQuery] = useState('');
+  const isMobile = useIsMobile();
   const { messageGroups, domains, rawData, calendarData, eventGroups } = state;
 
   const isGroupFilter =
@@ -98,8 +100,10 @@ export function Controls() {
     window.resetGraphZoom?.();
   };
 
+  if (isMobile && state.mobilePanel !== 'controls') return null;
+
   return (
-    <div className="controls">
+    <div className={`controls ${isMobile ? 'mobile-sheet' : ''}`}>
       <div className="controls-title">Filters</div>
 
       <div className="search-group">

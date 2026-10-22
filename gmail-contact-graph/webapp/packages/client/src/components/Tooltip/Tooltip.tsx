@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { graphConfig } from '../../utils/graphConfig';
 import { getSelectedGroups, supportsIsolation, ranksGroups, showsGroupColor, type SelectedGroup } from '../../utils/selectedGroups';
 import { useFilteredGraphData } from '../../hooks/useFilteredGraphData';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 function formatDurationSec(seconds: number | null | undefined): string {
   if (!seconds || seconds <= 0) return '—';
@@ -31,6 +32,7 @@ export function Tooltip() {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: -9999, top: -9999 });
   const [showAllGroups, setShowAllGroups] = useState(false);
+  const isMobile = useIsMobile();
   // Rank against the nodes the graph draws, so the panel and graph agree on
   // which groups are drawn and in what colour.
   const filteredData = useFilteredGraphData();
@@ -95,6 +97,8 @@ export function Tooltip() {
   }, [pos]);
 
   if (!selectedNode) return null;
+  // On a phone an open panel covers the details; closing it brings them back.
+  if (isMobile && state.mobilePanel) return null;
 
   const total = selectedNode.received + selectedNode.sent;
   const sentPercent = total > 0 ? Math.round((selectedNode.sent / total) * 100) : 0;
@@ -201,9 +205,10 @@ export function Tooltip() {
   return (
     <div
       ref={tooltipRef}
-      className="tooltip visible"
-      style={{ left: pos.left, top: pos.top, cursor: 'grab' }}
-      onMouseDown={handleDragStart}
+      // On a phone: a sheet along the bottom, not placed by the click or dragged.
+      className={`tooltip visible ${isMobile ? 'tooltip-sheet' : ''}`}
+      style={isMobile ? undefined : { left: pos.left, top: pos.top, cursor: 'grab' }}
+      onMouseDown={isMobile ? undefined : handleDragStart}
     >
       <button className="tooltip-close" onClick={handleClose}>&times;</button>
       <div className="tooltip-name">{selectedNode.name}</div>

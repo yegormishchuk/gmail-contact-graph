@@ -1,11 +1,14 @@
 import React from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export function Legend() {
   const { state } = useAppContext();
+  const isMobile = useIsMobile();
   const isCalendar = state.filters.filterType === 'calendar' || state.filters.filterType === 'eventGroups';
+  if (isMobile && state.mobilePanel !== 'legend') return null;
   return (
-    <div className="legend">
+    <div className={`legend ${isMobile ? 'mobile-sheet' : ''}`}>
       <div className="legend-title">Legend</div>
       <div className="legend-item">
         <div className="legend-color received"></div>
