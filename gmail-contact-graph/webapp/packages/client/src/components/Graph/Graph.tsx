@@ -54,6 +54,9 @@ export function Graph() {
         ref={svgRef}
         id="graph"
         style={{ width: '100%', height: '100%', display: 'block' }}
+        // Tapping empty graph closes the panel open on a phone. Node and
+        // group clicks stop propagation, so they don't get here.
+        onClick={() => state.mobilePanel && dispatch({ type: 'SET_MOBILE_PANEL', payload: null })}
       />
       <GroupTooltip data={hoveredGroupData} position={hoveredGroupPos} />
     </>
