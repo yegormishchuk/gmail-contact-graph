@@ -15,8 +15,6 @@ mkdirSync(calendarDir);
 process.env.DATA_DIR = dir;
 process.env.CONTACTS_DB_FILE = dbFile;
 process.env.USER_EMAIL = '';
-// Real parsers must never send test data to Hugging Face.
-process.env.HF_API_KEY = '';
 // Node stands in for fill_db: the "mbox" it is given is a script (below).
 process.env.FILL_DB_BIN = process.execPath;
 process.env.FILL_EVENTS_BIN = path.join(dir, 'no-fill_events');
@@ -214,8 +212,7 @@ try {
       assert.equal(r.mbox_bytes, readFileSync(FIXTURE).length);
       assert.equal(r.messages, 19);
       assert.equal(r.contacts, 12);
-      assert.equal(r.ai_enabled, false);
-      assert.deepEqual(Object.keys(r.stages_ms).sort(), ['ai', 'checkpoint', 'contacts', 'mails', 'spam']);
+      assert.deepEqual(Object.keys(r.stages_ms).sort(), ['checkpoint', 'contacts', 'mails', 'spam']);
       assert.ok(r.fill_db_wall_ms >= r.fill_db_total_ms, 'the wall time includes the process start');
       assert.equal(r.calendar_ms, null);
       assert.equal(typeof r.finalize_ms, 'number');

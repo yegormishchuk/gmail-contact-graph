@@ -46,11 +46,6 @@ export function countIcs(): number {
   }).length;
 }
 
-/** Same rule as fill_db's HFConfig: a key that is blank after trimming is off. */
-export function aiEnabled(): boolean {
-  return (process.env.HF_API_KEY ?? '').trim() !== '';
-}
-
 export function getSources(current: SourceRef | null): ImportSources {
   const mbox: MboxFile[] = listMbox().map((f) => ({
     ...f,
@@ -64,7 +59,6 @@ export function getSources(current: SourceRef | null): ImportSources {
     icsCount: countIcs(),
     parserAvailable: existsSync(config.FILL_DB_BIN),
     calendarParserAvailable: existsSync(config.FILL_EVENTS_BIN),
-    aiEnabled: aiEnabled(),
     defaultEmail: getUserEmail(),
     defaultName: metaUserName(),
   };

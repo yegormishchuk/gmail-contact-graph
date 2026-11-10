@@ -16,7 +16,6 @@ process.env.CONTACTS_DB_FILE = path.join(dir, 'mine.db');
 delete process.env.MBOX_DIR;
 delete process.env.CALENDAR_DIR;
 // Demo mode must ignore a key, wherever it comes from.
-process.env.HF_API_KEY = 'hf_not_for_the_demo';
 
 const SERVER = fileURLToPath(new URL('../../', import.meta.url));
 const REPO = path.resolve(SERVER, '../../../..');
@@ -57,14 +56,13 @@ async function post(url: string, body: unknown) {
 
 try {
   // 1. Demo defaults: the generated data in demo/, its own database folder
-  //    whatever DATA_DIR says, no AI filter, and the calendar's "now" pinned.
+  //    whatever DATA_DIR says, and the calendar's "now" pinned.
   {
     assert.equal(config.DEMO_MODE, true);
     assert.equal(config.MBOX_DIR, path.join(REPO, 'demo', 'Email'));
     assert.equal(config.CALENDAR_DIR, path.join(REPO, 'demo', 'Calendar'));
     assert.equal(config.DATA_DIR, DEMO_DATA);
     assert.equal(config.CONTACTS_DB_FILE, path.join(DEMO_DATA, 'contacts.db'));
-    assert.equal(process.env.HF_API_KEY, '');
     assert.equal(process.env.FILL_EVENTS_NOW, '2026-10-01');
     assert.equal(defaultDataDir(true), DEMO_DATA);
     assert.equal(defaultDataDir(false), path.join(REPO, 'data'));
@@ -82,9 +80,8 @@ try {
     const replay = await bootDemo();
     assert.equal(replay.durationMs, 8000);
     assert.deepEqual([...new Set(replay.steps.map((s) => s.phase))],
-      ['mails', 'contacts', 'spam', 'ai', 'calendar', 'finalizing']);
+      ['mails', 'contacts', 'spam', 'calendar', 'finalizing']);
     assert.equal(replay.steps.filter((s) => s.phase === 'mails').at(-1)!.detail, '801 messages');
-    assert.match(replay.steps.find((s) => s.phase === 'ai')!.detail, /^AI filter off: \d+ contacts/);
 
     // 4. The API serves it to everyone.
     assert.deepEqual((await get('/api/demo/replay')).body, replay);
@@ -97,7 +94,6 @@ try {
     const sources = (await get('/api/import/sources')).body;
     assert.deepEqual(sources.mbox.map((f: { name: string }) => f.name), ['sample.mbox']);
     assert.equal(sources.defaultEmail, 'you@example.com');
-    assert.equal(sources.aiEnabled, false);
     assert.equal(sources.icsCount, 1);
 
     assert.equal((await get('/api/graph')).body.nodes.length, 62, '61 contacts and the owner');

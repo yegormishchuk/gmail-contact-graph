@@ -10,9 +10,6 @@
 # without an id in its own service-specific format. The manifest-stub layers
 # still cache the dependency builds.
 FROM rust:1.87-bookworm AS parsers
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        pkg-config libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /out
 
 WORKDIR /build/gmail-mbox-parser
@@ -72,12 +69,8 @@ FROM node:22-bookworm-slim AS runtime
 # the dev dependencies that `npm ci` would otherwise skip.
 ENV NODE_ENV=production
 
-# The parsers' runtime needs, as in docker/parsers.Dockerfile: ca-certificates
-# for HTTPS to Hugging Face, libssl3 for the dynamically linked OpenSSL. The
-# node image is bookworm, the same Debian release the parsers were built on.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates libssl3 \
-    && rm -rf /var/lib/apt/lists/*
+# The node image is bookworm, the same Debian release the parsers were built
+# on, so their glibc matches.
 COPY --from=parsers /out/ /usr/local/bin/
 ENV FILL_DB_BIN=/usr/local/bin/fill_db \
     FILL_EVENTS_BIN=/usr/local/bin/fill_events

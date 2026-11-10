@@ -14,12 +14,6 @@
 # properly. The registry cache mount below only saves crates.io downloads.
 FROM rust:1.87-bookworm AS builder
 
-# reqwest 0.12 default features resolve to native-tls -> openssl-sys, which
-# links the SYSTEM OpenSSL. Without these the build fails inside openssl-sys.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        pkg-config libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 RUN mkdir -p /out
 
 # ---------- fill_db ----------
@@ -64,14 +58,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 # trixie or alpine gives "GLIBC_2.xx not found" / musl breakage.
 FROM debian:bookworm-slim AS runtime
 
-# ca-certificates: HTTPS to the Hugging Face API (optional spam pass).
-# libssl3: the native-tls/openssl-sys dynamic link noted above. Without it the
-# binary dies with "error while loading shared libraries: libssl.so.3".
-# rusqlite's bundled SQLite is static and needs nothing.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates libssl3 \
-    && rm -rf /var/lib/apt/lists/*
-
+# rusqlite's bundled SQLite is static: the binaries need no extra packages.
 COPY --from=builder /out/ /usr/local/bin/
 COPY docker/parse-entrypoint.sh /usr/local/bin/parse-entrypoint.sh
 RUN chmod +x /usr/local/bin/parse-entrypoint.sh

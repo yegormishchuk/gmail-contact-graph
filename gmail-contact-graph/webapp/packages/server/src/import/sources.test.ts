@@ -12,7 +12,6 @@ process.env.CONTACTS_DB_FILE = path.join(dir, 'contacts.db');
 process.env.FILL_DB_BIN = path.join(dir, 'missing-fill_db');
 process.env.FILL_EVENTS_BIN = process.execPath;
 process.env.USER_EMAIL = 'Env@Example.com';
-process.env.HF_API_KEY = '   ';
 
 const { listMbox, resolveMbox, countIcs, getSources } = await import('./sources.js');
 
@@ -67,7 +66,6 @@ try {
     assert.equal(s.icsCount, 2);
     assert.equal(s.parserAvailable, false);
     assert.equal(s.calendarParserAvailable, true);
-    assert.equal(s.aiEnabled, false, 'a blank HF_API_KEY disables AI, as in fill_db');
     assert.equal(s.defaultEmail, 'env@example.com');
     assert.equal(s.defaultName, '', 'no name without imported data');
 
