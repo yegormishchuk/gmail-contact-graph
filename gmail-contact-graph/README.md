@@ -10,7 +10,7 @@ Interactive web visualization of your Gmail communication network. Explore conta
 - Calendar co-attendee graph with per-event-group colored ropes and collapsible mini-star clusters
 - Tooltip and ranking panel adapt to the active mode (calendar-specific fields when in Calendar mode, event list per contact, etc.)
 - Composite email ranking and Borda-style overall ranking that merges Gmail + Calendar
-- Manual contact review (mark as human/not human)
+- Manual contact review (mark as not human, restore from spam)
 
 ## Prerequisites
 
@@ -56,7 +56,6 @@ override the bind address (for example inside a container) and
 | `/api/calendar-stats` | GET | Calendar summary stats |
 | `/api/event-groups` | GET | Recurring-event / event-group clusters |
 | `/api/health` | GET | Liveness probe (`{ status: 'ok' }`) |
-| `/api/contacts/mark-clear` | POST | Mark contact as human |
 | `/api/contacts/mark-not-human` | POST | Remove contact |
 | `/api/contacts/restore` | POST | Restore a previously removed contact |
 

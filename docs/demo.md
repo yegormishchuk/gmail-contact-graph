@@ -20,7 +20,6 @@ statistics, calendar). Contact edits are disabled.
 
 Demo mode also:
 
-- ignores `HF_API_KEY`, so the import is deterministic and offline;
 - sets `FILL_EVENTS_NOW=2026-10-01`, so the calendar gives the same 105
   meetings whatever the date (see [`demo/README.md`](../demo/README.md));
 - keeps its database in the system temp directory (`gmail-contact-graph-demo`),

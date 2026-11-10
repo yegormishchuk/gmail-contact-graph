@@ -6,15 +6,8 @@ Needed only to run without Docker — see [Run without Docker](../README.md#run-
 |---|---|---|
 | **Rust** | 1.87+ | the mbox and calendar parsers |
 | **Node.js** | 20.19+ | the webapp (CI builds on Node 24) |
-| **pkg-config** | any | building the parsers — locates system libraries |
-| **OpenSSL headers** (`libssl-dev`) | any | building the parsers — TLS for the optional Hugging Face calls |
+| **C compiler** | any | building the parsers — SQLite is compiled in from C |
 | **GNU Make** | any | optional — every step also has a plain `cargo` / `npm` form |
-
-`pkg-config` and the OpenSSL development headers are the two that most often
-bite: without them `cargo build` fails partway through with a `native-tls` /
-`openssl-sys` error rather than a missing-dependency message. They are already
-present on macOS (via Homebrew's OpenSSL) and on Windows (the build uses
-Schannel), so in practice this is a Linux prerequisite.
 
 **Rust 1.87+** — install via [rustup](https://rustup.rs), which is the same on
 every platform:
@@ -56,37 +49,35 @@ brew install node
 
 Verify with `node --version`.
 
-**pkg-config and OpenSSL headers** — needed to compile the parsers' TLS stack:
+**C compiler** — rusqlite builds its bundled SQLite from C:
 
 ```bash
 # Debian / Ubuntu
 sudo apt-get update
-sudo apt-get install -y pkg-config libssl-dev build-essential
+sudo apt-get install -y build-essential
 ```
 
 ```bash
 # Fedora / RHEL
-sudo dnf install -y pkgconf-pkg-config openssl-devel gcc
+sudo dnf install -y gcc
 ```
 
 ```bash
 # Arch
-sudo pacman -S --needed pkgconf openssl base-devel
+sudo pacman -S --needed base-devel
 ```
 
 ```bash
 # Alpine
-sudo apk add pkgconf openssl-dev build-base
+sudo apk add build-base
 ```
 
 ```bash
-# macOS — Xcode command line tools plus Homebrew OpenSSL
+# macOS — Xcode command line tools
 xcode-select --install
-brew install pkg-config openssl@3
 ```
 
-On Windows nothing extra is required: the build links against the system
-Schannel TLS stack, so there are no OpenSSL headers to install.
+On Windows the MSVC build tools that rustup asks for are enough.
 
 **GNU Make** — optional.
 
