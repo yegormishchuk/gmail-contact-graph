@@ -3,7 +3,6 @@ import {
   loadContactsFromFiltered,
   loadExcludedContacts,
   loadSpamStats,
-  markContactClear,
   markContactNotHuman,
   restoreContact,
   loadAllContacts,
@@ -21,7 +20,6 @@ router.get('/contacts', (req, res) => {
     received: c.received_count,
     sent: c.sent_count,
     total: c.total_count,
-    not_clear: c.not_clear,
   })));
 });
 
@@ -38,17 +36,6 @@ router.get('/spam-stats', (req, res) => {
 router.get('/contacts/all', (req, res) => {
   const result = loadAllContacts();
   res.json(result);
-});
-
-router.post('/contacts/mark-clear', rejectInDemo, requireJson, requireIdle, (req, res) => {
-  const { email } = req.body;
-  if (typeof email !== 'string' || !email.trim()) {
-    return res.status(400).json({ error: 'Email required' });
-  }
-
-  markContactClear(email);
-  clearCache();
-  res.json({ success: true, email });
 });
 
 router.post('/contacts/mark-not-human', rejectInDemo, requireJson, requireIdle, (req, res) => {

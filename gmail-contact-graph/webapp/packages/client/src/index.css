@@ -97,17 +97,6 @@ h1 {
     animation: member-border-pulse 2s ease-in-out infinite;
 }
 
-/* Unclear contacts - may not be real people */
-.node-unclear {
-    opacity: 0.5;
-    filter: saturate(0.6);
-}
-
-.node-unclear:hover {
-    opacity: 1;
-    filter: none;
-}
-
 /* Domain org links */
 .domain-link {
     stroke: #fbbf24;
@@ -344,25 +333,6 @@ h1 {
     margin-top: 12px;
 }
 
-.mark-human-btn {
-    display: none;
-    flex: 1;
-    padding: 8px 12px;
-    background: rgba(0, 214, 143, 0.12);
-    border: 1px solid rgba(0, 214, 143, 0.4);
-    border-radius: 6px;
-    color: #00d68f;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    pointer-events: auto;
-}
-
-.mark-human-btn:hover {
-    background: rgba(0, 214, 143, 0.22);
-    border-color: rgba(0, 214, 143, 0.6);
-}
-
 .mark-not-human-btn {
     display: block;
     flex: 1;
@@ -446,20 +416,6 @@ h1 {
     border: 2px dashed #00e5ff;
     width: 14px;
     height: 14px;
-}
-
-.legend-color.unclear-indicator {
-    background:
-        repeating-linear-gradient(
-            45deg,
-            transparent,
-            transparent 2px,
-            rgba(255, 255, 255, 0.4) 2px,
-            rgba(255, 255, 255, 0.4) 3px
-        ),
-        linear-gradient(135deg, #00d68f 50%, #86efac 50%);
-    opacity: 0.5;
-    filter: saturate(0.6);
 }
 
 /* Controls panel */
@@ -1781,7 +1737,6 @@ header {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.mark-human-btn:disabled,
 .mark-not-human-btn:disabled,
 .ranking-delete:disabled,
 .spam-restore:disabled {
