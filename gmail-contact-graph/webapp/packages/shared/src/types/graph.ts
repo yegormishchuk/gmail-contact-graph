@@ -7,7 +7,6 @@ export interface GraphNode {
   sent: number;
   compositeScore: number;
   rankings?: RankingInfo[];
-  notClear?: boolean;
   // D3 simulation properties (added at runtime)
   x?: number;
   y?: number;

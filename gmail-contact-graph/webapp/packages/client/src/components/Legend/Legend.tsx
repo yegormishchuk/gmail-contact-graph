@@ -30,10 +30,6 @@ export function Legend() {
         <div className="legend-color group-indicator"></div>
         <span>Message group</span>
       </div>
-      <div className="legend-item">
-        <div className="legend-color unclear-indicator"></div>
-        <span>May not be a person</span>
-      </div>
     </div>
   );
 }

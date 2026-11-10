@@ -105,7 +105,7 @@ try {
     assert.equal((await get('/api/calendar-stats')).body.totalMeetings, 105);
 
     // 5. Read-only: edits and imports are refused, whatever the body.
-    for (const url of ['/api/contacts/mark-clear', '/api/contacts/mark-not-human', '/api/contacts/restore',
+    for (const url of ['/api/contacts/mark-not-human', '/api/contacts/restore',
       '/api/import', '/api/import/cancel']) {
       assert.deepEqual(await post(url, { email: 'x@example.com' }), {
         status: 403, body: { error: 'Not available in the demo' },

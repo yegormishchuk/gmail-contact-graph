@@ -46,10 +46,7 @@ function journal(db: Database): Array<[string, string]> {
 
 // 1. Each action's effect on contacts_filtered.
 {
-  const db = mailbox({ 'a@x.com': [1, 1], 'b@x.com': [1, 0], 'c@x.com': [1, null], 'spam@x.com': [0, null] });
-  assert.equal(applyOverride(db, 'a@x.com', 'clear'), true);
-  assert.equal(filtered(db, 'a@x.com'), 0);
-
+  const db = mailbox({ 'b@x.com': [1, 0], 'c@x.com': [1, null], 'spam@x.com': [0, null] });
   assert.equal(applyOverride(db, 'b@x.com', 'not_human'), true);
   assert.equal(filtered(db, 'b@x.com'), null);
 
@@ -61,10 +58,9 @@ function journal(db: Database): Array<[string, string]> {
   assert.equal(filtered(db, 'spam@x.com'), null);
 
   // An action that finds nothing to change reports so.
-  assert.equal(applyOverride(db, 'a@x.com', 'clear'), false, 'already clear');
   assert.equal(applyOverride(db, 'b@x.com', 'not_human'), false, 'already excluded');
-  assert.equal(applyOverride(db, 'nobody@x.com', 'clear'), false);
-  assert.equal(hasContact(db, 'A@X.com'), true);
+  assert.equal(applyOverride(db, 'nobody@x.com', 'not_human'), false);
+  assert.equal(hasContact(db, 'B@X.com'), true);
   assert.equal(hasContact(db, 'nobody@x.com'), false);
 }
 
@@ -72,15 +68,17 @@ function journal(db: Database): Array<[string, string]> {
 {
   const db = mailbox({});
   recordOverride(db, ' A@X.com ', 'restore', 1);
-  recordOverride(db, 'a@x.com', 'clear', 2);
+  recordOverride(db, 'a@x.com', 'not_human', 2);
   recordOverride(db, 'b@x.com', 'not_human', 3);
-  assert.deepEqual(journal(db), [['a@x.com', 'clear'], ['b@x.com', 'not_human']]);
+  assert.deepEqual(journal(db), [['a@x.com', 'not_human'], ['b@x.com', 'not_human']]);
 }
 
 // 3. Same mailbox: the whole journal is copied and applied to the new data.
+//    A 'clear' row, left from the removed "It's a human" edit, is copied but
+//    changes nothing.
 {
   const old = mailbox({});
-  recordOverride(old, 'a@x.com', 'clear');
+  old.run(`INSERT INTO user_overrides (email, action, updated_at) VALUES ('a@x.com', 'clear', 1)`);
   recordOverride(old, 'b@x.com', 'not_human');
   recordOverride(old, 'c@x.com', 'restore');
   recordOverride(old, 'gone@x.com', 'not_human');
@@ -88,8 +86,8 @@ function journal(db: Database): Array<[string, string]> {
   const next = mailbox({ 'a@x.com': [1, 1], 'b@x.com': [1, 1], 'c@x.com': [1, null] });
   const result = carryOverOverrides(old, next, 'Me@X.com', 'me@x.com');
 
-  assert.deepEqual(result, { copied: 4, applied: 3 });
-  assert.equal(filtered(next, 'a@x.com'), 0);
+  assert.deepEqual(result, { copied: 4, applied: 2 });
+  assert.equal(filtered(next, 'a@x.com'), 1);
   assert.equal(filtered(next, 'b@x.com'), null);
   assert.equal(filtered(next, 'c@x.com'), 0);
   // Kept although it had no effect: the contact may come back next time.
@@ -120,9 +118,9 @@ function journal(db: Database): Array<[string, string]> {
 {
   const old = mailbox({});
   recordOverride(old, 'excluded@x.com', 'not_human');
-  recordOverride(old, 'clear@x.com', 'clear');
-  recordOverride(old, 'unclear@x.com', 'clear');
-  const next = mailbox({ 'excluded@x.com': [0, null], 'clear@x.com': [1, 0], 'unclear@x.com': [1, 1] });
+  recordOverride(old, 'kept@x.com', 'restore');
+  recordOverride(old, 'person@x.com', 'not_human');
+  const next = mailbox({ 'excluded@x.com': [0, null], 'kept@x.com': [0, null], 'person@x.com': [1, 0] });
   assert.deepEqual(carryOverOverrides(old, next, 'me@x.com', 'me@x.com'), { copied: 3, applied: 1 });
 }
 

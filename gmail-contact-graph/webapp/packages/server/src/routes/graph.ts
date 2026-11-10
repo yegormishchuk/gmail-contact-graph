@@ -52,7 +52,6 @@ router.get('/graph', (req, res) => {
       sent: contact.sent_count,
       compositeScore: scoreData.score,
       rankings: scoreData.rankings,
-      notClear: contact.not_clear,
     });
   }
 
