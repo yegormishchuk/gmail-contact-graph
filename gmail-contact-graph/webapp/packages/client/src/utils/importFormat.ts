@@ -4,7 +4,6 @@ const PHASE_LABELS: Record<ImportPhase, string> = {
   mails: 'Reading emails',
   contacts: 'Building contacts',
   spam: 'Filtering spam',
-  ai: 'AI check',
   calendar: 'Reading calendar',
   finalizing: 'Finishing up',
 };

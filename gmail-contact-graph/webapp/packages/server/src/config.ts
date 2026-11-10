@@ -33,9 +33,6 @@ if (fs.existsSync(ENV_FILE)) {
 // The public demo: serves the generated mailbox in demo/, read-only.
 const DEMO_MODE = process.env.DEMO_MODE === '1';
 if (DEMO_MODE) {
-  // Deterministic and offline. An empty value, not a missing one: the parsers
-  // load ../.env themselves and would pick a key up from there.
-  process.env.HF_API_KEY = '';
   // The date demo/Calendar ends on; see demo/README.md.
   process.env.FILL_EVENTS_NOW = '2026-10-01';
 }

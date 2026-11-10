@@ -13,7 +13,6 @@ use std::io::{BufRead, BufReader};
 
 use rusqlite::{params, Connection};
 
-use gmail_mbox_parser::hf::{ContactForVerification, HFClient, HFConfig};
 use models::{ContactStats, EmailMessage, ParseState};
 use progress::{CountingReader, MailCounts, Reporter};
 use spam::is_spam_contact;
@@ -46,8 +45,7 @@ fn parse_args(args: &[String]) -> Option<(&str, Option<&str>, &str)> {
     Some((mbox_path.as_str(), user_email, db_path))
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     // Load the single project-root .env (binary is invoked from gmail-mbox-parser/).
     // Fall back to CWD .env in case it's run from the repo root.
     let _ = dotenvy::from_path("../.env").or_else(|_| dotenvy::from_path(".env"));
@@ -103,16 +101,11 @@ async fn main() {
     reporter.phase("contacts");
     fill_contacts_db(&contact_stats, db_path);
 
-    // Phase 3: Mark non-spam contacts (basic spam filter)
+    // Phase 3: Mark non-spam contacts and fill the filtered contacts table
     reporter.phase("spam");
     let candidates = fill_candidates_db(db_path);
-
-    // Phase 4: AI verification and fill filtered contacts table
     if !candidates.is_empty() {
-        fill_filtered_with_ai(db_path, candidates, &mut reporter).await;
-    } else {
-        reporter.ai_phase(false, 0);
-        eprintln!("No candidates for AI verification.");
+        fill_filtered_db(db_path, &candidates);
     }
 
     // Merge WAL into the main DB file so non-WAL readers (e.g. sql.js in the
@@ -427,140 +420,20 @@ fn fill_candidates_db(db_path: &str) -> Vec<ContactCandidate> {
     candidates
 }
 
-// ---------------------------------------------------------------------------
-// Phase 4: AI verification and fill filtered contacts table
-// ---------------------------------------------------------------------------
-
-async fn fill_filtered_with_ai(
-    db_path: &str,
-    candidates: Vec<ContactCandidate>,
-    reporter: &mut Reporter,
-) {
-    eprintln!("\n=== Phase 4: AI Verification ===");
-
-    // Check if HF_API_KEY is set
-    let config = HFConfig::from_env();
-    reporter.ai_phase(config.is_ok(), candidates.len());
-    let config = match config {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Skipping AI verification: {}", e);
-            eprintln!("Set HF_API_KEY to enable AI verification.");
-            // Fallback: copy all candidates to filtered with not_clear = true
-            fallback_fill_filtered(db_path, &candidates);
-            return;
-        }
-    };
-
-    eprintln!("Model: {}", config.model);
-    eprintln!("Batch size: {}", config.batch_size);
-    eprintln!("Contacts to verify: {}", candidates.len());
-
-    // Create HF client
-    let client = match HFClient::new(config) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Failed to create HF client: {}", e);
-            fallback_fill_filtered(db_path, &candidates);
-            return;
-        }
-    };
-
-    // Convert to verification format
-    let contacts_for_verification: Vec<ContactForVerification> = candidates
-        .iter()
-        .map(|c| ContactForVerification {
-            name: c.name.clone(),
-            email: c.email.clone(),
-        })
-        .collect();
-
-    // Run AI verification
-    eprintln!("\nRunning AI verification (4 votes per batch, unanimous required)...");
-    let results = client.classify_all(&contacts_for_verification).await;
-
-    // Build email -> classification map
-    let mut classifications: HashMap<String, u8> = HashMap::new();
-    let mut errors = 0u64;
-
-    for result in results {
-        match result {
-            Ok(r) => {
-                classifications.insert(r.email, r.classification);
-            }
-            Err(e) => {
-                eprintln!("  [ERROR] {}", e);
-                errors += 1;
-            }
-        }
-    }
-
-    // Fill contacts_filtered based on AI results
+fn fill_filtered_db(db_path: &str, candidates: &[ContactCandidate]) {
     let conn = Connection::open(db_path).expect("failed to open database");
     db::setup_filtered_contacts_table(&conn);
 
     conn.execute_batch("BEGIN TRANSACTION").unwrap();
 
     let mut insert_stmt = conn
-        .prepare("INSERT INTO contacts_filtered (contact_id, not_clear) VALUES (?1, ?2)")
-        .unwrap();
-
-    let mut human_count = 0u64;
-    let mut unclear_count = 0u64;
-    let mut not_human_count = 0u64;
-
-    for candidate in &candidates {
-        let classification = classifications.get(&candidate.email).copied().unwrap_or(2);
-
-        match classification {
-            0 => {
-                // Not human - don't add to filtered
-                not_human_count += 1;
-            }
-            1 => {
-                // Human - add with not_clear = false
-                if insert_stmt.execute(params![candidate.id, 0]).is_ok() {
-                    human_count += 1;
-                }
-            }
-            _ => {
-                // Unknown/unclear - add with not_clear = true
-                if insert_stmt.execute(params![candidate.id, 1]).is_ok() {
-                    unclear_count += 1;
-                }
-            }
-        }
-    }
-
-    drop(insert_stmt);
-    conn.execute_batch("COMMIT").unwrap();
-
-    eprintln!("\n=== AI Verification Results ===");
-    eprintln!("Total candidates: {}", candidates.len());
-    eprintln!("  Human (added, not_clear=0): {}", human_count);
-    eprintln!("  Unclear (added, not_clear=1): {}", unclear_count);
-    eprintln!("  Not human (removed): {}", not_human_count);
-    eprintln!("  Errors: {}", errors);
-    eprintln!("Final filtered contacts: {}", human_count + unclear_count);
-}
-
-/// Fallback when AI verification is not available
-fn fallback_fill_filtered(db_path: &str, candidates: &[ContactCandidate]) {
-    eprintln!("Fallback: Adding all candidates with not_clear = true");
-
-    let conn = Connection::open(db_path).expect("failed to open database");
-    db::setup_filtered_contacts_table(&conn);
-
-    conn.execute_batch("BEGIN TRANSACTION").unwrap();
-
-    let mut insert_stmt = conn
-        .prepare("INSERT INTO contacts_filtered (contact_id, not_clear) VALUES (?1, ?2)")
+        .prepare("INSERT INTO contacts_filtered (contact_id) VALUES (?1)")
         .unwrap();
 
     let mut count = 0u64;
 
     for candidate in candidates {
-        if insert_stmt.execute(params![candidate.id, 1]).is_ok() {
+        if insert_stmt.execute(params![candidate.id]).is_ok() {
             count += 1;
         }
     }
@@ -568,11 +441,9 @@ fn fallback_fill_filtered(db_path: &str, candidates: &[ContactCandidate]) {
     drop(insert_stmt);
     conn.execute_batch("COMMIT").unwrap();
 
-    eprintln!(
-        "Fallback: {} contacts added to filtered (all with not_clear=1)",
-        count
-    );
+    eprintln!("Filtered contacts: {}", count);
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

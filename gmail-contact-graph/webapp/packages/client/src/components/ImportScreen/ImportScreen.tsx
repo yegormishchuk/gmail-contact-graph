@@ -175,12 +175,6 @@ export function ImportScreen({ inDialog = false }: ImportScreenProps) {
               {sources.icsCount > 0 && !sources.calendarParserAvailable && ' — calendar parser not built'}
             </span>
           </label>
-
-          {!demo && (
-            <div className="import-hint">
-              AI spam filter: {sources.aiEnabled ? 'on' : 'off (set HF_API_KEY in .env to enable it)'}
-            </div>
-          )}
         </>
       )}
 

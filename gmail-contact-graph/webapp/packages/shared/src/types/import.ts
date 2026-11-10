@@ -1,7 +1,7 @@
 // Importing a mailbox from the webapp: the server runs the parsers over a
 // file from data/Email and swaps the result in when they succeed.
 
-export type ImportPhase = 'mails' | 'contacts' | 'spam' | 'ai' | 'calendar' | 'finalizing';
+export type ImportPhase = 'mails' | 'contacts' | 'spam' | 'calendar' | 'finalizing';
 
 export type ImportStatus = (
   // No working database yet.
@@ -55,8 +55,6 @@ export interface ImportSources {
   icsCount: number;
   parserAvailable: boolean;
   calendarParserAvailable: boolean;
-  /** HF_API_KEY is set, so fill_db will run the AI filter. */
-  aiEnabled: boolean;
   defaultEmail: string;
   /** The name the current data was imported with, '' if none. */
   defaultName: string;

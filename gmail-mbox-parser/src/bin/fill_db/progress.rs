@@ -29,7 +29,6 @@ pub struct Reporter {
     stage: Option<(&'static str, Instant)>,
     stages: Vec<(&'static str, Duration)>,
     total: Duration,
-    ai_enabled: bool,
 }
 
 impl Reporter {
@@ -45,7 +44,6 @@ impl Reporter {
             stage: None,
             stages: Vec::new(),
             total: Duration::ZERO,
-            ai_enabled: false,
         }
     }
 
@@ -59,12 +57,6 @@ impl Reporter {
     pub fn phase(&mut self, phase: &'static str) {
         self.start_stage(phase, Instant::now());
         emit(self.phase_line(phase));
-    }
-
-    pub fn ai_phase(&mut self, enabled: bool, contacts: usize) {
-        self.ai_enabled = enabled;
-        self.start_stage("ai", Instant::now());
-        emit(self.ai_phase_line(enabled, contacts));
     }
 
     /// Starts a timed stage that the webapp is not told about.
@@ -105,7 +97,6 @@ impl Reporter {
                 "mbox_bytes": mbox_bytes,
                 "messages": messages,
                 "contacts": contacts,
-                "ai_enabled": self.ai_enabled,
                 "stages_ms": self.stages_ms(),
                 "fill_db_total_ms": millis(self.total),
             })
@@ -139,13 +130,6 @@ impl Reporter {
     fn phase_line(&self, phase: &str) -> Option<String> {
         self.json
             .then(|| json!({ "event": "phase", "phase": phase }).to_string())
-    }
-
-    fn ai_phase_line(&self, enabled: bool, contacts: usize) -> Option<String> {
-        self.json.then(|| {
-            json!({ "event": "phase", "phase": "ai", "enabled": enabled, "contacts": contacts })
-                .to_string()
-        })
     }
 
     fn message_line(&mut self, counts: MailCounts, now: Instant) -> Option<String> {
@@ -324,7 +308,6 @@ mod tests {
         let mut r = Reporter::new(false);
         let now = Instant::now();
         assert_eq!(r.phase_line("mails"), None);
-        assert_eq!(r.ai_phase_line(true, 3), None);
         assert_eq!(r.mails_finished_line(counts(7), now), None);
         let done = r.done_line(1, 2, 3).unwrap();
         assert!(done.starts_with("Stage timings:"), "{done}");
@@ -383,14 +366,9 @@ mod tests {
     }
 
     #[test]
-    fn phase_ai_and_done_lines_are_json() {
+    fn phase_and_done_lines_are_json() {
         let r = Reporter::new(true);
         assert_eq!(parse(&r.phase_line("spam").unwrap())["phase"], "spam");
-
-        let ai = parse(&r.ai_phase_line(false, 42).unwrap());
-        assert_eq!(ai["phase"], "ai");
-        assert_eq!(ai["enabled"], false);
-        assert_eq!(ai["contacts"], 42);
 
         let done = parse(&r.done_line(19, 12, 7).unwrap());
         assert_eq!(done["event"], "done");
@@ -399,8 +377,8 @@ mod tests {
         assert_eq!(done["filtered"], 7);
     }
 
-    /// A run through every stage: 100 ms of mails, 50 of contacts, 10 of
-    /// spam, 240 of ai and 50 of checkpoint.
+    /// A run through every stage: 100 ms of mails, 50 of contacts, 250 of
+    /// spam and 50 of checkpoint.
     fn timed_run(json: bool) -> Reporter {
         let t0 = Instant::now();
         let ms = |n| t0 + Duration::from_millis(n);
@@ -408,7 +386,6 @@ mod tests {
         r.start_stage("mails", ms(0));
         r.start_stage("contacts", ms(100));
         r.start_stage("spam", ms(150));
-        r.start_stage("ai", ms(160));
         r.start_stage("checkpoint", ms(400));
         r.finish(ms(450));
         r
@@ -419,7 +396,7 @@ mod tests {
         let done = parse(&timed_run(true).done_line(19, 12, 7).unwrap());
         assert_eq!(
             done["stages_ms"],
-            serde_json::json!({ "mails": 100, "contacts": 50, "spam": 10, "ai": 240, "checkpoint": 50 })
+            serde_json::json!({ "mails": 100, "contacts": 50, "spam": 250, "checkpoint": 50 })
         );
         assert_eq!(done["total_ms"], 450);
     }
@@ -435,8 +412,7 @@ mod tests {
                 "Stage timings:",
                 "mails           0.100 s",
                 "contacts        0.050 s",
-                "spam            0.010 s",
-                "ai              0.240 s",
+                "spam            0.250 s",
                 "checkpoint      0.050 s",
                 "total           0.450 s",
             ]
@@ -445,8 +421,7 @@ mod tests {
 
     #[test]
     fn text_mode_writes_a_cli_timing_record() {
-        let mut r = timed_run(false);
-        r.ai_enabled = true;
+        let r = timed_run(false);
         let line = r
             .record_line("../data/Email/all.mbox", 2048, 19, 12)
             .expect("no record in text mode");
@@ -456,8 +431,7 @@ mod tests {
         assert_eq!(v["mbox_bytes"], 2048);
         assert_eq!(v["messages"], 19);
         assert_eq!(v["contacts"], 12);
-        assert_eq!(v["ai_enabled"], true);
-        assert_eq!(v["stages_ms"]["ai"], 240);
+        assert_eq!(v["stages_ms"]["spam"], 250);
         assert_eq!(v["fill_db_total_ms"], 450);
         assert!(v["at"].as_str().is_some_and(|at| at.ends_with('Z')));
     }

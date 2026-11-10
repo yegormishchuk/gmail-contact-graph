@@ -16,18 +16,16 @@ import { ProgressTracker } from './progress.js';
   t.feed('{"event":"phase","phase":"spam"}');
   assert.equal(t.snapshot().progress, 0.87);
 
-  t.feed('{"event":"phase","phase":"ai","enabled":true,"contacts":1540}');
-  assert.deepEqual(t.snapshot(), { phase: 'ai', progress: 0.88, detail: 'Checking 1,540 contacts with AI' });
-
   t.feed('{"event":"done","messages":310211,"contacts":8123,"filtered":1320}');
-  assert.equal(t.snapshot().phase, 'ai', 'done does not move the phase');
+  assert.equal(t.snapshot().phase, 'spam', 'done does not move the phase');
 }
 
-// 2. The AI phase without a key says so.
+// 2. The AI phase of a fill_db built before it was removed is ignored.
 {
   const t = new ProgressTracker();
+  t.feed('{"event":"phase","phase":"spam"}');
   t.feed('{"event":"phase","phase":"ai","enabled":false,"contacts":7}');
-  assert.equal(t.snapshot().detail, 'AI filter off: 7 contacts kept as unclear');
+  assert.deepEqual(t.snapshot(), { phase: 'spam', progress: 0.87, detail: '' });
 }
 
 // 3. Phases set by the importer itself.
@@ -72,34 +70,32 @@ import { ProgressTracker } from './progress.js';
 {
   const t = new ProgressTracker();
   assert.equal(t.fillDbTimings(), null);
-  t.feed('{"event":"phase","phase":"ai","enabled":true,"contacts":3}');
   t.feed('{"event":"done","messages":19,"contacts":12,"filtered":7,'
-    + '"stages_ms":{"mails":100,"contacts":5,"spam":1,"ai":40,"checkpoint":2},"total_ms":150}');
+    + '"stages_ms":{"mails":100,"contacts":5,"spam":1,"checkpoint":2},"total_ms":150}');
   t.feed('{"event":"done","masters":4,"occurrences":9}');
   assert.deepEqual(t.fillDbTimings(), {
     messages: 19,
     contacts: 12,
-    aiEnabled: true,
-    stagesMs: { mails: 100, contacts: 5, spam: 1, ai: 40, checkpoint: 2 },
+    stagesMs: { mails: 100, contacts: 5, spam: 1, checkpoint: 2 },
     totalMs: 150,
   });
 }
 
-// 8. A listener sees every snapshot as it changes, once per event, with the
-//    AI phase's detail already set. Text lines and done events change nothing.
+// 8. A listener sees every snapshot as it changes, once per event. Text lines
+//    and done events change nothing.
 {
   const seen: unknown[] = [];
   const t = new ProgressTracker((s) => seen.push(s));
   t.feed('{"event":"phase","phase":"mails"}');
   t.feed('{"event":"progress","phase":"mails","bytes":50,"total_bytes":100,"messages":10}');
-  t.feed('{"event":"phase","phase":"ai","enabled":false,"contacts":7}');
+  t.feed('{"event":"phase","phase":"spam"}');
   t.feed('{"event":"done","messages":19,"contacts":12,"filtered":7,"stages_ms":{},"total_ms":1}');
   t.feed('Contacts table: 12 contacts inserted.');
   t.setPhase('finalizing');
   assert.deepEqual(seen, [
     { phase: 'mails', progress: 0, detail: '' },
     { phase: 'mails', progress: 0.425, detail: '10 messages' },
-    { phase: 'ai', progress: 0.88, detail: 'AI filter off: 7 contacts kept as unclear' },
+    { phase: 'spam', progress: 0.87, detail: '' },
     { phase: 'finalizing', progress: 0.99, detail: '' },
   ]);
 }
