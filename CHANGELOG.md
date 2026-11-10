@@ -9,6 +9,11 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-11
+
+The AI spam filter is gone: the parsers run fully offline and
+deterministically, with no Hugging Face key and no OpenSSL.
+
 ### Removed
 
 - The optional AI spam filter (Hugging Face). Every contact that passes the
@@ -395,7 +400,8 @@ Takeout export to an interactive graph in the browser.
   Everything else in the pipeline is deterministic.
 - Requires Rust 1.87+ and Node.js 20.19+ (or 22+).
 
-[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.4.0
 [0.3.3]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.3
 [0.3.2]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.2
 [0.3.1]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.1
