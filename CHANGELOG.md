@@ -9,6 +9,19 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+### Removed
+
+- The optional AI spam filter (Hugging Face). Every contact that passes the
+  rule-based filter is kept; `HF_API_KEY`, `HF_MODEL`, `HF_BATCH_SIZE` and
+  `HF_TIMEOUT` are no longer read, and the project makes no network requests.
+- Unclear contacts: no more dimmed, hatched nodes, "May not be a person"
+  legend entry or **It's a human** button, and no
+  `POST /api/contacts/mark-clear`. `contacts_filtered.not_clear` stays in the
+  schema and is always 0; earlier **It's a human** edits are no longer applied.
+- The import's "AI check" phase, and `ai_enabled` in timing records.
+- The OpenSSL build and runtime dependency: building the parsers no longer
+  needs `pkg-config` or `libssl-dev`.
+
 ## [0.3.2] - 2026-10-14
 
 A contact in many groups no longer turns the graph into a tangle of ropes
