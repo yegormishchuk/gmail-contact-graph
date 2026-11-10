@@ -50,7 +50,7 @@ async function mailbox(contact: string, userEmail: string | null) {
       not_clear INTEGER NOT NULL DEFAULT 0);
   `);
   db.run(`INSERT INTO contacts (id, name, email, received, sent, not_spam) VALUES (1, 'X', ?, 3, 2, 1)`, [contact]);
-  db.run(`INSERT INTO contacts_filtered (contact_id, not_clear) VALUES (1, 1)`);
+  db.run(`INSERT INTO contacts_filtered (contact_id) VALUES (1)`);
   if (userEmail) {
     db.run(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
     setMeta(db, 'user_email', userEmail);
@@ -81,7 +81,7 @@ try {
       assert.equal(r.status, 409, url);
       assert.deepEqual(r.body, { state: 'empty' }, url);
     }
-    const edit = await post('/api/contacts/mark-clear', { email: 'a@x.com' });
+    const edit = await post('/api/contacts/mark-not-human', { email: 'a@x.com' });
     assert.equal(edit.status, 409);
 
     // The import API works without a database.
@@ -118,7 +118,7 @@ try {
     assert.deepEqual(emails(r.body), ['owner@x.com', 'alice@x.com']);
     assert.equal(r.body.nodes[0].name, 'owner');
     assert.equal((await get('/api/message-groups')).status, 200);
-    for (const url of ['/api/contacts/mark-clear', '/api/contacts/mark-not-human', '/api/contacts/restore']) {
+    for (const url of ['/api/contacts/mark-not-human', '/api/contacts/restore']) {
       await assertJsonOnly(url);
     }
   }
@@ -136,32 +136,31 @@ try {
   {
     setImporting(true);
     assert.equal((await get('/api/graph')).status, 200);
-    for (const url of ['/api/contacts/mark-clear', '/api/contacts/mark-not-human', '/api/contacts/restore']) {
+    for (const url of ['/api/contacts/mark-not-human', '/api/contacts/restore']) {
       const r = await post(url, { email: 'bob@x.com' });
       assert.equal(r.status, 409, url);
       assert.equal(r.body.state, 'importing', url);
     }
     setImporting(false);
-    assert.equal((await post('/api/contacts/mark-clear', { email: 'bob@x.com' })).status, 200);
+    assert.equal((await post('/api/contacts/restore', { email: 'bob@x.com' })).status, 200);
   }
 
   // 5. Edits are journaled, so a re-import can apply them again.
   {
     assert.equal((await post('/api/contacts/mark-not-human', { email: 'bob@x.com' })).status, 200);
     const rows = getDatabase().exec(`SELECT email, action FROM user_overrides`)[0].values;
-    assert.deepEqual(rows, [['bob@x.com', 'not_human']], 'the last action replaces the earlier clear');
+    assert.deepEqual(rows, [['bob@x.com', 'not_human']], 'the last action replaces the earlier restore');
 
     // Addresses that are not contacts are not journaled: a failed restore,
-    // or a clear / not-human for a typo.
+    // or a not-human for a typo.
     assert.equal((await post('/api/contacts/restore', { email: 'nobody@x.com' })).status, 404);
-    assert.equal((await post('/api/contacts/mark-clear', { email: 'nobody@x.com' })).status, 200);
     assert.equal((await post('/api/contacts/mark-not-human', { email: 'nobody@x.com' })).status, 200);
     assert.equal(getDatabase().exec(`SELECT COUNT(*) FROM user_overrides`)[0].values[0][0], 1);
   }
 
   // 6. The email must be a non-empty string.
   {
-    for (const url of ['/api/contacts/mark-clear', '/api/contacts/mark-not-human', '/api/contacts/restore']) {
+    for (const url of ['/api/contacts/mark-not-human', '/api/contacts/restore']) {
       for (const email of [123, ['a@x.com'], { a: 1 }, '  ', undefined]) {
         assert.equal((await post(url, { email })).status, 400, `${url} ${JSON.stringify(email)}`);
       }

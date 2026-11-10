@@ -125,9 +125,6 @@ cd ../gmail-contact-graph
 make run CONTACTS_DB_FILE=../data/demo/contacts.db
 ```
 
-Leave `HF_API_KEY` empty in `.env` for this: the parsers read `.env` directly,
-so clearing the variable in your shell does not help.
-
 ## Docker
 
 The parsers also run as one-shot Compose services behind the `parse` profile.

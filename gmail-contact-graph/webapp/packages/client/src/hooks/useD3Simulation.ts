@@ -231,17 +231,6 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       svg.call(zoom.transform, initialTransform);
       transformRef.current = initialTransform;
 
-      // Create defs for hatch pattern
-      const defs = svg.append('defs');
-      const hatchPattern = defs.append('pattern')
-        .attr('id', 'hatch-pattern')
-        .attr('patternUnits', 'userSpaceOnUse')
-        .attr('width', 6).attr('height', 6)
-        .attr('patternTransform', 'rotate(45)');
-      hatchPattern.append('line')
-        .attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 6)
-        .attr('stroke', 'rgba(255, 255, 255, 0.4)').attr('stroke-width', 1.5);
-
       // Only one cell is expanded (showing attendees) at a time.
       let expandedLabel: string | null = null;
       const cellApi = new Map<string, { expand: () => void; collapse: (resetCamera?: boolean) => void }>();
@@ -358,11 +347,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
             .data(simNodes)
             .enter()
             .append('g')
-            .attr('class', d => {
-              let cls = 'node node-contact';
-              if (d.notClear) cls += ' node-unclear';
-              return cls;
-            });
+            .attr('class', 'node node-contact');
 
           nodeGroups.each(function(d, nodeIdx) {
             const nodeG = d3.select(this);
@@ -394,13 +379,6 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
               .attr('stroke', hasSent ? graphConfig.sentColor : 'rgba(255,255,255,0.3)')
               .attr('stroke-width', hasSent ? graphConfig.borderWidth : 1.5)
               .attr('class', 'node-border');
-
-            if (d.notClear) {
-              nodeG.append('circle')
-                .attr('r', radius)
-                .attr('fill', 'url(#hatch-pattern)')
-                .attr('class', 'node-hatch');
-            }
           });
 
           // Labels
@@ -592,22 +570,6 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
     // Calculate max score for node sizing
     const maxScore = d3.max(options.data.nodes.filter(n => !n.isCenter), d => d.compositeScore) || 1;
 
-    // Create defs for patterns
-    const defs = svg.append('defs');
-
-    // Hatching pattern for unclear contacts
-    const hatchPattern = defs.append('pattern')
-      .attr('id', 'hatch-pattern')
-      .attr('patternUnits', 'userSpaceOnUse')
-      .attr('width', 6)
-      .attr('height', 6)
-      .attr('patternTransform', 'rotate(45)');
-    hatchPattern.append('line')
-      .attr('x1', 0).attr('y1', 0)
-      .attr('x2', 0).attr('y2', 6)
-      .attr('stroke', 'rgba(255, 255, 255, 0.4)')
-      .attr('stroke-width', 1.5);
-
     // Main group with zoom
     const g = svg.append('g');
 
@@ -687,11 +649,7 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       .data(nodes)
       .enter()
       .append('g')
-      .attr('class', d => {
-        let classes = d.isCenter ? 'node node-center' : 'node node-contact';
-        if (d.notClear) classes += ' node-unclear';
-        return classes;
-      });
+      .attr('class', d => d.isCenter ? 'node node-center' : 'node node-contact');
 
     // Add circles to each node
     nodeGroups.each(function(d, i) {
@@ -747,14 +705,6 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
           .attr('stroke', hasSent ? graphConfig.sentColor : 'rgba(255,255,255,0.3)')
           .attr('stroke-width', hasSent ? graphConfig.borderWidth : 1.5)
           .attr('class', 'node-border');
-
-        // Hatching overlay for unclear contacts
-        if (d.notClear) {
-          group.append('circle')
-            .attr('r', radius)
-            .attr('fill', 'url(#hatch-pattern)')
-            .attr('class', 'node-hatch');
-        }
       }
     });
 
@@ -835,12 +785,11 @@ export function useD3Simulation(options: UseD3SimulationOptions) {
       .each(function(d) {
         const el = d3.select(this);
         const hasSent = d.sent > 0;
-        const naturalOpacity = d.notClear ? 0.5 : 1;
 
         el.classed('node-group-member', false);
 
         el.transition('opacity').duration(320).ease(d3.easeCubicOut)
-          .style('opacity', naturalOpacity)
+          .style('opacity', 1)
           .on('end', function() {
             d3.select(this as SVGGElement).style('opacity', null);
           });

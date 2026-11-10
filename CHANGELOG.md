@@ -9,6 +9,24 @@ HTTP API may change in a minor release.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-11
+
+The AI spam filter is gone: the parsers run fully offline and
+deterministically, with no Hugging Face key and no OpenSSL.
+
+### Removed
+
+- The optional AI spam filter (Hugging Face). Every contact that passes the
+  rule-based filter is kept; `HF_API_KEY`, `HF_MODEL`, `HF_BATCH_SIZE` and
+  `HF_TIMEOUT` are no longer read, and the project makes no network requests.
+- Unclear contacts: no more dimmed, hatched nodes, "May not be a person"
+  legend entry or **It's a human** button, and no
+  `POST /api/contacts/mark-clear`. `contacts_filtered.not_clear` stays in the
+  schema and is always 0; earlier **It's a human** edits are no longer applied.
+- The import's "AI check" phase, and `ai_enabled` in timing records.
+- The OpenSSL build and runtime dependency: building the parsers no longer
+  needs `pkg-config` or `libssl-dev`.
+
 ## [0.3.3] - 2026-10-22
 
 The webapp works on a phone: the panels get out of the way, and the graph
@@ -382,7 +400,8 @@ Takeout export to an interactive graph in the browser.
   Everything else in the pipeline is deterministic.
 - Requires Rust 1.87+ and Node.js 20.19+ (or 22+).
 
-[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/yegormishchuk/gmail-contact-graph/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.4.0
 [0.3.3]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.3
 [0.3.2]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.2
 [0.3.1]: https://github.com/yegormishchuk/gmail-contact-graph/releases/tag/v0.3.1

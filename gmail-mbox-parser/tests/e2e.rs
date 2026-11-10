@@ -37,8 +37,6 @@ impl Run {
 /// The binary is launched from inside the temp directory on purpose: it reads
 /// configuration from `../.env` relative to its working directory, so starting
 /// it in a scratch directory keeps the developer's real `.env` out of reach.
-/// That matters beyond tidiness — an `HF_API_KEY` picked up from there would
-/// send contact names and addresses to Hugging Face during a test run.
 fn run_fill_db(case: &str) -> Run {
     run_fill_db_into(case, "contacts.db")
 }
@@ -82,7 +80,6 @@ fn run_fill_db_with(
     let mut command = Command::new(env!("CARGO_BIN_EXE_fill_db"));
     command
         .current_dir(&dir)
-        .env_remove("HF_API_KEY")
         .env_remove("USER_EMAIL")
         .env_remove("PROGRESS_FORMAT")
         .arg(&fixture)
@@ -299,13 +296,13 @@ fn automated_and_one_way_senders_are_filtered_out() {
 }
 
 #[test]
-fn without_an_api_key_every_survivor_is_marked_unclear() {
-    let run = run_fill_db("fallback");
-    // AI verification is skipped, so nothing is classified as definitely human:
-    // all seven two-way contacts land in the table flagged as unclear.
+fn every_survivor_is_kept_and_none_is_marked_unclear() {
+    let run = run_fill_db("survivors");
+    // All seven two-way contacts land in the table; the not_clear column is
+    // kept for older readers but is always 0.
     assert_eq!(run.count("SELECT COUNT(*) FROM contacts_filtered"), 7);
     assert_eq!(
-        run.count("SELECT COUNT(*) FROM contacts_filtered WHERE not_clear = 1"),
+        run.count("SELECT COUNT(*) FROM contacts_filtered WHERE not_clear = 0"),
         7
     );
 }
@@ -345,16 +342,9 @@ fn json_progress_reports_phases_in_order_and_ends_with_done() {
 
     assert_eq!(
         phases(&events),
-        ["mails", "contacts", "spam", "ai"],
+        ["mails", "contacts", "spam"],
         "stderr:\n{stderr}"
     );
-
-    let ai = events
-        .iter()
-        .find(|e| e["phase"] == "ai" && e["event"] == "phase")
-        .unwrap();
-    assert_eq!(ai["enabled"], false, "HF_API_KEY is removed for tests");
-    assert_eq!(ai["contacts"], 7);
 
     let done = events.last().expect("no JSON events");
     assert_eq!(done["event"], "done");
@@ -363,7 +353,7 @@ fn json_progress_reports_phases_in_order_and_ends_with_done() {
     assert_eq!(done["filtered"], 7);
 }
 
-const STAGES: [&str; 5] = ["mails", "contacts", "spam", "ai", "checkpoint"];
+const STAGES: [&str; 4] = ["mails", "contacts", "spam", "checkpoint"];
 
 #[test]
 fn json_done_carries_the_stage_timings_and_nothing_is_recorded() {
@@ -397,7 +387,6 @@ fn text_mode_appends_a_cli_timing_record_next_to_the_database() {
     );
     assert_eq!(record["messages"], 19);
     assert_eq!(record["contacts"], 12);
-    assert_eq!(record["ai_enabled"], false);
     for stage in STAGES {
         assert!(
             record["stages_ms"][stage].is_u64(),
@@ -439,18 +428,15 @@ fn json_progress_counts_crlf_and_undecodable_bytes() {
 }
 
 #[test]
-fn json_progress_reports_the_ai_phase_even_without_candidates() {
+fn json_progress_reports_every_phase_even_without_candidates() {
     let (_run, stderr) = run_fill_db_with("json_empty", "contacts.db", Some("json"), Some(b""));
     let events = json_events(&stderr);
 
     assert_eq!(
         phases(&events),
-        ["mails", "contacts", "spam", "ai"],
+        ["mails", "contacts", "spam"],
         "stderr:\n{stderr}"
     );
-    let ai = events.iter().find(|e| e["phase"] == "ai").unwrap();
-    assert_eq!(ai["enabled"], false);
-    assert_eq!(ai["contacts"], 0);
 
     let done = events.last().unwrap();
     assert_eq!(done["event"], "done");

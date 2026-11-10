@@ -4,7 +4,7 @@ import { config } from '../config.js';
 import type { FillDbTimings } from './progress.js';
 import type { SourceRef } from './sources.js';
 
-const STAGE_ORDER = ['mails', 'contacts', 'spam', 'ai', 'checkpoint'];
+const STAGE_ORDER = ['mails', 'contacts', 'spam', 'checkpoint'];
 
 /** What the importer measured around the parsers, in milliseconds. */
 export interface ImportTimings {
@@ -45,7 +45,6 @@ export function recordImportTimings(fillDb: FillDbTimings, source: SourceRef, ou
     mbox_bytes: source.size,
     messages: fillDb.messages,
     contacts: fillDb.contacts,
-    ai_enabled: fillDb.aiEnabled,
     stages_ms: fillDb.stagesMs,
     fill_db_total_ms: fillDb.totalMs,
     fill_db_wall_ms: outer.fillDbWallMs,

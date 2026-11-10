@@ -9,13 +9,12 @@ const PHASE_START: Record<ImportPhase, number> = {
   mails: 0,
   contacts: 0.85,
   spam: 0.87,
-  ai: 0.88,
   calendar: 0.97,
   finalizing: 0.99,
 };
 
 type ParserEvent =
-  | { event: 'phase'; phase: string; enabled?: boolean; contacts?: number }
+  | { event: 'phase'; phase: string }
   | { event: 'progress'; phase: string; bytes: number; total_bytes: number; messages: number }
   | { event: 'done'; messages?: number; contacts?: number; stages_ms?: Record<string, number>; total_ms?: number };
 
@@ -28,7 +27,6 @@ export type ProgressListener = (snapshot: ProgressSnapshot) => void;
 export interface FillDbTimings {
   messages: number;
   contacts: number;
-  aiEnabled: boolean;
   stagesMs: Record<string, number>;
   totalMs: number;
 }
@@ -46,7 +44,6 @@ export class ProgressTracker {
   private progress = 0;
   private detail = '';
   private sawJson = false;
-  private aiEnabled = false;
   private timings: FillDbTimings | null = null;
 
   constructor(private readonly listener?: ProgressListener) {}
@@ -67,13 +64,6 @@ export class ProgressTracker {
 
     if (event.event === 'phase' && isPhase(event.phase)) {
       this.enterPhase(event.phase);
-      if (event.phase === 'ai') {
-        this.aiEnabled = event.enabled === true;
-        const n = (event.contacts ?? 0).toLocaleString('en-US');
-        this.detail = event.enabled
-          ? `Checking ${n} contacts with AI`
-          : `AI filter off: ${n} contacts kept as unclear`;
-      }
       this.notify();
     } else if (event.event === 'progress' && event.phase === 'mails') {
       const fraction = event.total_bytes > 0 ? Math.min(event.bytes / event.total_bytes, 1) : 0;
@@ -85,7 +75,6 @@ export class ProgressTracker {
       this.timings = {
         messages: event.messages ?? 0,
         contacts: event.contacts ?? 0,
-        aiEnabled: this.aiEnabled,
         stagesMs: event.stages_ms,
         totalMs: event.total_ms ?? 0,
       };

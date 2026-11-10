@@ -131,7 +131,6 @@ type Action =
   | { type: 'SET_TAB'; payload: 'graph' | 'stats' }
   | { type: 'REMOVE_CONTACT'; payload: string }
   | { type: 'RESTORE_CONTACT'; payload: ExcludedContact }
-  | { type: 'MARK_CONTACT_CLEAR'; payload: string }
   | { type: 'SET_IMPORT_STATUS'; payload: ImportStatus; seq?: number }
   | { type: 'SET_IMPORT_STATUS_ERROR'; payload: string }
   | { type: 'OPEN_IMPORT' }
@@ -253,19 +252,6 @@ export function reducer(state: AppState, action: Action): AppState {
         calendarStats: action.payload.stats,
         eventGroups: action.payload.eventGroups,
       };
-    case 'MARK_CONTACT_CLEAR': {
-      if (!state.rawData) return state;
-      const email = action.payload;
-      return {
-        ...state,
-        rawData: {
-          ...state.rawData,
-          nodes: state.rawData.nodes.map(n =>
-            n.email === email ? { ...n, notClear: false } : n
-          ),
-        },
-      };
-    }
     case 'SET_IMPORT_STATUS': {
       if (action.seq !== undefined && action.seq < state.importStatusSeq) return state;
       const status = action.payload;

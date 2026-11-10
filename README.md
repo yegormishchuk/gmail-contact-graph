@@ -67,9 +67,8 @@ image without saying so.
 
 ## Run without Docker
 
-Needs **Rust 1.87+** and **Node.js 20.19+**; on Linux also `pkg-config` and the
-OpenSSL headers. `make` is optional. Install commands for every platform are in
-[docs/install.md](docs/install.md).
+Needs **Rust 1.87+**, **Node.js 20.19+** and a C compiler. `make` is optional.
+Install commands for every platform are in [docs/install.md](docs/install.md).
 
 ```bash
 git clone https://github.com/yegormishchuk/gmail-contact-graph.git
@@ -151,13 +150,8 @@ Everything runs on your machine. The parsers read your local Takeout export and
 write SQLite files into `data/`; the webapp server binds to `127.0.0.1` only (and
 under Docker, the port is published on `127.0.0.1` only), so it is reachable
 from your own machine and not from the rest of your network. Nothing is
-uploaded, and `data/` is gitignored so your mail can't be committed by
-accident.
-
-The one exception is opt-in. If you set `HF_API_KEY`, contact **names and email
-addresses** — never subjects or message bodies — are sent to the Hugging Face
-API to classify them as human or automated. Leave `HF_API_KEY` empty and the
-project makes no outbound network requests at all.
+uploaded, the project makes no outbound network requests, and `data/` is
+gitignored so your mail can't be committed by accident.
 
 ## Getting your Google data
 
@@ -200,7 +194,6 @@ on the `make` command line (`make run PORT=5055`) overrides it.
 | `FILL_DB_BIN`, `FILL_EVENTS_BIN` | the `target/release` builds | Parser binaries the import screen runs. |
 | `ALLOWED_ORIGINS` | empty | Comma-separated origins allowed cross-origin requests; only for a deliberate cross-origin setup. |
 | `UID`, `GID` | `1000` | Docker only: owner of the files containers write — see [Troubleshooting](#troubleshooting). |
-| `HF_API_KEY`, `HF_MODEL`, `HF_BATCH_SIZE`, `HF_TIMEOUT` | — | The AI spam filter, below. |
 | `DEMO_MODE` | — | `1` serves the read-only demo on the generated mailbox — see [docs/demo.md](docs/demo.md). |
 
 Relative paths resolve against `gmail-contact-graph/` for a native run. Under
@@ -209,26 +202,6 @@ relative to the repository root (default `./data`) — so pass a native value on
 the command line (`make run DATA_DIR=../data/demo`) rather than putting it in
 `.env`. The variables only the command-line parsers use are listed in
 [docs/cli.md](docs/cli.md).
-
-### Optional: AI spam filtering via Hugging Face — beta
-
-With `HF_API_KEY` set, the mbox parser additionally verifies borderline contacts
-against a hosted LLM (`HF_MODEL`, default `meta-llama/Llama-3.1-8B-Instruct`;
-`HF_BATCH_SIZE` contacts per request, `HF_TIMEOUT` seconds per request). It
-takes effect during an import, so set it before importing; the import screen
-shows whether it is on. Only contact names and email addresses are sent, never
-subjects or bodies (see [Privacy](#privacy)).
-
-> **Beta.** This step is not deterministic. Which contacts survive depends
-> entirely on the model you point `HF_MODEL` at, and the same model can return
-> different verdicts on different runs — hosted models are also updated and
-> retired without notice. Treat the result as a suggestion, not a stable
-> classification; [the manual corrections](#using-the-app) let you fix it.
-> Everything else in the pipeline is deterministic and unaffected by this
-> setting.
-
-Leave it empty for the sample mailbox: its invented addresses are exactly the
-kind of input the classifier judges unpredictably.
 
 ## Troubleshooting
 

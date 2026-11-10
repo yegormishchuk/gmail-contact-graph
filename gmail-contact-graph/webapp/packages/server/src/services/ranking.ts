@@ -1,12 +1,12 @@
-import type { ContactFiltered, RankingInfo } from '@gmail-graph/shared';
+import type { Contact, RankingInfo } from '@gmail-graph/shared';
 import { config } from '../config.js';
 
 // Assigns ordinal ranks to contacts by a given metric (descending).
 // Contacts with equal values get the same rank; the next distinct value
 // skips ranks accordingly (standard competition ranking: 1,1,3,4,...).
 function assignRanks(
-  contacts: ContactFiltered[],
-  valueFn: (c: ContactFiltered) => number
+  contacts: Contact[],
+  valueFn: (c: Contact) => number
 ): Map<string, number> {
   const sorted = [...contacts].sort((a, b) => valueFn(b) - valueFn(a));
   const emailToRank = new Map<string, number>();
@@ -56,7 +56,7 @@ export interface CompositeScoreData {
 //
 // The resulting score is used to size/sort nodes in the graph.
 export function calculateCompositeScores(
-  contacts: ContactFiltered[]
+  contacts: Contact[]
 ): Map<string, CompositeScoreData> {
   if (contacts.length === 0) return new Map();
 
@@ -67,7 +67,7 @@ export function calculateCompositeScores(
     scores.set(c.email, { score: 0, rankings: [] });
   }
 
-  const valueFns: Record<string, (c: ContactFiltered) => number> = {
+  const valueFns: Record<string, (c: Contact) => number> = {
     sent: (c) => c.sent_count,
     received: (c) => c.received_count,
   };

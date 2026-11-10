@@ -184,8 +184,8 @@ function runParser(current: Job, bin: string, args: string[]): Promise<void> {
   if (current.cancelled) return Promise.reject(new Error('cancelled'));
 
   // cwd = DATA_DIR: the parsers read ../.env relative to it, which is the
-  // project .env natively. The server's own environment (HF_API_KEY and all)
-  // is passed on, and dotenvy does not override it.
+  // project .env natively. The server's own environment is passed on, and
+  // dotenvy does not override it.
   mkdirSync(config.DATA_DIR, { recursive: true });
   const child = spawn(bin, args, {
     cwd: config.DATA_DIR,

@@ -181,16 +181,6 @@ export function Tooltip() {
     );
   };
 
-  const handleMarkHuman = async () => {
-    if (locked) return;
-    try {
-      await api.markClear(selectedNode.email);
-      dispatch({ type: 'MARK_CONTACT_CLEAR', payload: selectedNode.email });
-    } catch (err) {
-      console.error('Failed to mark contact as clear:', err);
-    }
-  };
-
   const handleMarkNotHuman = async () => {
     if (locked) return;
     try {
@@ -353,17 +343,6 @@ export function Tooltip() {
 
       {!isCalendarMode && (
         <div className="tooltip-buttons">
-          {selectedNode.notClear && (
-            <button
-              className="mark-human-btn"
-              style={{ display: 'block' }}
-              onClick={handleMarkHuman}
-              disabled={locked}
-              title={lockedReason ?? undefined}
-            >
-              It's a human
-            </button>
-          )}
           <button
             className="mark-not-human-btn"
             onClick={handleMarkNotHuman}

@@ -8,22 +8,19 @@ import type { Database as SqlJsDatabase } from 'sql.js';
  * user asked for; an import of the same mailbox copies it into the new
  * database and applies it again. One row per email: the last action wins.
  */
-export type OverrideAction = 'clear' | 'not_human' | 'restore';
+export type OverrideAction = 'not_human' | 'restore';
 
 const CONTACT_ID = `(SELECT id FROM contacts WHERE email = ?)`;
 
 /**
  * Applies `action` to contacts_filtered. Returns whether it changed anything:
- * false for a contact that is missing or already clear / already excluded.
+ * false for a contact that is missing or already excluded.
  * A restore returns false only for a contact that did not pass the basic spam
  * filter (the restore endpoint answers 404 for it), and true otherwise.
  */
 export function applyOverride(db: SqlJsDatabase, email: string, action: OverrideAction): boolean {
   const key = normalize(email);
   switch (action) {
-    case 'clear':
-      db.run(`UPDATE contacts_filtered SET not_clear = 0 WHERE contact_id = ${CONTACT_ID} AND not_clear != 0`, [key]);
-      return db.getRowsModified() > 0;
     case 'not_human':
       db.run(`DELETE FROM contacts_filtered WHERE contact_id = ${CONTACT_ID}`, [key]);
       return db.getRowsModified() > 0;
@@ -77,7 +74,8 @@ export function carryOverOverrides(
     const key = String(email);
     const act = action as OverrideAction;
     recordOverride(to, key, act, Number(updatedAt));
-    if (applyOverride(to, key, act)) applied++;
+    // 'clear' rows are left from the removed "It's a human" edit: kept, never applied.
+    if (String(action) !== 'clear' && applyOverride(to, key, act)) applied++;
   }
   return { copied: rows.length, applied };
 }

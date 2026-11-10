@@ -109,7 +109,6 @@ export function buildOverallGraph(
       sent: g?.sent ?? 0,
       compositeScore: totalPoints,
       rankings: g?.rankings,
-      notClear: g?.notClear,
     });
   }
 

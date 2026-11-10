@@ -1,12 +1,11 @@
 [package]
 name = "gmail-mbox-parser"
-version = "0.3.3"
+version = "0.4.0"
 edition = "2021"
-# 1.83 comes from the committed Cargo.lock (icu_* 2.1, pulled in through
-# reqwest -> url -> idna); 1.87 comes from our own use of `is_multiple_of` in
-# fill_db. `cargo clippy` enforces this via the incompatible_msrv lint.
+# 1.87 comes from our own use of `is_multiple_of` in fill_db. `cargo clippy`
+# enforces this via the incompatible_msrv lint.
 rust-version = "1.87"
-description = "Gmail MBOX parser with contact extraction and AI verification"
+description = "Gmail MBOX parser with contact extraction and spam filtering"
 license = "Apache-2.0"
 
 [lib]
@@ -19,11 +18,7 @@ base64 = "0.22"
 encoding_rs = "0.8"
 rusqlite = { version = "0.32", features = ["bundled"] }
 chrono = "0.4"
-reqwest = { version = "0.12", features = ["json"] }
-futures = "0.3"
-serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1", features = ["full"] }
 dotenvy = "0.15"
 
 

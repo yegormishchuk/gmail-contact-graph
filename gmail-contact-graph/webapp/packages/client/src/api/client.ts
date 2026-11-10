@@ -153,12 +153,6 @@ export const api = {
   getAllContacts: () =>
     fetchJson<{ contacts: { name: string; email: string }[]; excludedEmails: string[] }>('/contacts/all'),
 
-  markClear: (email: string) =>
-    fetchJson<ApiSuccessResponse>('/contacts/mark-clear', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    }),
-
   markNotHuman: (email: string) =>
     fetchJson<ApiSuccessResponse>('/contacts/mark-not-human', {
       method: 'POST',
