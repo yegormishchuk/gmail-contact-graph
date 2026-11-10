@@ -265,7 +265,7 @@ jobs:
           curl -fsS "$api/calendar-stats" | jq -e '.totalMeetings > 0'
           curl -fsS "$api/import/sources" | jq -e '.mbox | map(.name) == ["sample.mbox"]'
           # Read-only: edits and imports are refused.
-          for path in contacts/mark-clear import; do
+          for path in contacts/mark-not-human import; do
             code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
               -H 'Content-Type: application/json' -d '{}' "$api/$path")
             test "$code" = 403 || { echo "POST $path: $code, expected 403" >&2; exit 1; }
